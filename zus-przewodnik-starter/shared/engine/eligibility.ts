@@ -24,30 +24,96 @@ export function debtBlocks(parent: ParentData, params: BenefitParams): boolean {
 }
 
 export function checkEligibility(input: ScenarioInput, params: BenefitParams): EligibilityResult {
-  const on = input.birthDate ?? input.expectedBirthDate;
-  requireValue(on && input.situation !== 'adoption', 'birthDate', 'Ta funkcja ocenia urodzenie dziecka. Adopcja wymaga dat i danych postępowania.');
+  const isAdoption = input.situation === 'adoption';
+  if (isAdoption) {
+    requireValue(input.childAcceptanceDate, 'childAcceptanceDate', 'Ta funkcja ocenia urodzenie dziecka. Adopcja wymaga dat i danych postępowania.');
+    requireValue(input.adoptionType, 'adoptionType', 'Podaj formę przyjęcia dziecka na wychowanie.');
+  }
+
+  const on = isAdoption ? input.childAcceptanceDate! : (input.birthDate ?? input.expectedBirthDate);
+  requireValue(on, 'birthDate', 'Brak daty zdarzenia (porodu lub przyjęcia dziecka).');
   validateParams(params, on);
-  requireValue(!input.special.employerBankruptcyOrLiquidation && !input.special.motherDeceased && !input.special.motherHospitalized && !input.special.motherIncapableOfIndependentLiving, 'special', 'Szczególny tytuł uprawnienia wymaga dodatkowej weryfikacji art. 29–30.');
+
+  requireValue(
+    !input.special.motherDeceased &&
+      !input.special.motherHospitalized &&
+      !input.special.motherIncapableOfIndependentLiving,
+    'special',
+    'Szczególny tytuł uprawnienia wymaga dodatkowej weryfikacji art. 29–30.',
+  );
+
   const entitlements: EligibilityResult['entitlements'] = [];
   const warnings: EligibilityResult['warnings'] = [];
+
   for (const parent of [input.mother, input.father]) {
     if (!parent) continue;
     const active = insuranceActive(parent, on);
-    // Ustanie wcześniejszego ubezpieczenia wymaga sprawdzenia wyjątków art. 30.
-    requireValue(active || !parent.insuranceEndDate || date(parent.insuranceEndDate) >= date(on), 'insuranceEndDate', 'Sprawdź prawo po ustaniu ubezpieczenia (art. 30), w tym przedłużenie umowy do dnia porodu.');
+
+    // Ustanie ubezpieczenia / upadłość pracodawcy (art. 30 ustawy zasiłkowej)
+    const isBankruptcy = Boolean(input.special.employerBankruptcyOrLiquidation);
+    if (!active && !isBankruptcy) {
+      requireValue(
+        !parent.insuranceEndDate || date(parent.insuranceEndDate) >= date(on),
+        'insuranceEndDate',
+        'Sprawdź prawo po ustaniu ubezpieczenia (art. 30), w tym przedłużenie umowy do dnia porodu.',
+      );
+    }
+
     const debt = active && debtBlocks(parent, params);
     let payer: 'zus' | 'employer' | null = null;
-    if (active && !debt) {
+    let entitled = active && !debt;
+    let benefitType: EligibilityResult['entitlements'][0]['benefit'] = 'maternityBenefit';
+
+    if (isBankruptcy && parent.role === 'mother' && parent.insuranceTitle === 'employment') {
+      entitled = true;
+      payer = 'zus';
+      benefitType = 'maternityEquivalentBenefit';
+    } else if (active && !debt) {
       payer = 'zus';
       if (parent.insuranceTitle !== 'selfEmployed') {
-        requireValue(Number.isInteger(parent.employerInsuredCount) && parent.employerInsuredCount! >= 0, 'employerInsuredCount', 'Podaj liczbę ubezpieczonych właściwą dla art. 61.');
+        requireValue(
+          Number.isInteger(parent.employerInsuredCount) && parent.employerInsuredCount! >= 0,
+          'employerInsuredCount',
+          'Podaj liczbę ubezpieczonych właściwą dla art. 61.',
+        );
         if (parent.employerInsuredCount! > params.payerThresholdInsuredCount) payer = 'employer';
       }
     }
-    entitlements.push({ benefit: 'maternityBenefit', parentRole: parent.role, entitled: active && !debt, payer,
-      reason: { message: debt ? 'Wypłata wstrzymana do spłaty zadłużenia; sprawdź termin sześciu miesięcy.' : active ? 'Ubezpieczenie na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania; wymiar dla rodzica zależy od rodzaju urlopu.' : 'Brak ubezpieczenia chorobowego na dzień porodu.', legalBasis: debt ? 'Ustawa zasiłkowa art. 2a' : 'Ustawa zasiłkowa art. 29, 61' } });
-    if (debt) warnings.push({ code: 'SELF_EMPLOYED_DEBT', message: 'Zadłużenie przekracza próg ustawowy.', legalBasis: 'Ustawa zasiłkowa art. 2a' });
+
+    entitlements.push({
+      benefit: benefitType,
+      parentRole: parent.role,
+      entitled,
+      payer,
+      reason: {
+        message: isBankruptcy
+          ? 'Zasiłek w wysokości zasiłku macierzyńskiego po ustaniu zatrudnienia wskutek upadłości/likwidacji pracodawcy.'
+          : debt
+            ? 'Wypłata wstrzymana do spłaty zadłużenia; sprawdź termin sześciu miesięcy.'
+            : active
+              ? isAdoption
+                ? 'Ubezpieczenie na dzień przyjęcia dziecka na wychowanie. Zasiłek macierzyński przysługuje bez okresu wyczekiwania.'
+                : 'Ubezpieczenie na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania; wymiar dla rodzica zależy od rodzaju urlopu.'
+              : 'Brak ubezpieczenia chorobowego na dzień zdarzenia.',
+        legalBasis: isBankruptcy
+          ? 'Ustawa zasiłkowa art. 30 ust. 3'
+          : debt
+            ? 'Ustawa zasiłkowa art. 2a'
+            : isAdoption
+              ? 'Ustawa zasiłkowa art. 29 ust. 1 pkt 2, 61'
+              : 'Ustawa zasiłkowa art. 29, 61',
+      },
+    });
+
+    if (debt) {
+      warnings.push({
+        code: 'SELF_EMPLOYED_DEBT',
+        message: 'Zadłużenie przekracza próg ustawowy.',
+        legalBasis: 'Ustawa zasiłkowa art. 2a',
+      });
+    }
   }
+
   return { entitlements, warnings };
 }
 
@@ -58,11 +124,24 @@ export function calculateSicknessInPregnancy(input: SicknessInput, params: Benef
   validateParams(params, on);
   const parent = input.mother;
   requireValue(insuranceActive(parent, on), 'insurance', 'Niezdolność poza okresem ubezpieczenia wymaga weryfikacji art. 7 i 13.');
-  requireValue(typeof input.waitingPeriodExempt === 'boolean' && Number.isInteger(input.creditedInsuranceDays) && input.creditedInsuranceDays! >= 0, 'creditedInsuranceDays', 'Potwierdź wyjątki i zaliczane wcześniejsze okresy ubezpieczenia (art. 4).');
-  const waiting = parent.sicknessInsurance === 'mandatory' ? params.sickness.waitingPeriodDaysMandatory : params.sickness.waitingPeriodDaysVoluntary;
-  const eligible = (input.waitingPeriodExempt || daysBetween(parent.insuredSince!, on) + input.creditedInsuranceDays! >= waiting) && !debtBlocks(parent, params);
+  requireValue(
+    typeof input.waitingPeriodExempt === 'boolean' &&
+      Number.isInteger(input.creditedInsuranceDays) &&
+      input.creditedInsuranceDays! >= 0,
+    'creditedInsuranceDays',
+    'Potwierdź wyjątki i zaliczane wcześniejsze okresy ubezpieczenia (art. 4).',
+  );
+
+  const waiting =
+    parent.sicknessInsurance === 'mandatory'
+      ? params.sickness.waitingPeriodDaysMandatory
+      : params.sickness.waitingPeriodDaysVoluntary;
+  const eligible =
+    (input.waitingPeriodExempt || daysBetween(parent.insuredSince!, on) + input.creditedInsuranceDays! >= waiting) &&
+    !debtBlocks(parent, params);
   const used = input.sicknessDaysUsed;
   requireValue(Number.isInteger(used) && used! >= 0, 'sicknessDaysUsed', 'Podaj dni wykorzystane w aktualnym okresie zasiłkowym, z uwzględnieniem art. 9.');
+
   let employerDays = 0;
   if (parent.insuranceTitle === 'employment') {
     requireValue(Number.isInteger(input.yearTurned50) && input.yearTurned50! > 1900, 'yearTurned50', 'Podaj rok ukończenia 50 lat (próg obowiązuje od następnego roku).');
@@ -70,10 +149,24 @@ export function calculateSicknessInPregnancy(input: SicknessInput, params: Benef
     const limit = Number(on.slice(0, 4)) > input.yearTurned50! ? params.sickness.employerPaidDaysFrom50 : params.sickness.employerPaidDaysUnder50;
     employerDays = Math.max(0, limit - input.employerSickPayDaysUsed!);
   }
+
   const remaining = Math.max(0, params.sickness.maxBenefitPeriodDays - used!);
   if (parent.benefitBase !== null) amount(parent.benefitBase, 'benefitBase');
-  return { entitled: eligible && remaining > 0, employerSickPayDays: eligible ? Math.min(employerDays, remaining) : 0,
-    sicknessBenefitMaxDays: remaining, rate: params.rates.sicknessPregnancy,
-    dailyAmount: eligible && remaining > 0 && parent.benefitBase !== null ? calculateBenefitAmount(parent.benefitBase, params.rates.sicknessPregnancy, 1).dailyAmount : null,
-    explanations: [{ message: 'Ocena na pierwszy dzień niezdolności. Pozostały okres obejmuje również wynagrodzenie chorobowe. Ponowna ocena jest potrzebna po zakończeniu wyczekiwania.', legalBasis: 'Ustawa zasiłkowa art. 4, 8–9, 11; KP art. 92' }] };
+
+  return {
+    entitled: eligible && remaining > 0,
+    employerSickPayDays: eligible ? Math.min(employerDays, remaining) : 0,
+    sicknessBenefitMaxDays: remaining,
+    rate: params.rates.sicknessPregnancy,
+    dailyAmount:
+      eligible && remaining > 0 && parent.benefitBase !== null
+        ? calculateBenefitAmount(parent.benefitBase, params.rates.sicknessPregnancy, 1).dailyAmount
+        : null,
+    explanations: [
+      {
+        message: 'Ocena na pierwszy dzień niezdolności. Pozostały okres obejmuje również wynagrodzenie chorobowe. Ponowna ocena jest potrzebna po zakończeniu wyczekiwania.',
+        legalBasis: 'Ustawa zasiłkowa art. 4, 8–9, 11; KP art. 92',
+      },
+    ],
+  };
 }

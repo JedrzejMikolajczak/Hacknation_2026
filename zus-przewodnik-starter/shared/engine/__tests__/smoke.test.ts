@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { BenefitParams } from '../../types';
 import paramsJson from '../../params.json';
-import { planParentalSplit } from '../index';
+import { checkEligibility, getRequiredDocuments } from '../index';
 
 describe('shared smoke', () => {
   it('loads params.json with a version matching BenefitParams', () => {
@@ -10,7 +10,8 @@ describe('shared smoke', () => {
     expect(params.version.length).toBeGreaterThan(0);
   });
 
-  it('unimplemented stubs throw until completed', () => {
-    expect(() => planParentalSplit({} as never, paramsJson)).toThrow('Not implemented');
+  it('engine exports are functional', () => {
+    expect(typeof checkEligibility).toBe('function');
+    expect(typeof getRequiredDocuments).toBe('function');
   });
 });

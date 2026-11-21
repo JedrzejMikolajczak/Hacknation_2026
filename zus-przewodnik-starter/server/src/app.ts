@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { calculatorRouter } from './routes/calculator';
 import { healthRouter } from './routes/health';
 import { paramsRouter } from './routes/params';
 
@@ -18,6 +19,7 @@ export function createApp(): Express {
 
   app.use(API_PREFIX, healthRouter);
   app.use(API_PREFIX, paramsRouter);
+  app.use(API_PREFIX, calculatorRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

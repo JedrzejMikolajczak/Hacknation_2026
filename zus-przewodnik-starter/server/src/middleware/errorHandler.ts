@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
+import { CalculationError } from '@shared/engine';
 import { fail } from '../lib/envelope';
 
 /** Brak dopasowanej ścieżki → 404 NOT_FOUND w kopercie. */
@@ -16,8 +17,12 @@ function isJsonParseError(err: unknown): boolean {
   );
 }
 
-/** Błędy zod (i niepoprawny JSON) → 422 VALIDATION_ERROR, pozostałe → 500 INTERNAL_ERROR. */
+/** Błędy zod, CalculationError i niepoprawny JSON → 422 VALIDATION_ERROR, pozostałe → 500 INTERNAL_ERROR. */
 export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
+  if (err instanceof CalculationError) {
+    res.status(422).json(fail('VALIDATION_ERROR', err.message, [{ field: err.field, message: err.message }]));
+    return;
+  }
   if (err instanceof ZodError) {
     res.status(422).json(fail('VALIDATION_ERROR', 'Request validation failed', err.issues));
     return;
