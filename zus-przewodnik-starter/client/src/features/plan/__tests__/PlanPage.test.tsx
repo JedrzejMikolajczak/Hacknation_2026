@@ -389,7 +389,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(screen.getByText(/Powrót do pracy po tej części:/i)).toBeInTheDocument();
   });
 
-  it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy, pokazuje płatnika dla rodziców, najbliższy krok i link dalej', async () => {
+  it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy, pokazuje płatnika dla rodziców, pasek postępu, założenia planu i link dalej', async () => {
     window.localStorage.clear();
     const bothParentsDraft: ScenarioDraft = {
       situation: 'afterBirth',
@@ -429,6 +429,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
       screen.getByRole('heading', { level: 2, name: /Lista dokumentów/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Skompletowano: 0 z/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
 
     const checkboxes = screen.getAllByRole('checkbox');
     await user.click(checkboxes[0]);
@@ -438,6 +439,9 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(screen.getByText(/Najbliższy termin/i)).toBeInTheDocument();
     expect(screen.getAllByText(/01\.12\.2026/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/09\.03\.2027/i).length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByRole('link', { name: /Zmień podział w sekcji Plan urlopów/i }),
+    ).toHaveAttribute('href', '/plan/leave-plan?situation=afterBirth');
 
     // Uwagi i podstawy prawne zwinięte w <details>
     const detailSummaries = screen.getAllByText(/Szczegóły i wskazówki/i);
@@ -448,6 +452,46 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
 
     const nextLink = screen.getByRole('link', { name: /Dalej: Wnioski/i });
     expect(nextLink).toHaveAttribute('href', '/plan/applications?situation=afterBirth');
+  });
+
+  it('w zakładce Dokumenty i terminy oznacza przekroczony termin i pokazuje stan brakujących danych bez zmyślonych wpisów', () => {
+    window.localStorage.clear();
+    const overdueDraft: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-12-10',
+      birthDate: '2026-11-10',
+      childrenCount: 1,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        benefitBase: 6903.2,
+        employerInsuredCount: 150,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {},
+    };
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/plan/documents?situation=afterBirth']}>
+        <ScenarioProvider initialScenario={overdueDraft}>
+          <App />
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Jeden z terminów już minął/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/\(po terminie\)/i).length).toBeGreaterThanOrEqual(1);
+    unmount();
+
+    // Pusty stan bez danych w localStorage / URL
+    renderPlan('/plan/documents');
+    expect(
+      screen.getByRole('heading', { level: 2, name: /Uzupełnij dane do listy dokumentów/i }),
+    ).toBeInTheDocument();
   });
 
   it('w zakładce Wnioski nie ma zmyślonych danych osobowych, waliduje puste pola, zwija podgląd i symuluje wysyłkę z UPO', async () => {
@@ -507,38 +551,66 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     );
   });
 
-  it('w zakładce Wsparcie pokazuje najpierw organizacje i linki, potem kontakt z ZUS, a na końcu Najczęstsze pytania bez etykiety AI', async () => {
-    const { user } = renderPlan('/plan/support?situation=afterBirth');
+  it('w zakładce Wsparcie pokazuje Najważniejsze dla Ciebie (ryzyka z silnika i sytuacje szczególne), zwinięte narzędzia, organizacje charytatywne i brak etykiety AI', async () => {
+    const jdgDraft: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      childrenCount: 1,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'selfEmployed',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2020-01-01',
+        benefitBase: 5000,
+        contributionDebt: 400,
+        wantsLeave: true,
+      },
+      father: null,
+      special: { zaZyciemCertificate: true },
+    };
+
+    const { user } = renderPlan('/plan/support?situation=afterBirth', jdgDraft);
 
     // Brak nieprawdziwego oznaczenia AI
     expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/asystent.*AI/i)).not.toBeInTheDocument();
 
-    // Właściwa kolejność sekcji: organizacje -> linki -> PUE/eZUS -> Najczęstsze pytania
-    const orgsHeading = screen.getByRole('heading', { level: 2, name: /Organizacje pomocowe/i });
-    const linksHeading = screen.getByRole('heading', {
+    // Najważniejsze dla Ciebie na górze z ryzykiem z silnika oraz pasującą sytuacją szczególną
+    const keyHeading = screen.getByRole('heading', {
       level: 2,
-      name: /Oficjalne strony urzędowe/i,
+      name: /Najważniejsze dla Ciebie/i,
     });
-    const pueHeading = screen.getByRole('heading', {
-      level: 2,
-      name: /Kontakt z ZUS przez PUE \/ eZUS/i,
-    });
-    const faqHeading = screen.getByRole('heading', { level: 2, name: /Najczęstsze pytania/i });
+    const keySection = keyHeading.closest('section') as HTMLElement;
+    expect(within(keySection).getByText(/Zadłużenie składkowe \(JDG\)/i)).toBeInTheDocument();
+    expect(
+      within(keySection).getByRole('heading', {
+        level: 3,
+        name: /Zaświadczenie „Za życiem”/i,
+      }),
+    ).toBeInTheDocument();
 
-    expect(orgsHeading.compareDocumentPosition(linksHeading)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
+    // Ogólne ryzyka, inne sytuacje, PUE/eZUS i Najczęstsze pytania są zwinięte domyślnie
+    expect(
+      screen.getByText(/Ogólne ryzyka utraty lub obniżenia zasiłku/i).closest('details'),
+    ).not.toHaveAttribute('open');
+    expect(screen.getByText('Inne sytuacje szczególne').closest('details')).not.toHaveAttribute(
+      'open',
     );
-    expect(linksHeading.compareDocumentPosition(pueHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(pueHeading.compareDocumentPosition(faqHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByText('Najczęstsze pytania').closest('details')).not.toHaveAttribute('open');
 
+    // Organizacje charytatywne (przy „Za życiem” otwarte i z Fundacją Gajusz na początku)
+    expect(screen.getByText(/Fundacja Gajusz/i)).toBeInTheDocument();
     expect(screen.getByText(/Fundacja Rodzić po Ludzku/i)).toBeInTheDocument();
 
-    // Gotowe odpowiedzi nadal działają
+    // Gotowe odpowiedzi w Najczęstszych pytaniach działają po rozwinięciu
+    await user.click(screen.getByText('Najczęstsze pytania'));
     await user.click(screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }));
     expect(await screen.findByText(/ujednoliconą stawkę 81,5%/i)).toBeInTheDocument();
 
-    // Formularz PUE / eZUS nadal działa
+    // Symulacja PUE / eZUS działa po rozwinięciu
+    await user.click(screen.getByText(/Kontakt z ZUS i podgląd konta/i));
     await user.type(
       screen.getByLabelText(/Treść pytania do doradcy ZUS/i),
       'Proszę o potwierdzenie terminu złożenia ZAM.',
@@ -548,5 +620,19 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
 
     const backLink = screen.getByRole('link', { name: /Wróć do planu/i });
     expect(backLink).toHaveAttribute('href', '/plan?situation=afterBirth');
+  });
+
+  it('w zakładce Wsparcie przy braku danych pokazuje stan Uzupełnij dane z linkiem do kreatora', () => {
+    window.localStorage.clear();
+    renderPlan('/plan/support?situation=afterBirth');
+
+    const keySection = screen
+      .getByRole('heading', { level: 2, name: /Najważniejsze dla Ciebie/i })
+      .closest('section') as HTMLElement;
+    expect(within(keySection).getByText(/Data porodu/i)).toBeInTheDocument();
+    expect(within(keySection).getByRole('link', { name: /Uzupełnij dane/i })).toHaveAttribute(
+      'href',
+      '/wizard?situation=afterBirth',
+    );
   });
 });
