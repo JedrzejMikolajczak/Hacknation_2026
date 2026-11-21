@@ -1,0 +1,19 @@
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-pill);
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.ai-badge__icon {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  fill: currentColor;
+}
