@@ -136,6 +136,75 @@ describe('Twój plan', () => {
     expect(await screen.findByLabelText('PESEL')).toHaveValue('');
   });
 
+  it('w zakładce Wnioski dla planu dwojga rodziców (UoP) pokazuje spójne wnioski z realnymi datami i bez duplikatów', async () => {
+    const twoParentScenario: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      expectedBirthDate: null,
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        insuranceEndDate: null,
+        benefitBase: 6903.2,
+        contributionDebt: null,
+        employerInsuredCount: 150,
+        age: 31,
+        wantsLeave: true,
+      },
+      father: {
+        role: 'father',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2019-01-01',
+        insuranceEndDate: null,
+        benefitBase: 5000,
+        contributionDebt: null,
+        employerInsuredCount: 10,
+        wantsLeave: true,
+      },
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/applications?situation=afterBirth']}>
+        <ScenarioProvider initialScenario={twoParentScenario}>
+          <Routes>
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Lista wniosków (5)', level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Wniosek do USC o wydanie odpisu aktu urodzenia')).toHaveLength(1);
+    expect(screen.getAllByText(/10\.11\.2026–29\.03\.2027/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/28\.11\.2026–11\.12\.2026/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/09\.11\.2027–10\.01\.2028/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Wzór zgodny z rozporządzeniem MRPiPS 2025 poz\. 322 – do weryfikacji/)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Dalej: Wsparcie ›' })).toHaveAttribute(
+      'href',
+      '/plan/support?situation=afterBirth',
+    );
+  });
+
   it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
     openPlan('support');
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
