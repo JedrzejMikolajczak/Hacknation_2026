@@ -1,0 +1,314 @@
+/*
+ * „Twój plan” – czysty, nowoczesny wygląd zakładek.
+ * 1) Bez niebieskiego: granat i błękitne tła zastąpione głęboką zielenią i neutralnym szarym.
+ * 2) Najważniejsze informacje (odpowiedź, kwoty, terminy) mają największy kontrast i rozmiar;
+ *    reszta jest cichsza: cienkie ramki, mało cieni, dużo bieli.
+ */
+
+.plan-page {
+  /* granat → głęboka zieleń; błękitne tło → neutralny, lekko ciepły szary */
+  --color-navy: #1c3d2e;
+  --color-navy-dark: #12281e;
+  --color-info-soft: #f3f5f4;
+  --color-surface-muted: #f3f5f4;
+  --color-border: #e4e8e6;
+  --accent-bar-width: 4px; /* cieńsze pasy akcentowe zamiast 7 px */
+  background: #f7f9f8;
+}
+
+.plan-page__demo-strip {
+  background: #eef2f0;
+}
+.plan-page__demo-note {
+  color: var(--color-text-muted);
+}
+
+.plan-page__footer {
+  background: var(--color-surface);
+}
+
+/* ───────── Karty: biel, cienka ramka, bez ciężkich pasów ───────── */
+.plan-section,
+.lp-card,
+.results-right-item,
+.results-variant-bar,
+.results-details,
+.case-plan-card,
+.case-plan-part {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+
+.plan-section,
+.lp-card {
+  padding: var(--space-5);
+}
+
+.plan-section:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.plan-section__title,
+.lp-card__title,
+.results-section__title {
+  font-size: var(--font-size-xl);
+  letter-spacing: -0.01em;
+}
+
+/* Znacznik sekcji – mała zielona kreska zamiast ciężkiej belki */
+.plan-section__title::before,
+.lp-card__title::before,
+.results-section__title::before {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 4px;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+/* ───────── GŁÓWNA ODPOWIEDŹ – największe wyróżnienie na ekranie ───────── */
+.results-answer,
+.lp-answer,
+.support-answer {
+  position: relative;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid #cfe6d8;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(0 120 52 / 0.1), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #eef8f2 100%);
+  box-shadow: 0 18px 44px -26px rgb(0 70 30 / 0.45);
+}
+
+.results-answer::before,
+.lp-answer::before,
+.support-answer::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: linear-gradient(180deg, var(--color-primary), #2fbf6c);
+}
+
+.results-answer__title,
+.lp-answer__title {
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+}
+
+.results-answer__headline,
+.lp-answer__lead,
+.support-answer__title {
+  color: var(--color-text);
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  font-size: clamp(1.5rem, 1.1rem + 1.8vw, 2.25rem);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.results-answer__total {
+  color: var(--color-primary);
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-answer__role {
+  color: var(--color-primary);
+}
+
+.results-answer__item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+/* Odpowiedź „neutralna / do uzupełnienia” – szara, nie niebieska */
+.results-answer--info,
+.support-answer--empathetic,
+.support-answer--missing,
+.lp-answer--missing {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+.results-answer--info::before,
+.support-answer--empathetic::before,
+.support-answer--missing::before,
+.lp-answer--missing::before {
+  background: #b8c2bd;
+}
+
+/* Brak uprawnień / ostrzeżenie – czerwień zostaje, ale spokojniej */
+.results-answer--none,
+.support-answer--warning {
+  border-color: #f0cccc;
+  background: linear-gradient(180deg, #ffffff 0%, var(--color-error-soft) 100%);
+}
+.results-answer--none::before,
+.support-answer--warning::before {
+  background: var(--color-error);
+}
+
+/* Kluczowe fakty (daty, kwoty) – duże, grube, tabularne */
+.lp-answer__facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid #cfe6d8;
+}
+
+.lp-answer__fact {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid #dcebe2;
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.85);
+}
+
+.lp-answer__fact dt {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lp-answer__fact dt::after {
+  content: none;
+}
+
+.lp-answer__fact dd {
+  color: var(--color-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-answer__deadline {
+  border-left: 4px solid var(--color-cta);
+  background: #fff8ec;
+}
+
+/* ───────── Kwoty i okresy ───────── */
+.period-card {
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  transition:
+    transform 0.3s var(--ease-out),
+    box-shadow 0.25s ease;
+}
+.period-card:hover {
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 0 14px 30px -20px rgb(0 70 30 / 0.45);
+}
+.period-group--father .period-card {
+  border-left-color: #7aa98d;
+  background: var(--color-surface);
+}
+.period-group--father .period-card__rate {
+  color: var(--color-primary);
+}
+.period-card__type {
+  font-weight: var(--font-weight-bold);
+}
+.period-card__amounts {
+  color: var(--color-primary);
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
+}
+.period-card--denied {
+  border-left-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+/* ───────── Statusy i plakietki – pastylki, zieleń / szarość / czerwień ───────── */
+.results-right-item__status,
+.plan-badge {
+  border-radius: var(--radius-pill);
+}
+.results-right-item__status--unknown,
+.plan-badge--navy {
+  background: #eceff0;
+  color: #3d4a44;
+}
+
+/* ───────── Podpowiedzi neutralne; ostrzeżenia zostają czerwone ───────── */
+.plan-callout,
+.results-risk--info,
+.plan-controls__case-full {
+  border-left-color: #9fb3a8;
+  background: var(--color-info-soft);
+}
+.plan-callout--success {
+  border-left-color: var(--color-primary);
+  background: var(--color-accent-soft);
+}
+.plan-callout--warning {
+  border-left-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+.plan-callout,
+.results-risk {
+  border-radius: var(--radius-md);
+}
+
+/* ───────── Przyciski drugorzędne i przełączniki ───────── */
+.results-variant-bar__btn,
+.plan-controls__toggle {
+  border-radius: var(--radius-pill);
+}
+.results-variant-bar__btn--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.plan-btn--secondary {
+  border-color: #c7d3cc;
+  color: var(--color-navy);
+}
+.plan-btn--secondary:hover:not(:disabled) {
+  border-color: var(--color-navy);
+}
+
+/* Rozwijane szczegóły – ciche, żeby nie konkurowały z odpowiedzią */
+.results-details,
+.docs-details,
+.lp-details {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+.results-details__summary,
+.docs-details__summary,
+.lp-details__summary {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Terminy po terminie – czerwień zostaje, bo to ważne */
+.docs-compact-item__overdue,
+.case-overdue {
+  color: var(--color-error);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Więcej oddechu między blokami zakładki */
+.results-tab,
+.plan-tab-content,
+.lp-view,
+.support-tab {
+  gap: var(--space-6);
+}

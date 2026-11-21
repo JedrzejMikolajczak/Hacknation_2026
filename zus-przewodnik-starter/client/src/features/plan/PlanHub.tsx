@@ -76,10 +76,10 @@ export function PlanHub({ querySuffix }: PlanHubProps) {
         urlopów → Dokumenty i terminy → Wnioski → Wsparcie.
       </p>
       <ul className="plan-hub__grid">
-        {PLAN_TABS.map((item) => {
+        {PLAN_TABS.map((item, index) => {
           const isRecommended = item.id === RECOMMENDED_FIRST_TAB;
           return (
-            <li key={item.id} className="plan-hub__item">
+            <li key={item.id} className="plan-hub__item" style={{ ['--i' as string]: index }}>
               <Link
                 to={`/plan/${item.id}${querySuffix}`}
                 className={
