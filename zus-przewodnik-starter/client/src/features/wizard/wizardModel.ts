@@ -13,6 +13,8 @@ import type { ScenarioDraft } from '../../app/scenarioDraft';
 import { addDaysIso, formatPolishDate } from '../plan/planScenario';
 
 export const STAGES = ['Rodzina', 'Dziecko', 'Ubezpieczenie', 'Plany i kwoty', 'Podsumowanie'];
+export const MIN_WIZARD_YEAR = 1900;
+export const MAX_WIZARD_YEAR = 3000;
 export const SITUATION_LABELS: Record<SituationType, string> = {
   planning: 'Planuję dziecko',
   pregnant: 'Jestem w ciąży',
@@ -376,12 +378,12 @@ export function getQuestions(
       label: 'Sytuacja mamy',
       hint: 'Możesz zaznaczyć pobyt w szpitalu i orzeczenie jednocześnie. Te informacje pomagają ustalić, czy tata może przejąć część urlopu macierzyńskiego.',
       options: [
-        { value: 'none', label: 'Nie dotyczy' },
-        { value: 'hospitalized', label: 'Mama przebywa w szpitalu' },
         {
           value: 'incapable',
           label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
         },
+        { value: 'hospitalized', label: 'Mama przebywa w szpitalu' },
+        { value: 'none', label: 'Nie dotyczy' },
         ...(situation === 'afterBirth'
           ? [
               { value: 'deceased', label: 'Mama zmarła' },
@@ -575,7 +577,16 @@ export function getQuestions(
         options: YES_NO,
       });
       if (answers['mother.pregnancySickLeave'] === 'yes') {
-        const start = answers['mother.sickLeaveStart'];
+        const start = dateOrNull(answers['mother.sickLeaveStart']);
+        const birth = dateOrNull(answers[pregnant ? 'expectedBirthDate' : 'birthDate']);
+        const untilBirth = answers['mother.sickLeaveUntilBirth'] === 'yes';
+        const today = todayLocal();
+        const lastDayBeforeBirth = birth && addDays(birth, -1);
+        const latestStart =
+          untilBirth && lastDayBeforeBirth && lastDayBeforeBirth < today
+            ? lastDayBeforeBirth
+            : today;
+        const startAfterBirth = untilBirth && birth && start && start >= birth;
         questions.push(
           {
             id: 'mother.sickLeaveStart',
@@ -585,7 +596,10 @@ export function getQuestions(
               ? 'Od kiedy trwa (lub trwało) zwolnienie?'
               : 'Od kiedy trwało zwolnienie?',
             label: 'Początek zwolnienia w ciąży',
-            max: todayLocal(),
+            max: latestStart,
+            hint: startAfterBirth
+              ? 'Jeśli zwolnienie trwało do porodu, wybierz datę rozpoczęcia przed porodem.'
+              : undefined,
             unknownLabel: 'Nie pamiętam dokładnej daty',
           },
           {
@@ -608,7 +622,7 @@ export function getQuestions(
               ? 'Do kiedy trwa (lub trwało) zwolnienie?'
               : 'Do kiedy trwało zwolnienie?',
             label: 'Koniec zwolnienia w ciąży',
-            min: start && start !== 'unknown' ? start : undefined,
+            min: start ?? undefined,
             max:
               !pregnant && answers.birthDate && answers.birthDate !== 'unknown'
                 ? answers.birthDate
@@ -870,6 +884,8 @@ export function selectedMotherSituations(value: string): string[] {
 }
 
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
+  if (!value && question.id === 'childrenCount')
+    return 'Wybierz liczbę dzieci lub wpisz liczbę całkowitą od 4.';
   if (!value) return question.optional ? null : 'Odpowiedz na pytanie, aby przejść dalej.';
   if (question.type === 'choice') {
     return question.options?.some((option) => option.value === value)
@@ -898,11 +914,14 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
       return `Wpisz liczbę nie większą niż ${question.max}.`;
     return null;
   }
-  if (!isIsoCalendarDate(value)) return 'Wpisz poprawną datę w formacie DD/MM/YYYY.';
+  if (!isIsoCalendarDate(value)) return 'Wybierz poprawny dzień, miesiąc i rok.';
+  const year = Number(value.slice(0, 4));
+  if (year < MIN_WIZARD_YEAR || year > MAX_WIZARD_YEAR)
+    return `Wybierz rok od ${MIN_WIZARD_YEAR} do ${MAX_WIZARD_YEAR}.`;
   if (typeof question.min === 'string' && value < question.min)
-    return 'Data jest wcześniejsza niż dozwolona.';
+    return `Wybierz datę nie wcześniejszą niż ${formatPolishDate(question.min)}.`;
   if (typeof question.max === 'string' && value > question.max)
-    return 'Ta data nie może być w przyszłości.';
+    return `Wybierz datę nie późniejszą niż ${formatPolishDate(question.max)}.`;
   return null;
 }
 
@@ -944,7 +963,7 @@ function numberOrNull(value: string | undefined): number | null {
 }
 
 function dateOrNull(value: string | undefined): string | null {
-  return !value || value === 'unknown' ? null : value;
+  return value && isIsoCalendarDate(value) ? value : null;
 }
 
 function knownBoolean(value: string | undefined): boolean | undefined {
@@ -1214,10 +1233,6 @@ export function buildScenario(
 /** Prezentacja dat jest niezależna od ustawień językowych przeglądarki. */
 export function displayDate(value: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
-}
-
-export function dateInputToIso(value: string): string {
-  return /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? value.split('/').reverse().join('-') : value;
 }
 
 export function formatAnswer(question: WizardQuestion, value: string | undefined): string {

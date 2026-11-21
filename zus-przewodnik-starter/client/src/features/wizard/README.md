@@ -26,7 +26,7 @@ W katalogu `zus-przewodnik-starter` uruchom `npm install`, a następnie `npm run
 
 ## Dane dla kolejnych modułów
 
-Wszystkie daty w polach formularza i podsumowaniu mają format `DD/MM/YYYY`, niezależnie od języka przeglądarki. Poprawne, pełne daty są zapisywane jako ISO `YYYY-MM-DD`, zgodnie z kontraktem obliczeń; niepełny wpis jest zachowany w szkicu odpowiedzi do dalszej edycji.
+W pustym pytaniu listy dnia, miesiąca i roku pokazują dzisiejszą datę według zegara przeglądarki. Rozwiń listę roku i przewiń od bieżącego roku w górę lub w dół. Przycisk „Dalej” zatwierdza wyświetloną datę po walidacji. Powrót do pytania pokazuje zapisaną odpowiedź. Daty zapisują się jako ISO `YYYY-MM-DD`, a w podsumowaniu wyświetlają się jako `DD/MM/YYYY`.
 
 `useScenario()` udostępnia:
 

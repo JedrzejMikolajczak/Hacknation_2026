@@ -28,7 +28,7 @@ describe('errorHandler', () => {
     expect(res.status).toBe(500);
     expect(res.body).toEqual({
       data: null,
-      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+      error: { code: 'INTERNAL_ERROR', message: 'Wystąpił błąd serwera. Spróbuj ponownie.' },
     });
   });
 });

@@ -157,14 +157,16 @@ export const caseInputSchema = z
         'Data porzucenia dziecka nie może poprzedzać daty porodu.',
       );
     }
-    for (const [start, end] of [
-      ['sickness_leave_start_date', 'sickness_leave_end_date'],
-      ['newborn_hospitalization_start', 'newborn_hospitalization_end'],
+    for (const [start, end, message] of [
+      ['sickness_leave_start_date', 'sickness_leave_end_date',
+        'Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zwolnieniu lekarskim.'],
+      ['newborn_hospitalization_start', 'newborn_hospitalization_end',
+        'Ustaw koniec pobytu w szpitalu w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zaświadczeniu ze szpitala.'],
     ] as const) {
       check(
         !input[start] || !input[end] || input[start] <= input[end],
         end,
-        'Koniec okresu wypada przed początkiem.',
+        message,
       );
     }
     function checkMonths(months: NonNullable<CaseInputs['monthly_bases']>, field: string) {

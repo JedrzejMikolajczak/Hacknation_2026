@@ -186,7 +186,9 @@ Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez
 1. Po porodzie ustaw datę sprzed 21 dni, a następnie sprzed 22 dni. Sprawdź, czy kreator nadal pozwala wybrać 81,5% w pierwszym przypadku i wybiera stawki rozdzielone w drugim.
 2. W planie obojga rodziców zaznacz pobyt mamy w szpitalu i orzeczenie jednocześnie. Następnie wybierz zgon mamy. Podaj datę zgonu i sprawdź, czy formularz przechodzi do danych taty.
 3. W zakładce **Wnioski** wybierz **Pobierz dane z mObywatela (symulacja)**. Wybierz gotowy profil, wskaż wnioskodawcę, jeśli plan obejmuje oboje rodziców, i kliknij **Przekaż dane testowe**. Po automatycznym powrocie sprawdź imię i nazwisko, PESEL oraz datę urodzenia wybranego wnioskodawcy.
-4. Rozwiń wniosek urlopowy. Uzupełnij wymagane pola i sprawdź listę załączników oraz podgląd do druku. Symulacja wysyłki sprawdza pola wniosku. Załączniki należy skompletować osobno.
+4. Uzupełnij wymagane pola wniosku i kliknij **Pobierz PDF**. Sprawdź podgląd oraz listę załączników i wybierz **Pobierz wniosek do uzupełnienia (PDF)**. Uzupełnij ewentualne braki i złóż wniosek u adresata wskazanego w podglądzie.
+5. W kreatorze wybierz datę 31 stycznia, po czym zmień miesiąc na luty. Pole dnia powinno się wyczyścić. W pytaniu o liczbę dzieci sprawdź wartości 1, 2 i 3 oraz **4 lub więcej**.
+6. W planie z odwróconymi datami zwolnienia sprawdź komunikat w zakładce **Uprawnienia** i popraw zakres bezpośrednio pod komunikatem.
 
 Wnioski pracownicze generowane z planu obejmują urlopy i czynności dostępne w aplikacji. Dane osobowe z symulacji pozostają w pamięci strony do jej odświeżenia. [Rozporządzenie MRPiPS, Dz.U. 2025 poz. 322](https://dziennikustaw.gov.pl/DU/2025/322)
 
