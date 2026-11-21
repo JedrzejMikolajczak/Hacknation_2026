@@ -68,6 +68,10 @@ describe('Twój plan', () => {
 
   it('synchronizuje zmianę daty ojca z dokumentami i wnioskiem', async () => {
     openPlan('leave-plan');
+    const manualSummary = await screen.findByText('Ułóż ręcznie / połącz z pracą');
+    const manualDetails = manualSummary.closest('details') as HTMLDetailsElement;
+    expect(manualDetails.open).toBe(false);
+    fireEvent.click(manualSummary);
     fireEvent.change(await screen.findByLabelText('Koniec części 2'), {
       target: { value: '2028-01-10' },
     });
@@ -89,6 +93,26 @@ describe('Twój plan', () => {
     });
     fireEvent.change(selected, { target: { value: (father as HTMLOptionElement).value } });
     expect(screen.getByText(/09.11.2027–10.01.2028/)).toBeInTheDocument();
+  });
+
+  it('pokazuje podsumowanie, oś czasu obu rodziców i działające presety w Planie urlopów', async () => {
+    openPlan('leave-plan');
+    expect(
+      await screen.findByRole('heading', { name: 'Plan urlopów w skrócie', level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Oś czasu urlopów mamy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Oś czasu urlopów taty')).toBeInTheDocument();
+
+    const calendarDetails = screen
+      .getByText('Pokaż kalendarz dzień po dniu')
+      .closest('details') as HTMLDetailsElement;
+    expect(calendarDetails.open).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /Po połowie/ }));
+    expect(
+      await screen.findByRole('button', { name: /Po połowie/, pressed: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dalej: Dokumenty i terminy ›' })).toBeInTheDocument();
   });
 
   it('edytuje wzór w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
