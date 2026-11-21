@@ -184,7 +184,8 @@ export function LandingPage() {
             </ul>
           </nav>
           <p className="landing__privacy-note">
-            Nie zapisujemy Twoich danych – wyliczenia działają w Twojej sesji.
+            Odpowiedzi z formularza zapisujemy tylko w tej przeglądarce, aby można było do nich
+            wrócić.
           </p>
         </div>
       </footer>

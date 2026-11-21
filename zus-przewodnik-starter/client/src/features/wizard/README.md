@@ -1,0 +1,37 @@
+# Formularz bez mObywatela
+
+## Cel
+
+Kreator zbiera dane rodziny do późniejszego sprawdzania uprawnień, wyliczeń i planu urlopów. Jest dostępny po wybraniu sytuacji na stronie startowej i kliknięciu „Kontynuuj bez logowania”. Korzysta wyłącznie z istniejących zależności projektu.
+
+## Ścieżki
+
+- Na początku użytkownik wybiera wspólny plan mamy i taty albo plan samodzielnej mamy lub taty. Formularz pyta o dane każdego wskazanego rodzica osobno.
+- Planowanie i ciąża: orientacyjny lub przewidywany termin, liczba dzieci do symulacji, ubezpieczenie i plany rodziców. Dane faktycznego porodu nie są zbierane.
+- Po porodzie: faktyczna data i liczba dzieci. Pytania o tydzień ciąży, masę urodzeniową i długość hospitalizacji pojawiają się po wskazaniu pobytu dziecka w szpitalu.
+- Adopcja lub rodzina zastępcza: rodzaj opieki, planowane lub zakończone przyjęcie, odpowiednia data, wiek i liczba dzieci.
+- Ubezpieczenie: pytania zależą od formy zatrudnienia każdego rodzica. Podstawa wymiaru jest opcjonalna; formularz nie utożsamia jej z wynagrodzeniem.
+
+Jedno główne pytanie jest wyświetlane na ekranie. Pasek postępu odnosi się do pięciu stałych etapów: rodzina, dziecko, ubezpieczenie, plany i kwoty, podsumowanie. Rozwinięcie pytań dodatkowych nie zmienia liczby etapów. Podsumowanie pozwala edytować dowolną odpowiedź; nowo wymagane pytania trzeba uzupełnić przed zapisaniem.
+
+## Uruchomienie
+
+W katalogu `zus-przewodnik-starter` uruchom `npm install`, a następnie `npm run dev`. Otwórz `http://localhost:5173`, wybierz sytuację i przejdź do formularza. Sprawdź ścieżki dla dwojga rodziców i dla jednej osoby, odśwież stronę w połowie formularza, a następnie zmień skład rodziny w podsumowaniu. Odpowiedzi dotyczące usuniętego rodzica powinny zniknąć. `npm run test -w client` uruchamia testy ścieżek, walidacji i zapisu.
+
+## Dane dla kolejnych modułów
+
+Wszystkie daty w polach formularza i podsumowaniu mają format `DD/MM/YYYY`, niezależnie od języka przeglądarki. Poprawne, pełne daty są zapisywane jako ISO `YYYY-MM-DD`, zgodnie z kontraktem obliczeń; niepełny wpis jest zachowany w szkicu odpowiedzi do dalszej edycji.
+
+`useScenario()` udostępnia:
+
+- `scenario`: typowany szkic danych oparty na typach z `shared/types.ts`, zapisany pod kluczem `zus-manual-scenario-v1`.
+- `manualForm`: wersjonowany stan kreatora (`version: 2`, sytuacja, odpowiedzi, identyfikator bieżącego pytania, potwierdzenie zakończenia), zapisany pod kluczem `zus-manual-form-v2`. `manualForm.answers.family` przyjmuje `both`, `motherOnly` lub `fatherOnly`. Odpowiedź `unknown` oznacza świadome odłożenie informacji.
+- `storageAvailable`: informacja o powodzeniu zapisu. Gdy przeglądarka blokuje zapis, formularz pokazuje, że dane są dostępne tylko do zamknięcia strony.
+
+Każda odpowiedź i przejście między pytaniami zapisują oba obiekty. Po zmianie sytuacji na stronie startowej powstaje nowy formularz. Zmiana gałęzi usuwa nieaktualne odpowiedzi: np. wybór samodzielnego rodzica usuwa dane drugiego rodzica, zmiana zatrudnienia usuwa wcześniejsze dane tego ubezpieczenia, a rezygnacja z pytania o hospitalizację usuwa jej szczegóły. Stary numer kroku z pierwszej wersji kreatora jest wycofany; bez nowego stanu formularz rozpoczyna się od wyboru rodziny.
+
+**Zakończenie formularza nie oznacza gotowości do obliczeń.** Można świadomie pozostawić dane do uzupełnienia. Kwoty i daty nieznane są `null`; nieznane wartości logiczne i tytuł ubezpieczenia pozostają nieustawione. Nie są zamieniane na `false`, zero ani brak ubezpieczenia. Brak rodzica w planie to `mother: null` lub `father: null`.
+
+Przed wysłaniem do silnika trzeba sprawdzić wymagane dane i przygotować pełny `ScenarioInput`. Obecny wspólny kontrakt wymaga `mother: ParentData`, dlatego ścieżka samodzielnego taty wymaga przyszłego dostosowania kontraktu obliczeń. Formularz przechowuje ją poprawnie jako szkic, bez tworzenia fikcyjnego profilu mamy. `shared/types.ts` i REST API nie zostały zmienione.
+
+„Usuń zapisane odpowiedzi” po potwierdzeniu czyści oba zapisy. Dane pozostają na tym samym urządzeniu i w tej samej przeglądarce. Strona `/plan` jest obecnie ekranem zastępczym; podłączenie kalkulatora i planu jest kolejnym etapem projektu. Szczegóły hospitalizacji są przechowywane dla jednego dziecka; przy porodzie mnogim obecny kontrakt nie opisuje osobnej hospitalizacji każdego dziecka.
