@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { BenefitParams, CaseInputs, CasePlan } from '@shared/types';
 import { useScenario } from '../../../app/ScenarioContext';
-import { FaqDetails } from '../../support/FaqSection';
+import { AiAssistantSection } from '../../support/FaqSection';
 import { OrganizationsDetails } from '../../support/OrganizationsSection';
 import {
   OfficialLinksAndUscDetails,
@@ -115,6 +115,8 @@ export function CaseSupport({
         <MatchedSpecialSituations situations={matchingSpecial} />
       </section>
 
+      <AiAssistantSection input={input} plan={plan} params={params} difficult={difficult} />
+
       <section className="support-more" aria-labelledby="support-more-heading">
         <h3 id="support-more-heading" className="support-more__title">
           Dodatkowe informacje, pomoc i narzędzia
@@ -135,7 +137,6 @@ export function CaseSupport({
             referenceDate={input.reference_date ?? todayIsoDate()}
             links={plan.support.official_links}
           />
-          <FaqDetails params={params} />
         </div>
       </section>
 

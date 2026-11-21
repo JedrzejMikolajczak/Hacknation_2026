@@ -228,7 +228,7 @@ describe('Twój plan', () => {
     );
   });
 
-  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
+  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i asystenta AI', async () => {
     openPlan('support');
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
     expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
@@ -236,9 +236,8 @@ describe('Twój plan', () => {
       screen.getByText('Wcześniak lub hospitalizacja dziecka po porodzie'),
     ).toBeInTheDocument();
     expect(screen.getByText('Fundacja Wcześniak Rodzice-Rodzicom')).toBeInTheDocument();
-    expect(screen.getByText('Najczęstsze pytania')).toBeInTheDocument();
-    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asystent AI/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Wspierane przez AI')).toBeInTheDocument();
+    expect(screen.getByText(/Asystent AI – zapytaj o swoją sytuację/)).toBeInTheDocument();
   });
 
   it('wyświetla hub planu z kolejnością kroków, bez zduplikowanych linków w nagłówku', () => {

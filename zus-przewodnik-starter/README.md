@@ -172,7 +172,7 @@ npm run build
 
 Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez AI” i wpisujemy do listy poniżej.
 
-- [x] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny) — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`. Odpowiedzi pochodzą z bazy demonstracyjnej)
+- [x] Asystent AI (Google Gemini) odpowiadający na podstawie poradnika ZUS 2026, parametrów systemu i zanonimizowanego kontekstu planu — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`, z automatycznym trybem awaryjnym z bazy lokalnej bez AI, gdy brak klucza `GEMINI_API_KEY`)
 - [ ] Odczyt danych z PDF przykładowej sprawy (opcjonalny)
 
 ## Test wersji konkursowej
