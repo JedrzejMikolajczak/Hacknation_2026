@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import {
   addDays,
+  addMonths,
   amount,
   calculateBenefitAmount,
   date,
@@ -190,17 +191,25 @@ export function checkEligibility(
     const hasSicknessTitle =
       parent.insuranceTitle !== 'none' && parent.sicknessInsurance !== 'none';
     if (isMother && hasSicknessTitle) {
-      const tenureDays = parent.insuredSince !== null ? daysBetween(parent.insuredSince, on) : null;
-      if (
-        input.shamContractRiskHint ||
-        (tenureDays !== null &&
-          tenureDays >= 0 &&
-          tenureDays < params.sickness.waitingPeriodDaysVoluntary)
-      ) {
+      const insuredSince = parent.insuredSince;
+      const tenureDays = insuredSince === null ? null : daysBetween(insuredSince, on);
+      const risk = params.insuranceRisk;
+      const riskEvent = isAdoption ? on : (input.sicknessStartDate ?? on);
+      const startedDuringPregnancy =
+        !isAdoption &&
+        insuredSince !== null &&
+        insuredSince >= addDays(on, -risk.estimatedPregnancyDays) &&
+        insuredSince <= on;
+      const startedShortlyBeforeEvent =
+        insuredSince !== null &&
+        insuredSince <= riskEvent &&
+        insuredSince > addMonths(riskEvent, -risk.shortTitleMonths);
+
+      if (input.shamContractRiskHint || startedDuringPregnancy || startedShortlyBeforeEvent) {
         warnings.push({
           code: 'SHAM_CONTRACT_RISK',
           message:
-            'Krótki okres ubezpieczenia przed porodem może skutkować postępowaniem wyjaśniającym ZUS w sprawie tytułu ubezpieczenia (ocena, czy umowa lub działalność nie zostały podjęte dla pozoru). Warto zachować dokumenty potwierdzające faktyczne wykonywanie pracy lub prowadzenie działalności.',
+            'Przy rozpoczęciu ubezpieczenia w trakcie ciąży lub krótko przed zdarzeniem ZUS może zweryfikować tytuł ubezpieczenia. Warto zachować dokumenty potwierdzające faktyczne wykonywanie pracy lub prowadzenie działalności.',
           legalBasis: 'Ustawa o systemie ubezpieczeń społecznych art. 68, art. 83; KC art. 83',
         });
       }
