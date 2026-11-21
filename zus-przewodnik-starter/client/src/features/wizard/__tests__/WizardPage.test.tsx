@@ -61,7 +61,12 @@ describe('family wizard', () => {
   it('saves separate parents, preserves unknowns and resumes the current question', async () => {
     let view = renderWizard();
     await view.choice(/^Dwoje rodziców/);
-    await view.input('2027-04-01');
+    const date = screen.getByPlaceholderText('DD/MM/YYYY');
+    await view.user.type(date, '01042');
+    expect(date).toHaveValue('01/04/2');
+    await view.user.type(date, '{Backspace}2027');
+    expect(date).toHaveValue('01/04/2027');
+    await view.next();
     await view.user.click(screen.getByRole('button', { name: 'Wstecz' }));
     expect(screen.getByPlaceholderText('DD/MM/YYYY')).toHaveValue('01/04/2027');
     await view.next();
