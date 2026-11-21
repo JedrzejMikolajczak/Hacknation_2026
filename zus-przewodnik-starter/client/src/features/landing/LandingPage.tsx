@@ -40,6 +40,40 @@ const EXTERNAL_LINKS = [
   },
 ];
 
+/** Dekoracyjna ilustracja w nagłówku – serce w kręgach, bez znaczenia informacyjnego. */
+function HeroEmblem() {
+  return (
+    <svg
+      className="landing__emblem"
+      viewBox="0 0 120 120"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="60" cy="60" r="56" opacity="0.35" />
+      <circle cx="60" cy="60" r="44" opacity="0.55" />
+      <path d="M60 84 C30 64 34 40 50 40 C56 40 60 44 60 49 C60 44 64 40 70 40 C86 40 90 64 60 84Z" />
+    </svg>
+  );
+}
+
+/** Podstawowe wymiary urlopów dla jednego dziecka – szczegóły zależą od sytuacji. */
+const QUICK_FACTS = [
+  { value: '20', unit: 'tygodni', label: 'urlopu macierzyńskiego' },
+  { value: '2', unit: 'tygodnie', label: 'urlopu ojcowskiego' },
+  { value: '41', unit: 'tygodni', label: 'urlopu rodzicielskiego' },
+];
+
+const REASSURANCES = [
+  'Zajmie kilka minut',
+  'Dane zostają w Twojej przeglądarce',
+  'Możesz zacząć bez logowania',
+];
+
 const BENEFITS = [
   'Sprawdzisz, jakie świadczenia Ci przysługują.',
   'Policzysz okres i wysokość zasiłku.',
@@ -94,10 +128,22 @@ export function LandingPage() {
 
       <header className="landing__header">
         <div className="landing__container">
-          <h1 className="landing__title">Przewodnik Przyszłego Rodzica</h1>
-          <p className="landing__subtitle">
-            Sprawdź, jakie świadczenia z ZUS Ci przysługują – w kilka minut.
-          </p>
+          <div className="landing__hero">
+            <div className="landing__hero-text">
+              <h1 className="landing__title">Przewodnik Przyszłego Rodzica</h1>
+              <p className="landing__subtitle">
+                Sprawdź, jakie świadczenia z ZUS Ci przysługują – w kilka minut.
+              </p>
+              <ul className="landing__reassurances">
+                {REASSURANCES.map((item) => (
+                  <li key={item} className="landing__reassurance">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <HeroEmblem />
+          </div>
         </div>
       </header>
 
@@ -149,6 +195,25 @@ export function LandingPage() {
                 </button>
               </div>
             </div>
+          </section>
+
+          <section className="landing__section landing__facts" aria-labelledby="facts-heading">
+            <h2 id="facts-heading" className="landing__facts-title">
+              W skrócie
+            </h2>
+            <ul className="landing__facts-list">
+              {QUICK_FACTS.map((fact) => (
+                <li key={fact.label} className="landing__fact">
+                  <span className="landing__fact-value">{fact.value}</span>
+                  <span className="landing__fact-unit">{fact.unit}</span>
+                  <span className="landing__fact-label">{fact.label}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="landing__facts-note">
+              Dotyczy jednego dziecka. Dokładny wymiar zależy od Twojej sytuacji – sprawdzisz go w
+              planie.
+            </p>
           </section>
 
           <section
