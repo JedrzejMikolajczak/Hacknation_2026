@@ -172,5 +172,5 @@ npm run build
 
 Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez AI” i wpisujemy do listy poniżej.
 
-- [ ] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny)
+- [x] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny) — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`)
 - [ ] Odczyt danych z PDF przykładowej sprawy (opcjonalny)

@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { PlaceholderPage } from '../components/PlaceholderPage';
 import { LandingPage } from '../features/landing/LandingPage';
+import { SupportPage } from '../features/support/SupportPage';
 
 /** Routing zgodny z CONVENTIONS §7. */
 export function App() {
@@ -10,6 +11,7 @@ export function App() {
       <Route path="/login" element={<PlaceholderPage />} />
       <Route path="/wizard" element={<PlaceholderPage />} />
       <Route path="/plan" element={<PlaceholderPage />} />
+      <Route path="/plan/support" element={<SupportPage />} />
       <Route path="/plan/:tab" element={<PlaceholderPage />} />
       <Route path="/guide" element={<PlaceholderPage />} />
       <Route path="/guide/:slug" element={<PlaceholderPage />} />
