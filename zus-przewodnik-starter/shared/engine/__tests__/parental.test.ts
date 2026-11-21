@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
 import type { ScenarioInput } from '../../types';
-import { calculateParentalLeaveWithWork, planParentalSplit, CalculationError } from '../index';
+import { CalculationError, calculateParentalLeaveWithWork, planParentalSplit } from '../index';
 
 function testScenario(): ScenarioInput {
   const mother = {
@@ -52,14 +52,14 @@ function testScenario(): ScenarioInput {
 }
 
 describe('parental leave rules', () => {
-  it('allows valid split between mother and father within pool', () => {
+  it('allows valid split between mother and father within pool (including simultaneous use)', () => {
     const scenario = testScenario();
     const result = planParentalSplit(
       {
         scenario,
         parts: [
           { parentRole: 'mother', leaveType: 'parentalLeave', startDate: '2027-03-22', weeks: 32 },
-          { parentRole: 'father', leaveType: 'parentalLeave', startDate: '2027-11-02', weeks: 9 },
+          { parentRole: 'father', leaveType: 'parentalLeave', startDate: '2027-03-22', weeks: 9 },
         ],
       },
       params,
@@ -76,37 +76,88 @@ describe('parental leave rules', () => {
   it('rejects more than 5 parts', () => {
     const scenario = testScenario();
     const parts = [
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-03-22', weeks: 5 },
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-04-26', weeks: 5 },
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-05-31', weeks: 5 },
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-07-05', weeks: 5 },
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-08-09', weeks: 5 },
-      { parentRole: 'mother' as const, leaveType: 'parentalLeave' as const, startDate: '2027-09-13', weeks: 5 },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-03-22',
+        weeks: 5,
+      },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-04-26',
+        weeks: 5,
+      },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-05-31',
+        weeks: 5,
+      },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-07-05',
+        weeks: 5,
+      },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-08-09',
+        weeks: 5,
+      },
+      {
+        parentRole: 'mother' as const,
+        leaveType: 'parentalLeave' as const,
+        startDate: '2027-09-13',
+        weeks: 5,
+      },
     ];
 
     const result = planParentalSplit({ scenario, parts }, params);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.message.includes('przekracza maksymalną dopuszczalną liczbę'))).toBe(true);
+    expect(
+      result.errors.some((e) => e.message.includes('przekracza maksymalną dopuszczalną liczbę')),
+    ).toBe(true);
   });
 
   it('protects 9 non-transferable weeks for the second parent', () => {
     const scenario = testScenario();
-    // Mother attempts to take 35 weeks (max allowed for single parent is 41 - 9 = 32 weeks)
     const result = planParentalSplit(
       {
         scenario,
-        parts: [{ parentRole: 'mother', leaveType: 'parentalLeave', startDate: '2027-03-22', weeks: 35 }],
+        parts: [
+          { parentRole: 'mother', leaveType: 'parentalLeave', startDate: '2027-03-22', weeks: 35 },
+        ],
       },
       params,
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.message.includes('9 tygodni jest nieprzenoszalne'))).toBe(true);
+    expect(result.errors.some((e) => e.message.includes('9 tygodni jest nieprzenoszalne'))).toBe(
+      true,
+    );
   });
 
-  it('calculates parental leave extended with part-time work (art. 182¹f KP)', () => {
+  it('rejects parental leave parts extending past the end of calendar year when child turns 6', () => {
+    const scenario = testScenario(); // born 2026-11-01 -> deadline 2032-12-31
+    const result = planParentalSplit(
+      {
+        scenario,
+        parts: [
+          { parentRole: 'mother', leaveType: 'parentalLeave', startDate: '2032-12-20', weeks: 4 },
+        ],
+      },
+      params,
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.message.includes('2032-12-31'))).toBe(true);
+  });
+
+  it('calculates parental leave extended with part-time work without rounding rate (0.815 * 0.5 = 0.4075)', () => {
     const scenario = testScenario();
-    const result = calculateParentalLeaveWithWork(
+    const stdResult = calculateParentalLeaveWithWork(
       {
         scenario,
         parentRole: 'mother',
@@ -117,17 +168,28 @@ describe('parental leave rules', () => {
       params,
     );
 
-    expect(result.extendedWeeks).toBe(5);
-    expect(result.extendedDays).toBe(35);
-    expect(result.periods).toHaveLength(2);
+    expect(stdResult.extendedWeeks).toBe(5);
+    expect(stdResult.extendedDays).toBe(35);
+    expect(stdResult.periods).toHaveLength(2);
+    expect(stdResult.periods[0].rate).toBe(0.35);
+    expect(stdResult.periods[1].rate).toBe(0.7);
 
-    // Worked period has reduced benefit rate (0.7 * (1 - 0.5) = 0.35)
-    expect(result.periods[0].weeks).toBe(10);
-    expect(result.periods[0].rate).toBe(0.35);
+    // Combined 81.5% at 0.5 work -> rate MUST stay exact 0.4075, NOT 0.41!
+    const combinedScenario = { ...testScenario(), rateVariant: 'combined' as const };
+    const combResult = calculateParentalLeaveWithWork(
+      {
+        scenario: combinedScenario,
+        parentRole: 'mother',
+        workTimeFraction: 0.5,
+        startDate: '2027-03-22',
+        weeks: 10,
+      },
+      params,
+    );
 
-    // Extended period has full benefit rate (0.7)
-    expect(result.periods[1].weeks).toBe(5);
-    expect(result.periods[1].rate).toBe(0.7);
+    expect(combResult.periods[0].rate).toBeCloseTo(0.4075, 6);
+    expect(combResult.periods[0].monthlyAmount).toBe(2445); // 6000 * 0.4075 = 2445.00 (not 2460!)
+    expect(combResult.periods[1].rate).toBe(0.815);
   });
 
   it('throws CalculationError when workTimeFraction exceeds 0.5', () => {

@@ -16,9 +16,9 @@
 export { CalculationError, calculateBenefitAmount, roundPln } from './core';
 export { calculateBenefitBase } from './benefitBase';
 export type { BaseInput } from './benefitBase';
-export { checkEligibility, calculateSicknessInPregnancy } from './eligibility';
-export type { SicknessInput } from './eligibility';
-export { calculateMaternity } from './maternity';
+export { checkEligibility, calculateSicknessInPregnancy, resolveParentPayer } from './eligibility';
+export type { EligibilityInput, SicknessInput } from './eligibility';
+export { calculateMaternity, resolveSupplementaryMaternityLeave } from './maternity';
 export type { MaternityInput } from './maternity';
 export { planParentalSplit, calculateParentalLeaveWithWork } from './parental';
 export { getRequiredDocuments } from './documents';
