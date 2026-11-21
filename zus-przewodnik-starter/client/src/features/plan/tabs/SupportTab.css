@@ -1,0 +1,233 @@
+/*
+ * Zakładka „Wsparcie” – styl zgodny z www.zus.pl (CONVENTIONS §7.1).
+ * Wyłącznie tokeny z client/src/styles/tokens.css; mobile-first (640 / 1024 px).
+ */
+
+.support-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+}
+
+.support-answer--empathetic {
+  border-left-color: var(--color-navy);
+  background: var(--color-info-soft);
+}
+
+.support-answer__title {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+}
+
+.support-answer__text {
+  color: var(--color-text);
+}
+
+/* Organizacje pomocowe */
+.support-orgs-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.support-org-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.support-org-tile__tag {
+  align-self: flex-start;
+}
+
+.support-org-tile__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.support-org-tile__desc {
+  flex: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.support-org-tile__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Linki urzędowe */
+.support-official-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.support-official-list__item {
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.support-official-list__item:last-child {
+  border-bottom: none;
+}
+
+.support-official-list__link {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) 0;
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+/* Formularze (PUE/eZUS i Najczęstsze pytania) */
+.support-action-btn {
+  width: 100%;
+}
+
+.support-pue-feedback {
+  margin-top: var(--space-3);
+}
+
+/* Najczęstsze pytania */
+.support-faq-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.support-faq-chip {
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-faq-chip:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+.support-faq-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.support-faq-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.support-faq-sources {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.support-faq-sources__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  list-style: none;
+  cursor: pointer;
+}
+
+.support-faq-sources__summary::-webkit-details-marker {
+  display: none;
+}
+
+.support-faq-sources__summary::after {
+  content: '▸';
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.support-faq-sources[open] > .support-faq-sources__summary::after {
+  content: '▾';
+}
+
+.support-faq-sources__body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Powrót do planu */
+.support-next-nav {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+}
+
+.support-next-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width-control) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.support-next-link:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+@media (min-width: 640px) {
+  .support-orgs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .support-action-btn,
+  .support-next-link {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-faq-chip,
+  .support-next-link {
+    transition: none;
+  }
+}
