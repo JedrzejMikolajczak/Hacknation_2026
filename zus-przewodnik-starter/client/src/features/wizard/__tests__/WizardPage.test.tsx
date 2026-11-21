@@ -8,6 +8,7 @@ import {
   SCENARIO_STORAGE_KEY,
 } from '../../../app/ScenarioContext';
 import { App } from '../../../app/App';
+import { todayLocal } from '../wizardModel';
 
 const memory = new Map<string, string>();
 
@@ -63,6 +64,20 @@ function renderWizard(situation = 'pregnant') {
 }
 
 describe('family wizard', () => {
+  it('otwiera pola daty na dzisiejszej dacie i zapisuje ją po kliknięciu Dalej', async () => {
+    const view = renderWizard();
+    await view.choice(/^Samodzielnie — mama/);
+    const today = todayLocal();
+    const [year, month, day] = today.split('-');
+    expect(screen.getByLabelText('Rok')).toHaveValue(year);
+    expect(screen.getByLabelText('Miesiąc')).toHaveValue(month);
+    expect(screen.getByLabelText('Dzień')).toHaveValue(day);
+    expect(JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers).not.toHaveProperty('expectedBirthDate');
+    await view.next();
+    expect(JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers.expectedBirthDate).toBe(today);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Ilu dzieci');
+  });
+
   it('saves separate parents, preserves unknowns and resumes the current question', async () => {
     let view = renderWizard();
     await view.choice(/^Dwoje rodziców/);
@@ -74,6 +89,8 @@ describe('family wizard', () => {
     fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: '29' } });
     fireEvent.change(screen.getByLabelText('Rok'), { target: { value: '2027' } });
     expect(screen.getByLabelText('Dzień')).toHaveValue('');
+    await view.next();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Miesiąc'), { target: { value: '04' } });
     fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: '01' } });
     await view.next();

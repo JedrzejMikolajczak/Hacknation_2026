@@ -326,15 +326,29 @@ export function WizardPage() {
   function next(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !question) return;
-    const validation = validateAnswer(question, answers[question.id]);
+    let value = answers[question.id];
+    if (question.type === 'date' && value !== 'unknown') {
+      const fields = new FormData(event.currentTarget);
+      const parts = ['date-year', 'date-month', 'date-day'].map((name) => fields.get(name));
+      value = parts.every(Boolean) ? parts.join('-') : '';
+    }
+    const validation = validateAnswer(question, value);
     if (validation) {
       setError(validation);
       return;
     }
+    const currentForm = { ...form, answers };
+    const updated =
+      value !== answers[question.id] && value !== undefined
+        ? recordUserEdit(currentForm, question.id, value)
+        : currentForm;
+    const nextQuestions = updated === currentForm
+      ? questions
+      : getQuestions(form.situation, updated.answers);
     const nextQuestion = editing
-      ? firstMissing
-      : questions[questions.findIndex((item) => item.id === question.id) + 1];
-    persist(answers, nextQuestion?.id ?? 'summary');
+      ? nextQuestions.find((item) => validateAnswer(item, updated.answers[item.id]) !== null)
+      : nextQuestions[nextQuestions.findIndex((item) => item.id === question.id) + 1];
+    persistForm({ ...updated, currentQuestionId: nextQuestion?.id ?? 'summary', completed: false });
     setError(null);
     if (!nextQuestion) setEditing(false);
   }

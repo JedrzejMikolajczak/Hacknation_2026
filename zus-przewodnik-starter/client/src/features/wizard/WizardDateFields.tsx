@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MAX_WIZARD_YEAR, MIN_WIZARD_YEAR } from './wizardModel';
+import { MAX_WIZARD_YEAR, MIN_WIZARD_YEAR, todayLocal } from './wizardModel';
 
 const months = [
   'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
@@ -10,6 +10,11 @@ const years = Array.from(
   (_, index) => MIN_WIZARD_YEAR + index,
 );
 const emptyDate = { day: '', month: '', year: '' };
+
+function todayFields() {
+  const [year, month, day] = todayLocal().split('-');
+  return { year, month, day };
+}
 
 function daysInMonth(month: string, year: string) {
   return month ? new Date(Date.UTC(Number(year || '2000'), Number(month), 0)).getUTCDate() : 31;
@@ -26,7 +31,7 @@ export function WizardDateFields({
   invalid: boolean;
   onChange: (value: string) => void;
 }) {
-  const [draft, setDraft] = useState(emptyDate);
+  const [draft, setDraft] = useState(todayFields);
   const [year = '', month = '', day = ''] = value.split('-');
   const current = value === 'unknown' ? emptyDate : value ? { year, month, day } : draft;
 
@@ -49,7 +54,7 @@ export function WizardDateFields({
     >
       <label className="wizard__field">
         Dzień
-        <select value={current.day} onChange={(event) => select('day', event.target.value)}>
+        <select name="date-day" value={current.day} onChange={(event) => select('day', event.target.value)}>
           <option value="">Wybierz</option>
           {Array.from({ length: daysInMonth(current.month, current.year) }, (_, index) => {
             const day = String(index + 1).padStart(2, '0');
@@ -59,7 +64,7 @@ export function WizardDateFields({
       </label>
       <label className="wizard__field">
         Miesiąc
-        <select value={current.month} onChange={(event) => select('month', event.target.value)}>
+        <select name="date-month" value={current.month} onChange={(event) => select('month', event.target.value)}>
           <option value="">Wybierz</option>
           {months.map((month, index) => (
             <option key={month} value={String(index + 1).padStart(2, '0')}>{month}</option>
@@ -68,7 +73,7 @@ export function WizardDateFields({
       </label>
       <label className="wizard__field">
         Rok
-        <select value={current.year} onChange={(event) => select('year', event.target.value)}>
+        <select name="date-year" value={current.year} onChange={(event) => select('year', event.target.value)}>
           <option value="">Wybierz</option>
           {years.map((year) => <option key={year}>{year}</option>)}
         </select>
