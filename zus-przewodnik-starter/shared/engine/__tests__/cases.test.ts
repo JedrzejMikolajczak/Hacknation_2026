@@ -697,4 +697,102 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
       { parent_role: 'FATHER', leave_type: 'PATERNITY', weeks: 2, rate_percent: 100 },
     ]);
   });
+
+  it('obsługuje 5 przypadków rozszerzonego kontraktu PDF (porzucenie, bezprawne zwolnienie, dwa tytuły, poród mnogi z liczbą zmarłych dzieci)', () => {
+    // 1. Porzucenie dziecka przez matkę (KP art. 180 § 13) – ojciec przejmuje macierzyński
+    const abandoned = calculateCasePlan(
+      baseTwoParentInput({
+        applicant_role: 'FATHER',
+        co_parenting: false,
+        other_parent_insured: null,
+        other_parent: undefined,
+        benefit_base_amount_pln: 5000,
+        father_parental_weeks: 0,
+        father_takeover_date: '2026-12-01',
+        special_circumstances: {
+          ...baseTwoParentInput().special_circumstances,
+          mother_abandoned_child: true,
+        },
+      }),
+      params,
+    );
+    expect(abandoned.outcome.is_qualified).toBe(true);
+    expect(
+      abandoned.outcome.periods.some(
+        (p) => p.parent_role === 'FATHER' && p.leave_type === 'MATERNITY',
+      ),
+    ).toBe(true);
+    expect(abandoned.documents.some((d) => d.id === 'TAKEOVER' && d.parent_role === 'FATHER')).toBe(
+      true,
+    );
+
+    // 2. Bezprawne zwolnienie potwierdzone wyrokiem sądu (art. 30 ust. 3) – ZUS wypłaca zasiłek mimo końca umowy przed porodem
+    const unlawful = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-02-01',
+        contract_type: 'INDEFINITE',
+        contract_end_date: '2026-10-01',
+        special_circumstances: {
+          ...baseTwoParentInput().special_circumstances,
+          unlawful_termination_confirmed_by_court: true,
+        },
+      }),
+      params,
+    );
+    expect(unlawful.outcome.is_qualified).toBe(true);
+    expect(
+      unlawful.entitlements.find((e) => e.benefit_type === 'MATERNITY_EQUIVALENT'),
+    ).toMatchObject({ is_qualified: true, who_pays: 'ZUS' });
+    expect(unlawful.documents.some((d) => d.id === 'COURT_JUDGMENT' && d.submit_to === 'ZUS')).toBe(
+      true,
+    );
+
+    // 3. Dwa tytuły ubezpieczenia naraz (UoP + dobrowolne JDG)
+    const dual = calculateCasePlan(
+      baseTwoParentInput({
+        secondary_employment_type: 'B2B',
+        secondary_voluntary_sickness_insured: true,
+      }),
+      params,
+    );
+    expect(dual.outcome.warnings.some((w) => w.code === 'MULTIPLE_INSURANCE_TITLES')).toBe(true);
+    expect(dual.documents.some((d) => d.id === 'SECONDARY_TITLE_ZAM' && d.submit_to === 'ZUS')).toBe(
+      true,
+    );
+
+    // 4. Poród mnogi (trojaczki) z liczbą zmarłych dzieci = 2 → zostaje 1 żywe dziecko (20 tyg. macierzyńskiego, 41 tyg. rodzicielskiego)
+    const tripletsLoss = calculateCasePlan(
+      baseTwoParentInput({
+        children_count: 3,
+        deceased_children_count: 2,
+        special_circumstances: {
+          ...baseTwoParentInput().special_circumstances,
+          stillbirth_or_child_death: 'BEFORE_8_WEEKS',
+        },
+      }),
+      params,
+    );
+    expect(
+      tripletsLoss.outcome.periods.find((p) => p.leave_type === 'MATERNITY')?.weeks,
+    ).toBe(20);
+    expect(tripletsLoss.outcome.parental_pool_weeks).toBe(41);
+
+    // 5. Poród mnogi (bliźnięta), oba zmarłe (deceased_children_count = 2) → 8 tyg. po porodzie, brak rodzicielskiego
+    const twinsAllLost = calculateCasePlan(
+      baseTwoParentInput({
+        children_count: 2,
+        deceased_children_count: 2,
+        special_circumstances: {
+          ...baseTwoParentInput().special_circumstances,
+          stillbirth_or_child_death: 'BEFORE_8_WEEKS',
+        },
+      }),
+      params,
+    );
+    expect(
+      twinsAllLost.outcome.periods.find((p) => p.leave_type === 'MATERNITY')?.weeks,
+    ).toBe(8);
+    expect(twinsAllLost.outcome.parental_pool_weeks).toBe(0);
+  });
 });

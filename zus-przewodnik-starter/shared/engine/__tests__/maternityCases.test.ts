@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { BenefitBaseInput, WizardScenario } from '../../types';
+import type { BenefitBaseInput, ParentData, WizardScenario } from '../../types';
 import {
   calculateBenefitBase,
   calculateMaternity,
@@ -8,7 +8,7 @@ import {
   checkEligibility,
 } from '../index';
 
-function testScenario(): WizardScenario {
+function testScenario(): WizardScenario & { mother: ParentData } {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
@@ -440,5 +440,52 @@ describe('maternity leave extended scenarios', () => {
       previousBenefitBase: 5500,
     };
     expect(calculateBenefitBase(continuityInput, params).benefitBase).toBe(5500);
+  });
+
+  it('supports single father without mother data (mother: null), abandonment, court judgment, dual titles, and multiple-birth deceased count', () => {
+    // 1. Samotny ojciec bez danych matki (mother: null)
+    const singleFather: WizardScenario = { ...testScenario(), mother: null };
+    const singleFatherElig = checkEligibility(singleFather, params);
+    expect(singleFatherElig.entitlements).toHaveLength(1);
+    expect(singleFatherElig.entitlements[0]).toMatchObject({
+      parentRole: 'father',
+      entitled: true,
+    });
+    const singleFatherMat = calculateMaternity(singleFather, params);
+    expect(singleFatherMat.periods.map((p) => p.leaveType)).toEqual([
+      'parentalLeave',
+      'paternityLeave',
+    ]);
+    expect(calculateSicknessInPregnancy(singleFather, params).entitled).toBe(false);
+
+    // 2. Porzucenie dziecka przez matkę w kontrakcie SpecialCircumstances
+    const abandoned = testScenario();
+    abandoned.special.motherAbandonedChild = true;
+    const abandonedMat = calculateMaternity(abandoned, params);
+    expect(
+      abandonedMat.periods.some((p) => p.parentRole === 'father' && p.leaveType === 'maternityLeave'),
+    ).toBe(true);
+
+    // 3. Bezprawne zwolnienie potwierdzone wyrokiem w SpecialCircumstances + dwa tytuły naraz
+    const unlawful = testScenario();
+    unlawful.special.unlawfulTerminationConfirmedByCourt = true;
+    unlawful.mother!.secondaryInsuranceTitle = 'selfEmployed';
+    unlawful.mother!.secondarySicknessInsurance = 'voluntary';
+    const unlawfulElig = checkEligibility(unlawful, params);
+    expect(
+      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityEquivalentBenefit')?.entitled,
+    ).toBe(true);
+    expect(
+      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother')
+        ?.reason.message,
+    ).toContain('drugi równoległy tytuł');
+
+    // 4. Liczba zmarłych dzieci przy porodzie mnogim (trojaczki, 2 zmarłe -> 1 żywe -> 20 tyg. macierzyńskiego)
+    const multipleLoss = testScenario();
+    multipleLoss.childrenCount = 3;
+    multipleLoss.special.childDeathDate = '2026-11-25';
+    multipleLoss.special.deceasedChildrenCount = 2;
+    const multipleLossMat = calculateMaternity(multipleLoss, params);
+    expect(multipleLossMat.periods.find((p) => p.leaveType === 'maternityLeave')?.weeks).toBe(20);
   });
 });
