@@ -58,6 +58,8 @@ export function DocumentsTab({
   wizardHref = '/wizard',
 }: DocumentsTabProps) {
   const { search } = useLocation();
+  const zamPreviewParams = new URLSearchParams(search);
+  zamPreviewParams.set('podglad', 'zus-zam');
   const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>(loadCheckedIds);
 
   useEffect(() => {
@@ -252,6 +254,14 @@ export function DocumentsTab({
                     </span>
                   </span>
                 </label>
+                {doc.id === 'formZAM' && (
+                  <Link
+                    className="plan-btn plan-btn--secondary"
+                    to={{ pathname: '/plan/applications', search: zamPreviewParams.toString() }}
+                  >
+                    Otwórz podgląd ZUS ZAM
+                  </Link>
+                )}
 
                 {doc.note && (
                   <div className="docs-compact-item__details-wrap">

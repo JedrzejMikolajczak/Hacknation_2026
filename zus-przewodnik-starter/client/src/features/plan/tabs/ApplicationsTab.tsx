@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import type {
   BenefitParams,
   DocumentChecklist,
@@ -14,6 +14,7 @@ import {
   formatPolishDate,
   getExplicitEventDate,
 } from '../planScenario';
+import { ApplicationPreview } from './ApplicationPreview';
 import './ApplicationsTab.css';
 
 interface ApplicationsTabProps {
@@ -65,6 +66,19 @@ function formatRecipientFull(submitTo: Payer | 'usc'): string {
 
 export function ApplicationsTab({ scenario, params, maternity, checklist }: ApplicationsTabProps) {
   const { search } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  function setPreview(id: string | null) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (id) next.set('podglad', id);
+        else next.delete('podglad');
+        return next;
+      },
+      { replace: true },
+    );
+  }
   const [applicantName, setApplicantName] = useState('');
   const [pesel, setPesel] = useState('');
   const [bankAccount, setBankAccount] = useState('');
@@ -268,6 +282,8 @@ export function ApplicationsTab({ scenario, params, maternity, checklist }: Appl
       ],
     });
   }
+
+  const preview = forms.find((form) => form.id === searchParams.get('podglad'));
 
   function findMissingPersonalFields(required: PersonalFieldKey[]): PersonalFieldKey[] {
     const missing: PersonalFieldKey[] = [];
@@ -485,6 +501,13 @@ export function ApplicationsTab({ scenario, params, maternity, checklist }: Appl
                         </div>
                       ))}
                     </dl>
+                    <button
+                      type="button"
+                      className="plan-btn plan-btn--secondary"
+                      onClick={() => setPreview(form.id)}
+                    >
+                      Otwórz podgląd do druku
+                    </button>
                     <p className="plan-legal">Kanał: {form.channelLabel}</p>
                     <p className="plan-legal">Podstawa prawna: {form.legalBasis}</p>
                   </div>
@@ -574,6 +597,15 @@ export function ApplicationsTab({ scenario, params, maternity, checklist }: Appl
         </div>
       </section>
 
+      {preview && (
+        <ApplicationPreview
+          key={preview.id}
+          title={preview.title}
+          recipient={formatRecipientShort(preview.submitTo)}
+          fields={preview.fields}
+          onClose={() => setPreview(null)}
+        />
+      )}
       <nav className="apps-next-nav" aria-label="Następny krok planu">
         <Link to={`/plan/support${search}`} className="apps-next-link">
           Dalej: Wsparcie ›
