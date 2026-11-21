@@ -5,7 +5,6 @@ import { ApiError } from '../../api/client';
 import {
   cloneBenefitParams,
   DEFAULT_BENEFIT_PARAMS,
-  DEMO_ADMIN_TOKEN,
   fetchAdminParams,
   resetSessionAdminParams,
   saveAdminParams,
@@ -121,9 +120,7 @@ export function AdminPage() {
             <Link to="/" className="admin-header__back">
               ‹ Strona startowa
             </Link>
-            <span className="admin-badge">
-              Panel administracyjny ZUS – wersja demonstracyjna
-            </span>
+            <span className="admin-badge">Panel administracyjny ZUS – wersja demonstracyjna</span>
           </div>
 
           <h1 className="admin-header__title">Konfiguracja parametrów ustawowych ZUS</h1>
@@ -172,21 +169,16 @@ export function AdminPage() {
                     <input
                       id="admin-token-input"
                       type="password"
+                      autoComplete="off"
                       value={adminToken}
                       onChange={(e) => setAdminToken(e.target.value)}
                       placeholder="Wpisz token administratora"
                     />
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      onClick={() => {
-                        setAdminToken(DEMO_ADMIN_TOKEN);
-                        setErrorMessage(null);
-                      }}
-                    >
-                      Wypełnij hasłem demonstracyjnym
-                    </button>
                   </div>
+                  <p className="admin-token-hint">
+                    Token jest ustawiany tylko po stronie serwera (zmienna ADMIN_TOKEN) i nie jest
+                    zapisany w aplikacji.
+                  </p>
                 </div>
 
                 <label className="admin-field">
@@ -263,9 +255,7 @@ export function AdminPage() {
                       type="button"
                       role="tab"
                       aria-selected={activeTab === tab.id}
-                      className={
-                        activeTab === tab.id ? 'admin-tab admin-tab--active' : 'admin-tab'
-                      }
+                      className={activeTab === tab.id ? 'admin-tab admin-tab--active' : 'admin-tab'}
                       onClick={() => setActiveTab(tab.id)}
                     >
                       {tab.label}
@@ -288,7 +278,8 @@ export function AdminPage() {
                       zasiłku po odliczeniu składek wynosi{' '}
                       <strong>{derived.minBenefitBasePln.toFixed(2).replace('.', ',')} zł</strong>,
                       a próg zadłużenia wstrzymującego zasiłek na działalności (JDG) to{' '}
-                      <strong>{derived.jdgDebtThresholdPln.toFixed(2).replace('.', ',')} zł</strong>.
+                      <strong>{derived.jdgDebtThresholdPln.toFixed(2).replace('.', ',')} zł</strong>
+                      .
                     </div>
 
                     <div className="admin-fields-grid">
@@ -952,7 +943,10 @@ export function AdminPage() {
                                 );
                                 setDraft({
                                   ...draft,
-                                  supplementaryMaternityLeave: { ...draft.supplementaryMaternityLeave, cases: nextCases },
+                                  supplementaryMaternityLeave: {
+                                    ...draft.supplementaryMaternityLeave,
+                                    cases: nextCases,
+                                  },
                                 });
                               }}
                             />

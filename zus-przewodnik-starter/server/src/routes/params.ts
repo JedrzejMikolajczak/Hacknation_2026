@@ -60,9 +60,21 @@ const paramsSchema = z.custom<BenefitParams>((input) => {
   );
 }, 'Parametry muszą mieć poprawny format i zakres.');
 
+/** Minimalna długość tokenu administratora – słabe lub przykładowe tokeny wyłączają panel. */
+const MIN_ADMIN_TOKEN_LENGTH = 32;
+const PLACEHOLDER_ADMIN_TOKENS = new Set(['change-me', 'changeme', 'admin', 'password']);
+
+export function isUsableAdminToken(token: string | undefined): token is string {
+  return (
+    typeof token === 'string' &&
+    token.length >= MIN_ADMIN_TOKEN_LENGTH &&
+    !PLACEHOLDER_ADMIN_TOKENS.has(token.toLowerCase())
+  );
+}
+
 function authorized(header: string | undefined): boolean {
   const token = process.env.ADMIN_TOKEN;
-  if (!token || !header) return false;
+  if (!isUsableAdminToken(token) || !header) return false;
   const expected = Buffer.from(`Bearer ${token}`);
   const actual = Buffer.from(header);
   return expected.length === actual.length && timingSafeEqual(expected, actual);

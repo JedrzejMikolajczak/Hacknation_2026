@@ -3,7 +3,6 @@ import defaultParamsJson from '@shared/params.json';
 import { ApiError, apiGet, apiPut } from '../../api/client';
 
 export const DEFAULT_BENEFIT_PARAMS: BenefitParams = defaultParamsJson as BenefitParams;
-export const DEMO_ADMIN_TOKEN = 'change-me';
 
 export interface ApiResultWithFallback<T> {
   data: T;
