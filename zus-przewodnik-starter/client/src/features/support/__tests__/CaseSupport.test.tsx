@@ -89,9 +89,37 @@ describe('CaseSupport', () => {
     expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
     expect(screen.getByText('Zadłużenie składkowe (JDG)')).toBeInTheDocument();
 
-    // Oznaczenie AI (README §9) i sekcja Asystenta AI
+    // Oznaczenie AI (README §9), wyraźne ostrzeżenie o błędach AI i sekcja Asystenta AI
     expect(screen.getByText('Wspierane przez AI')).toBeInTheDocument();
     expect(screen.getByText(/Asystent AI – zapytaj o swoją sytuację/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/to jest asystent AI \(sztuczna inteligencja\) i może popełniać błędy/i),
+    ).toBeInTheDocument();
+
+    // Blokada wklejania i przeciągania zdjęć/plików do pola tekstowego asystenta
+    const inputEl = screen.getByLabelText(/Zadaj pytanie tekstowe asystentowi AI/i);
+    const fakeImage = new File(['png'], 'skan.png', { type: 'image/png' });
+    fireEvent.paste(inputEl, {
+      clipboardData: {
+        files: [fakeImage],
+        items: [{ kind: 'file', type: 'image/png' }],
+        getData: () => '',
+      },
+    });
+    expect(
+      screen.getByText(/nie można wklejać ani przeciągać zdjęć i plików/i),
+    ).toBeInTheDocument();
+
+    fireEvent.drop(inputEl, {
+      dataTransfer: {
+        files: [fakeImage],
+        items: [{ kind: 'file', type: 'image/png' }],
+        getData: () => '',
+      },
+    });
+    expect(
+      screen.getByText(/nie można wklejać ani przeciągać zdjęć i plików/i),
+    ).toBeInTheDocument();
 
     // Kliknięcie podpowiedzi wysyła pytanie i zanonimizowany kontekst planu do /api/v1/assistant/ask
     fireEvent.click(

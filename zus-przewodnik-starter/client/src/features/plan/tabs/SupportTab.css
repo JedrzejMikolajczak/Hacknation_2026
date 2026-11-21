@@ -481,6 +481,25 @@
   font-size: var(--font-size-lg);
 }
 
+.support-ai__disclaimer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.support-ai__disclaimer-sub,
+.support-ai__footnote {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 .support-ai__answer-top {
   display: flex;
   flex-wrap: wrap;

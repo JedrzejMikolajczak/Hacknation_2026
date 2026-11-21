@@ -1,4 +1,10 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import {
+  useMemo,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 import type { AssistantAnswer, BenefitParams, CaseInputs, CasePlan } from '@shared/types';
 import { AiBadge } from '../../components/AiBadge';
 import {
@@ -7,6 +13,25 @@ import {
   type AssistantHistoryTurn,
 } from './assistantApi';
 import { SUGGESTED_QUESTIONS } from './assistantQuestions';
+
+const IMAGE_BLOCK_MESSAGE =
+  'Asystent obsługuje wyłącznie pytania tekstowe — nie można wklejać ani przeciągać zdjęć i plików.';
+
+function hasBlockedFileOrImage(dataTransfer: DataTransfer | null | undefined): boolean {
+  if (!dataTransfer) return false;
+  if (dataTransfer.files && dataTransfer.files.length > 0) return true;
+  if (dataTransfer.items) {
+    for (let i = 0; i < dataTransfer.items.length; i += 1) {
+      const item = dataTransfer.items[i];
+      if (item && (item.kind === 'file' || item.type.startsWith('image/'))) {
+        return true;
+      }
+    }
+  }
+  const plainText = dataTransfer.getData?.('text/plain') ?? '';
+  if (/^\s*data:image\//i.test(plainText)) return true;
+  return false;
+}
 
 interface AssistantMessageItem {
   id: number;
@@ -69,6 +94,10 @@ export function AiAssistantSection({
       setErrorText('Wpisz pytanie lub wybierz jedną z podpowiedzi powyżej.');
       return;
     }
+    if (/data:image\//i.test(trimmed)) {
+      setErrorText(IMAGE_BLOCK_MESSAGE);
+      return;
+    }
     setErrorText(null);
     setLoading(true);
     try {
@@ -101,6 +130,27 @@ export function AiAssistantSection({
     void submitQuestion(query);
   }
 
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    if (hasBlockedFileOrImage(event.clipboardData)) {
+      event.preventDefault();
+      setErrorText(IMAGE_BLOCK_MESSAGE);
+    }
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    if (hasBlockedFileOrImage(event.dataTransfer)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'none';
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    if (hasBlockedFileOrImage(event.dataTransfer)) {
+      event.preventDefault();
+      setErrorText(IMAGE_BLOCK_MESSAGE);
+    }
+  }
+
   return (
     <section className="support-ai" aria-labelledby="support-ai-heading">
       <div className="support-ai__header">
@@ -110,11 +160,19 @@ export function AiAssistantSection({
           </h3>
           <AiBadge />
         </div>
-        <p className="support-accordion__intro">
-          Asystent korzysta z modelu Google Gemini i uwzględnia zanonimizowany kontekst Twojego
-          planu (bez danych osobowych). Odpowiedzi mają charakter informacyjny i nie zastępują
-          oficjalnej decyzji ZUS.
-        </p>
+        <div className="support-ai__disclaimer" role="note">
+          <p>
+            <strong>Uwaga: to jest asystent AI (sztuczna inteligencja) i może popełniać błędy.</strong>{' '}
+            Odpowiedzi generowane są automatycznie przez model Google Gemini z uwzględnieniem
+            zanonimizowanego kontekstu Twojego planu. Mają charakter wyłącznie informacyjny, nie
+            stanowią porady prawnej ani oficjalnej decyzji ZUS — ważne terminy i kwoty zawsze
+            weryfikuj w zakładce Kalkulator oraz w oficjalnych źródłach ZUS.
+          </p>
+          <p className="support-ai__disclaimer-sub">
+            Obsługiwane są wyłącznie pytania tekstowe (bez zdjęć, skanów i załączników). Nie wpisuj
+            danych osobowych, takich jak PESEL czy numer konta.
+          </p>
+        </div>
       </div>
 
       <div className="support-faq-chips" aria-label="Przykładowe pytania do asystenta AI">
@@ -165,15 +223,22 @@ export function AiAssistantSection({
         </div>
       )}
 
-      <form className="support-form" onSubmit={handleSubmit}>
+      <form
+        className="support-form"
+        onSubmit={handleSubmit}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         <label className="plan-field">
-          <span className="plan-field__label">Zadaj pytanie asystentowi AI</span>
+          <span className="plan-field__label">Zadaj pytanie tekstowe asystentowi AI</span>
           <input
             type="text"
             className="plan-field__input"
             placeholder="Np. Do kiedy złożyć wniosek o 81,5% lub co zrobić z zadłużeniem JDG?"
             value={query}
             disabled={loading}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
             onChange={(e) => {
               setQuery(e.target.value);
               if (errorText) setErrorText(null);
@@ -207,6 +272,10 @@ export function AiAssistantSection({
             {errorText}
           </p>
         )}
+        <p className="support-ai__footnote">
+          To narzędzie wykorzystuje sztuczną inteligencję (AI) i może popełniać błędy — przed
+          złożeniem wniosku sprawdź informacje w ZUS.
+        </p>
       </form>
     </section>
   );
