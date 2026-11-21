@@ -181,4 +181,172 @@ describe('wizardCase', () => {
         ?.is_qualified,
     ).toBe(false);
   });
+
+  it('dla matki ubezpieczonej 2 miesiące przed przewidywanym porodem mapuje staż i wywołuje SHAM_CONTRACT_RISK', () => {
+    const draft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-01-21',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuredSince: '2026-11-21',
+      },
+    };
+    const input = wizardCase(draft, params);
+    expect(input?.title_start_date).toBe('2026-11-21');
+    expect(input?.insurance_duration_days).toBe(61);
+
+    const plan = calculateCasePlan(input!, params);
+    const codes = plan.outcome.warnings.map((w) => w.code);
+    expect(codes).toContain('SHAM_CONTRACT_RISK');
+    expect(codes).toContain('WAITING_PERIOD_NOT_MET');
+    expect(codes.indexOf('WAITING_PERIOD_NOT_MET')).toBeLessThan(
+      codes.indexOf('SHAM_CONTRACT_RISK'),
+    );
+    expect(plan.outcome.warnings.every((w) => Boolean(w.legal_basis))).toBe(true);
+    expect(plan.outcome.warnings.every((w) => w.message_pl.includes('Co zrobić:'))).toBe(true);
+  });
+
+  it('dla formularza ze średnim wynagrodzeniem nie wymyśla BASE_INCREASE_IN_PREGNANCY', () => {
+    const draft: ScenarioDraft = {
+      ...bothParentsDraft,
+      mother: {
+        ...bothParentsDraft.mother,
+        benefitBase: null,
+      },
+      benefitBaseInputs: {
+        mother: {
+          insuranceTitle: 'employment',
+          rightArisesOn: '2026-11-10',
+          incomes: [
+            { month: '2026-01', grossAmount: 9500, workedDays: null, requiredWorkingDays: null },
+            { month: '2026-06', grossAmount: 9500, workedDays: null, requiredWorkingDays: null },
+            { month: '2026-10', grossAmount: 9500, workedDays: null, requiredWorkingDays: null },
+          ],
+          contractMonthlySalary: 9500,
+          declaredContributionBase: null,
+          previousBenefitEndDate: null,
+          previousBenefitBase: null,
+        },
+      },
+    };
+    const plan = calculateCasePlan(wizardCase(draft, params)!, params);
+    expect(plan.outcome.warnings.some((w) => w.code === 'BASE_INCREASE_IN_PREGNANCY')).toBe(false);
+  });
+
+  it('dla umowy o pracę na czas określony przedłużanej do porodu z formularza NIE zgłasza fałszywego CONTRACT_ENDS_BEFORE_BIRTH', () => {
+    const draft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2023-01-01',
+        insuranceEndDate: '2026-12-31',
+      },
+    };
+    const input = wizardCase(draft, params);
+    expect(input?.contract_type).toBe('FIXED_TERM');
+
+    const plan = calculateCasePlan(input!, params);
+    expect(plan.outcome.is_qualified).toBe(true);
+    expect(plan.outcome.warnings.some((w) => w.code === 'CONTRACT_ENDS_BEFORE_BIRTH')).toBe(false);
+    expect(plan.outcome.warnings.some((w) => w.code === 'CONTRACT_EXTENDED_TO_BIRTH')).toBe(true);
+  });
+
+  it('dla umowy zlecenia kończącej się przed porodem oraz niezgłoszonego chorobowego zgłasza właściwe ryzyka z formularza', () => {
+    const mandateEndDraft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuranceTitle: 'mandateContract',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2023-01-01',
+        insuranceEndDate: '2026-12-31',
+        employerInsuredCount: 50,
+      },
+    };
+    const mandatePlan = calculateCasePlan(wizardCase(mandateEndDraft, params)!, params);
+    expect(mandatePlan.outcome.warnings.some((w) => w.code === 'CONTRACT_ENDS_BEFORE_BIRTH')).toBe(
+      true,
+    );
+
+    const noVoluntaryDraft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuranceTitle: 'selfEmployed',
+        sicknessInsurance: 'none',
+        insuredSince: null,
+        insuranceEndDate: null,
+        employerInsuredCount: null,
+      },
+    };
+    const noVoluntaryPlan = calculateCasePlan(wizardCase(noVoluntaryDraft, params)!, params);
+    expect(
+      noVoluntaryPlan.outcome.warnings.some((w) => w.code === 'NO_INSURANCE_ON_BIRTH_DATE'),
+    ).toBe(true);
+  });
+
+  it('dla JDG z zadłużeniem powyżej 1% płacy minimalnej zgłasza SELF_EMPLOYED_DEBT z formularza', () => {
+    const debtDraft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuranceTitle: 'selfEmployed',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2023-01-01',
+        insuranceEndDate: null,
+        employerInsuredCount: null,
+        contributionDebt: 150,
+      },
+    };
+    const input = wizardCase(debtDraft, params);
+    expect(input?.has_b2b_arrears).toBe(true);
+    expect(input?.debt_amount_pln).toBe(150);
+
+    const plan = calculateCasePlan(input!, params);
+    expect(plan.outcome.warnings.some((w) => w.code === 'SELF_EMPLOYED_DEBT')).toBe(true);
+  });
+
+  it('dla dobrowolnego ubezpieczenia trwającego krócej niż 90 dni zgłasza WAITING_PERIOD_NOT_MET z formularza', () => {
+    const waitingDraft: ScenarioDraft = {
+      ...bothParentsDraft,
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-05-01',
+      mother: {
+        ...bothParentsDraft.mother,
+        insuranceTitle: 'selfEmployed',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2026-10-01',
+        insuranceEndDate: null,
+        employerInsuredCount: null,
+        contributionDebt: 0,
+      },
+    };
+    const plan = calculateCasePlan(wizardCase(waitingDraft, params)!, params);
+    const waiting = plan.outcome.warnings.find((w) => w.code === 'WAITING_PERIOD_NOT_MET');
+    expect(waiting).toBeDefined();
+    expect(waiting?.message_pl).toContain(`${params.sickness.waitingPeriodDaysVoluntary} dni`);
+  });
 });

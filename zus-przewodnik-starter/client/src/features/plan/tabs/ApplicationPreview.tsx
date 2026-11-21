@@ -5,11 +5,22 @@ import './ApplicationPreview.css';
 interface ApplicationPreviewProps {
   title: string;
   recipient: string;
+  code?: string;
   fields: { label: string; value: string }[];
+  legalNote?: string;
+  verificationNote?: string;
   onClose: () => void;
 }
 
-export function ApplicationPreview({ title, recipient, fields, onClose }: ApplicationPreviewProps) {
+export function ApplicationPreview({
+  title,
+  recipient,
+  code,
+  fields,
+  legalNote,
+  verificationNote,
+  onClose,
+}: ApplicationPreviewProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
 
@@ -31,8 +42,9 @@ export function ApplicationPreview({ title, recipient, fields, onClose }: Applic
         <p className="application-preview__notice">
           Podgląd demonstracyjny · dane osobowe nie są wysyłane na serwer
         </p>
+        {code && <p className="application-preview__code">{code}</p>}
         <h2 id={headingId}>{title}</h2>
-        <p>Adresat: {recipient}</p>
+        <p className="application-preview__recipient">Adresat: {recipient}</p>
       </header>
       <dl>
         {fields.map(({ label, value }) => (
@@ -42,6 +54,16 @@ export function ApplicationPreview({ title, recipient, fields, onClose }: Applic
           </div>
         ))}
       </dl>
+      {(legalNote || verificationNote) && (
+        <div className="application-preview__notes">
+          {legalNote && (
+            <p className="application-preview__legal">
+              <strong>Podstawa prawna:</strong> {legalNote}
+            </p>
+          )}
+          {verificationNote && <p className="application-preview__verify">{verificationNote}</p>}
+        </div>
+      )}
       <footer>
         <button type="button" className="plan-btn plan-btn--primary" onClick={() => window.print()}>
           Drukuj lub zapisz PDF
