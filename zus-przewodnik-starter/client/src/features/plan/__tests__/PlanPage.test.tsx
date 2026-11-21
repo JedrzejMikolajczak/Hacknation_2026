@@ -507,38 +507,66 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     );
   });
 
-  it('w zakładce Wsparcie pokazuje najpierw organizacje i linki, potem kontakt z ZUS, a na końcu Najczęstsze pytania bez etykiety AI', async () => {
-    const { user } = renderPlan('/plan/support?situation=afterBirth');
+  it('w zakładce Wsparcie pokazuje Najważniejsze dla Ciebie (ryzyka z silnika i sytuacje szczególne), zwinięte narzędzia, organizacje charytatywne i brak etykiety AI', async () => {
+    const jdgDraft: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      childrenCount: 1,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'selfEmployed',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2020-01-01',
+        benefitBase: 5000,
+        contributionDebt: 400,
+        wantsLeave: true,
+      },
+      father: null,
+      special: { zaZyciemCertificate: true },
+    };
+
+    const { user } = renderPlan('/plan/support?situation=afterBirth', jdgDraft);
 
     // Brak nieprawdziwego oznaczenia AI
     expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/asystent.*AI/i)).not.toBeInTheDocument();
 
-    // Właściwa kolejność sekcji: organizacje -> linki -> PUE/eZUS -> Najczęstsze pytania
-    const orgsHeading = screen.getByRole('heading', { level: 2, name: /Organizacje pomocowe/i });
-    const linksHeading = screen.getByRole('heading', {
+    // Najważniejsze dla Ciebie na górze z ryzykiem z silnika oraz pasującą sytuacją szczególną
+    const keyHeading = screen.getByRole('heading', {
       level: 2,
-      name: /Oficjalne strony urzędowe/i,
+      name: /Najważniejsze dla Ciebie/i,
     });
-    const pueHeading = screen.getByRole('heading', {
-      level: 2,
-      name: /Kontakt z ZUS przez PUE \/ eZUS/i,
-    });
-    const faqHeading = screen.getByRole('heading', { level: 2, name: /Najczęstsze pytania/i });
+    const keySection = keyHeading.closest('section') as HTMLElement;
+    expect(within(keySection).getByText(/Zadłużenie składkowe \(JDG\)/i)).toBeInTheDocument();
+    expect(
+      within(keySection).getByRole('heading', {
+        level: 3,
+        name: /Zaświadczenie „Za życiem”/i,
+      }),
+    ).toBeInTheDocument();
 
-    expect(orgsHeading.compareDocumentPosition(linksHeading)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
+    // Ogólne ryzyka, inne sytuacje, PUE/eZUS i Najczęstsze pytania są zwinięte domyślnie
+    expect(
+      screen.getByText(/Ogólne ryzyka utraty lub obniżenia zasiłku/i).closest('details'),
+    ).not.toHaveAttribute('open');
+    expect(screen.getByText('Inne sytuacje szczególne').closest('details')).not.toHaveAttribute(
+      'open',
     );
-    expect(linksHeading.compareDocumentPosition(pueHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(pueHeading.compareDocumentPosition(faqHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByText('Najczęstsze pytania').closest('details')).not.toHaveAttribute('open');
 
+    // Organizacje charytatywne (przy „Za życiem” otwarte i z Fundacją Gajusz na początku)
+    expect(screen.getByText(/Fundacja Gajusz/i)).toBeInTheDocument();
     expect(screen.getByText(/Fundacja Rodzić po Ludzku/i)).toBeInTheDocument();
 
-    // Gotowe odpowiedzi nadal działają
+    // Gotowe odpowiedzi w Najczęstszych pytaniach działają po rozwinięciu
+    await user.click(screen.getByText('Najczęstsze pytania'));
     await user.click(screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }));
     expect(await screen.findByText(/ujednoliconą stawkę 81,5%/i)).toBeInTheDocument();
 
-    // Formularz PUE / eZUS nadal działa
+    // Symulacja PUE / eZUS działa po rozwinięciu
+    await user.click(screen.getByText(/Kontakt z ZUS i podgląd konta/i));
     await user.type(
       screen.getByLabelText(/Treść pytania do doradcy ZUS/i),
       'Proszę o potwierdzenie terminu złożenia ZAM.',
@@ -548,5 +576,19 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
 
     const backLink = screen.getByRole('link', { name: /Wróć do planu/i });
     expect(backLink).toHaveAttribute('href', '/plan?situation=afterBirth');
+  });
+
+  it('w zakładce Wsparcie przy braku danych pokazuje stan Uzupełnij dane z linkiem do kreatora', () => {
+    window.localStorage.clear();
+    renderPlan('/plan/support?situation=afterBirth');
+
+    const keySection = screen
+      .getByRole('heading', { level: 2, name: /Najważniejsze dla Ciebie/i })
+      .closest('section') as HTMLElement;
+    expect(within(keySection).getByText(/Data porodu/i)).toBeInTheDocument();
+    expect(within(keySection).getByRole('link', { name: /Uzupełnij dane/i })).toHaveAttribute(
+      'href',
+      '/wizard?situation=afterBirth',
+    );
   });
 });
