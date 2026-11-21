@@ -1,9 +1,4 @@
-/**
- * Publiczne API silnika obliczeń (CONVENTIONS §5).
- * Na razie tylko sygnatury – implementacje: Osoba 5 (maternity, parental, adoption)
- * i Osoba 6 (benefitBase). Czyste funkcje: bez I/O, bez Date.now().
- */
-import type {
+﻿import type {
   BenefitBaseInput,
   BenefitBaseResult,
   BenefitParams,
@@ -17,6 +12,16 @@ import type {
   ScenarioInput,
   SicknessResult,
 } from '../types';
+
+export { CalculationError, calculateBenefitAmount, roundPln } from './core';
+export { calculateBenefitBase } from './benefitBase';
+export type { BaseInput } from './benefitBase';
+export { checkEligibility, calculateSicknessInPregnancy, resolveParentPayer } from './eligibility';
+export type { EligibilityInput, SicknessInput } from './eligibility';
+export { calculateMaternity, resolveSupplementaryMaternityLeave } from './maternity';
+export type { MaternityInput } from './maternity';
+export { planParentalSplit, calculateParentalLeaveWithWork } from './parental';
+export { getRequiredDocuments } from './documents';
 
 export type {
   BenefitBaseInput,
@@ -32,53 +37,3 @@ export type {
   ScenarioInput,
   SicknessResult,
 };
-
-const notImplemented = (): never => {
-  throw new Error('Not implemented');
-};
-
-export function checkEligibility(_input: ScenarioInput, _params: BenefitParams): EligibilityResult {
-  return notImplemented();
-}
-
-export function calculateMaternity(
-  _input: ScenarioInput,
-  _params: BenefitParams,
-): MaternityCalculationResult {
-  return notImplemented();
-}
-
-export function calculateBenefitBase(
-  _input: BenefitBaseInput,
-  _params: BenefitParams,
-): BenefitBaseResult {
-  return notImplemented();
-}
-
-export function planParentalSplit(
-  _input: ParentalSplitInput,
-  _params: BenefitParams,
-): ParentalSplitResult {
-  return notImplemented();
-}
-
-export function calculateParentalLeaveWithWork(
-  _input: ParentalWithWorkInput,
-  _params: BenefitParams,
-): ParentalWithWorkResult {
-  return notImplemented();
-}
-
-export function calculateSicknessInPregnancy(
-  _input: ScenarioInput,
-  _params: BenefitParams,
-): SicknessResult {
-  return notImplemented();
-}
-
-export function getRequiredDocuments(
-  _input: ScenarioInput,
-  _params: BenefitParams,
-): DocumentChecklist {
-  return notImplemented();
-}

@@ -818,3 +818,154 @@
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* ---------- Ekran /plan: 6 kafelków sekcji (wygląd zgodny z zus.pl, CONVENTIONS §7.1) ---------- */
+
+.plan-page__back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  margin-bottom: var(--space-3);
+  color: var(--color-link);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-hub {
+  padding: var(--space-5) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-top: var(--accent-bar-width) solid var(--color-primary);
+  background: var(--color-surface);
+}
+
+.plan-hub__title {
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+}
+
+.plan-hub__lead {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+}
+
+.plan-hub__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.plan-hub__item {
+  display: flex;
+}
+
+.plan-hub__tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: var(--space-4);
+  border: var(--border-width-control) solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.plan-hub__tile:hover {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+}
+
+.plan-hub__icon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+  color: var(--color-primary);
+}
+
+.plan-hub__tile-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.plan-hub__tile-desc {
+  flex: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.plan-hub__tile-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  color: var(--color-link);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-hub__tile-cta svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
+@media (min-width: 640px) {
+  .plan-hub {
+    padding: var(--space-6);
+  }
+
+  .plan-hub__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .plan-hub__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-hub__tile {
+    transition: none;
+  }
+}
+
+/* Tryb obliczeń w przeglądarce i stan brakujących danych (CONVENTIONS §7.1) */
+.plan-page__mode-note {
+  display: inline-block;
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-missing-data {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.plan-missing-data__list {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+  color: var(--color-text);
+}
+
+.plan-missing-data__list li + li {
+  margin-top: var(--space-1);
+}
