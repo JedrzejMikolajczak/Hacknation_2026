@@ -25,27 +25,37 @@ export function getRequiredDocuments(
 
   const mother = input.mother;
   const father = input.father;
-  const motherInsured = mother.insuranceTitle !== 'none' && mother.sicknessInsurance !== 'none';
+  const motherInsured =
+    mother !== null && mother.insuranceTitle !== 'none' && mother.sicknessInsurance !== 'none';
   const fatherInsured =
     father !== null && father.insuranceTitle !== 'none' && father.sicknessInsurance !== 'none';
 
-  const motherPayerResolved = resolveParentPayer(mother, params);
+  const motherPayerResolved = mother ? resolveParentPayer(mother, params) : null;
   const fatherPayerResolved = father ? resolveParentPayer(father, params) : null;
 
-  // Główny płatnik: przy upadłości pracodawcy zawsze ZUS; jeśli matka nieubezpieczona/zmarła, płatnik ojca
-  const motherPayer: Payer = input.special.employerBankruptcyOrLiquidation
-    ? 'zus'
-    : effectivePayerOrZus(motherPayerResolved);
+  const motherUnavailable = Boolean(
+    input.special.motherDeceased || input.special.motherAbandonedChild,
+  );
+  // Główny płatnik: przy upadłości/bezprawnym zwolnieniu zawsze ZUS; jeśli matka nieubezpieczona/zmarła/porzuciła, płatnik ojca
+  const motherPayer: Payer =
+    input.special.employerBankruptcyOrLiquidation ||
+    input.special.unlawfulTerminationConfirmedByCourt
+      ? 'zus'
+      : effectivePayerOrZus(motherPayerResolved);
   const fatherPayer: Payer = effectivePayerOrZus(fatherPayerResolved);
   const primaryPayer: Payer =
-    motherInsured && !input.special.motherDeceased
-      ? motherPayer
-      : fatherInsured
-        ? fatherPayer
-        : 'zus';
+    motherInsured && !motherUnavailable ? motherPayer : fatherInsured ? fatherPayer : 'zus';
 
-  const childLostAll =
-    (input.special.stillbirth || input.special.childDeathDate !== null) && input.childrenCount <= 1;
+  const hasChildLoss = input.special.stillbirth || input.special.childDeathDate !== null;
+  const aliveChildren = hasChildLoss
+    ? input.special.deceasedChildrenCount !== undefined &&
+      input.special.deceasedChildrenCount !== null
+      ? Math.max(0, input.childrenCount - input.special.deceasedChildrenCount)
+      : input.special.stillbirth
+        ? 0
+        : Math.max(0, input.childrenCount - 1)
+    : input.childrenCount;
+  const childLostAll = hasChildLoss && aliveChildren === 0;
 
   const maternityWeeks = getMaternityWeeksForChildren(input.childrenCount, params);
   const suppWeeks =
@@ -73,7 +83,7 @@ export function getRequiredDocuments(
   const deadlines: { label: string; date: string; legalBasis: string | null }[] = [];
 
   // 1. Dokumenty w ciąży (zasiłek chorobowy, kod „B”)
-  if (input.situation === 'pregnant' && motherInsured) {
+  if (input.situation === 'pregnant' && mother && motherInsured) {
     documents.push({
       id: 'eZlaCodeB',
       name: `Zaświadczenie lekarskie e-ZLA z kodem literowym „B” (ciąża – ${formatPercentPl(params.rates.sicknessPregnancy)})`,
@@ -157,7 +167,7 @@ export function getRequiredDocuments(
   }
 
   // 3. Wniosek matki o zasiłek / urlop macierzyński
-  if (motherInsured && !input.special.motherDeceased) {
+  if (mother && motherInsured && !motherUnavailable) {
     if (motherPayer === 'employer' && mother.insuranceTitle === 'employment') {
       documents.push({
         id: 'applicationToEmployer',
@@ -219,11 +229,20 @@ export function getRequiredDocuments(
     }
   }
 
-  // 4. Upadłość / likwidacja pracodawcy
+  // 4. Upadłość / likwidacja pracodawcy lub bezprawne zwolnienie potwierdzone wyrokiem
   if (input.special.employerBankruptcyOrLiquidation) {
     documents.push({
       id: 'bankruptcyProof',
       name: 'Dokument potwierdzający upadłość lub likwidację pracodawcy oraz świadectwo pracy',
+      submitTo: 'zus',
+      deadline: null,
+      note: 'Wymagane do wypłaty zasiłku w wysokości zasiłku macierzyńskiego do dnia porodu przez ZUS (art. 30 ust. 3).',
+    });
+  }
+  if (input.special.unlawfulTerminationConfirmedByCourt) {
+    documents.push({
+      id: 'unlawfulTerminationCourtJudgment',
+      name: 'Prawomocny wyrok sądu potwierdzający niezgodne z prawem rozwiązanie umowy o pracę oraz świadectwo pracy',
       submitTo: 'zus',
       deadline: null,
       note: 'Wymagane do wypłaty zasiłku w wysokości zasiłku macierzyńskiego do dnia porodu przez ZUS (art. 30 ust. 3).',
@@ -267,13 +286,16 @@ export function getRequiredDocuments(
     fatherInsured &&
     (input.special.motherHospitalized ||
       input.special.motherIncapableOfIndependentLiving ||
-      input.special.motherDeceased)
+      input.special.motherDeceased ||
+      input.special.motherAbandonedChild)
   ) {
     const proofName = input.special.motherDeceased
       ? 'Odpis skrócony aktu zgonu matki (przejęcie urlopu przez ojca)'
-      : input.special.motherIncapableOfIndependentLiving
-        ? 'Orzeczenie o niezdolności matki do samodzielnej egzystencji'
-        : 'Zaświadczenie ze szpitala o pobycie matki uniemożliwiającym opiekę nad dzieckiem';
+      : input.special.motherAbandonedChild
+        ? 'Oświadczenie ojca o porzuceniu dziecka przez matkę (przejęcie urlopu – KP art. 180 § 13)'
+        : input.special.motherIncapableOfIndependentLiving
+          ? 'Orzeczenie o niezdolności matki do samodzielnej egzystencji'
+          : 'Zaświadczenie ze szpitala o pobycie matki uniemożliwiającym opiekę nad dzieckiem';
     documents.push({
       id: 'motherSpecialProof',
       name: proofName,
@@ -286,7 +308,7 @@ export function getRequiredDocuments(
       eventDate,
       params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate * 7,
     );
-    if (!input.special.motherDeceased) {
+    if (!motherUnavailable) {
       deadlines.push({
         label: `Wniosek ojca o przejęcie części urlopu macierzyńskiego (${params.applicationDeadlinesDays.fatherTakeoverPart} dni przed przejęciem)`,
         date: addDays(takeoverDate, -params.applicationDeadlinesDays.fatherTakeoverPart),
@@ -379,7 +401,7 @@ export function getRequiredDocuments(
       legalBasis: 'KP art. 182¹d § 1',
     });
 
-    if (mother.insuranceTitle === 'selfEmployed' && motherInsured) {
+    if (mother && mother.insuranceTitle === 'selfEmployed' && motherInsured) {
       const motherParentalWeeks =
         (input.special.zaZyciemCertificate
           ? input.childrenCount === 1

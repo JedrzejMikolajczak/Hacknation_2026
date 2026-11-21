@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { WizardScenario } from '../../types';
+import type { ParentData, WizardScenario } from '../../types';
 import { getRequiredDocuments } from '../index';
 
-function testScenario(): WizardScenario {
+function testScenario(): WizardScenario & { mother: ParentData } {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
