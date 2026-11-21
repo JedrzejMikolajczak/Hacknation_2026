@@ -1,32 +1,15 @@
 import { useState, type FormEvent } from 'react';
-import type { ScenarioInput, SicknessInsurance } from '@shared/types';
-import { formatInsuranceTitle, formatPln, formatPolishDate } from '../plan/planScenario';
-import { OFFICIAL_LINKS } from './supportData';
+import type { CaseInputs, EmploymentType, OfficialLink } from '@shared/types';
+import { formatPln, formatPolishDate, todayIsoDate } from '../plan/planScenario';
 
-interface PueSimulationDetailsProps {
-  scenario: ScenarioInput;
-  hasMotherInPlan: boolean;
-  motherInsuranceKnown: boolean;
-  usePrimarySubmit: boolean;
-}
+const titleLabels: Record<EmploymentType, string> = {
+  UOP: 'Umowa o pracę',
+  B2B: 'Działalność gospodarcza (JDG)',
+  ZLECENIE: 'Umowa zlecenie',
+  NONE: 'Brak tytułu ubezpieczenia',
+};
 
-function formatSicknessStatus(status: SicknessInsurance): string {
-  switch (status) {
-    case 'mandatory':
-      return 'Obowiązkowe';
-    case 'voluntary':
-      return 'Dobrowolne';
-    case 'none':
-      return 'Brak ubezpieczenia chorobowego';
-  }
-}
-
-export function PueSimulationDetails({
-  scenario,
-  hasMotherInPlan,
-  motherInsuranceKnown,
-  usePrimarySubmit,
-}: PueSimulationDetailsProps) {
+export function PueSimulationDetails({ input }: { input: CaseInputs }) {
   const [accountChecked, setAccountChecked] = useState(false);
 
   const [pueTopic, setPueTopic] = useState('Zasiłek macierzyński – ustalenie uprawnień');
@@ -34,10 +17,14 @@ export function PueSimulationDetails({
   const [pueError, setPueError] = useState<string | null>(null);
   const [pueTicket, setPueTicket] = useState<string | null>(null);
 
-  const parentToInspect = hasMotherInPlan ? scenario.mother : scenario.father;
-  const insuranceKnown = hasMotherInPlan
-    ? motherInsuranceKnown
-    : Boolean(scenario.father && scenario.father.insuranceTitle !== 'none');
+  const sicknessStatus =
+    input.employment_type === 'UOP'
+      ? 'Obowiązkowe'
+      : input.voluntary_sickness_insured === true
+        ? 'Dobrowolne'
+        : input.employment_type === 'NONE' || input.voluntary_sickness_insured === false
+          ? 'Brak ubezpieczenia chorobowego'
+          : 'Brak danych';
 
   function handleSendPue(event: FormEvent) {
     event.preventDefault();
@@ -46,7 +33,7 @@ export function PueSimulationDetails({
       setPueTicket(null);
       return;
     }
-    const year = scenario.referenceDate.slice(0, 4);
+    const year = (input.reference_date ?? todayIsoDate()).slice(0, 4);
     const ticket = `PUE-ZAP-${year}-${String(Math.floor(1000 + Math.random() * 9000))}`;
     setPueError(null);
     setPueTicket(ticket);
@@ -89,56 +76,42 @@ export function PueSimulationDetails({
               <dl className="support-account-dl">
                 <div className="support-account-dl__row">
                   <dt>Tytuł ubezpieczenia</dt>
-                  <dd>
-                    {parentToInspect && insuranceKnown
-                      ? formatInsuranceTitle(parentToInspect.insuranceTitle)
-                      : 'Brak danych'}
-                  </dd>
+                  <dd>{titleLabels[input.employment_type]}</dd>
                 </div>
                 <div className="support-account-dl__row">
                   <dt>Ubezpieczenie chorobowe</dt>
-                  <dd>
-                    {parentToInspect && insuranceKnown
-                      ? formatSicknessStatus(parentToInspect.sicknessInsurance)
-                      : 'Brak danych'}
-                  </dd>
+                  <dd>{sicknessStatus}</dd>
                 </div>
                 <div className="support-account-dl__row">
                   <dt>Początek ubezpieczenia</dt>
                   <dd>
-                    {parentToInspect?.insuredSince
-                      ? formatPolishDate(parentToInspect.insuredSince)
+                    {input.title_start_date
+                      ? formatPolishDate(input.title_start_date)
                       : 'Brak danych'}
                   </dd>
                 </div>
-                {parentToInspect?.insuranceEndDate && (
+                {input.contract_end_date && (
                   <div className="support-account-dl__row">
                     <dt>Koniec ubezpieczenia</dt>
-                    <dd>{formatPolishDate(parentToInspect.insuranceEndDate)}</dd>
+                    <dd>{formatPolishDate(input.contract_end_date)}</dd>
                   </div>
                 )}
-                {parentToInspect?.insuranceTitle === 'selfEmployed' && (
+                {input.employment_type === 'B2B' && (
                   <div className="support-account-dl__row">
                     <dt>Stan zadłużenia składkowego (JDG)</dt>
                     <dd>
-                      {parentToInspect.contributionDebt !== null
-                        ? formatPln(parentToInspect.contributionDebt)
+                      {input.debt_amount_pln !== undefined
+                        ? formatPln(input.debt_amount_pln)
                         : 'Brak danych'}
                     </dd>
                   </div>
                 )}
-                {parentToInspect &&
-                  parentToInspect.insuranceTitle !== 'selfEmployed' &&
-                  parentToInspect.insuranceTitle !== 'none' && (
-                    <div className="support-account-dl__row">
-                      <dt>Liczba ubezpieczonych u płatnika</dt>
-                      <dd>
-                        {parentToInspect.employerInsuredCount !== null
-                          ? `${parentToInspect.employerInsuredCount} osób`
-                          : 'Brak danych'}
-                      </dd>
-                    </div>
-                  )}
+                {(input.employment_type === 'UOP' || input.employment_type === 'ZLECENIE') && (
+                  <div className="support-account-dl__row">
+                    <dt>Liczba ubezpieczonych u płatnika</dt>
+                    <dd>{input.payer_insured_count_nov_30 ?? 'Brak danych'}</dd>
+                  </div>
+                )}
               </dl>
             </div>
           )}
@@ -188,14 +161,7 @@ export function PueSimulationDetails({
               />
             </label>
 
-            <button
-              type="submit"
-              className={
-                usePrimarySubmit
-                  ? 'plan-btn plan-btn--primary support-action-btn'
-                  : 'plan-btn plan-btn--secondary support-action-btn'
-              }
-            >
+            <button type="submit" className="plan-btn plan-btn--primary support-action-btn">
               Wyślij pytanie do PUE / eZUS ›
             </button>
           </form>
@@ -220,9 +186,13 @@ export function PueSimulationDetails({
 
 interface OfficialLinksAndUscDetailsProps {
   referenceDate: string;
+  links: OfficialLink[];
 }
 
-export function OfficialLinksAndUscDetails({ referenceDate }: OfficialLinksAndUscDetailsProps) {
+export function OfficialLinksAndUscDetails({
+  referenceDate,
+  links,
+}: OfficialLinksAndUscDetailsProps) {
   const [copyType, setCopyType] = useState<'short' | 'full'>('short');
   const [uscTicket, setUscTicket] = useState<string | null>(null);
 
@@ -240,7 +210,7 @@ export function OfficialLinksAndUscDetails({ referenceDate }: OfficialLinksAndUs
       </summary>
       <div className="support-accordion__body">
         <ul className="support-official-list" role="list">
-          {OFFICIAL_LINKS.map((link) => (
+          {links.map((link) => (
             <li key={link.id} className="support-official-list__item">
               <a
                 href={link.href}

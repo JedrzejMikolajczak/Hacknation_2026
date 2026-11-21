@@ -10,11 +10,16 @@ const input = fixture.inputs as CaseInputs;
 
 describe('API v1', () => {
   it('udostępnia health, parametry i CORS', async () => {
-    const health = await request(app).get(`${api}/health`).set('Origin', 'http://localhost:5173').expect(200);
+    const health = await request(app)
+      .get(`${api}/health`)
+      .set('Origin', 'http://localhost:5173')
+      .expect(200);
     expect(health.body).toEqual({ data: { status: 'ok' }, error: null });
     expect(health.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     const params = await request(app).get(`${api}/params`).expect(200);
-    expect(params.body.data.supplementaryMaternityLeave.transitionalEffectiveDate).toBe('2025-03-19');
+    expect(params.body.data.supplementaryMaternityLeave.transitionalEffectiveDate).toBe(
+      '2025-03-19',
+    );
   });
   it('zwraca jeden wynik planu i zgodne projekcje', async () => {
     const { body } = await request(app).post(`${api}/plan`).send(input).expect(200);
@@ -23,7 +28,10 @@ describe('API v1', () => {
     expect(plan.outcome.granted_rate_percent).toBe(81.5);
     const rights = await request(app).post(`${api}/eligibility`).send(input).expect(200);
     const docs = await request(app).post(`${api}/documents`).send(input).expect(200);
-    const calculator = await request(app).post(`${api}/calculate/maternity`).send(input).expect(200);
+    const calculator = await request(app)
+      .post(`${api}/calculate/maternity`)
+      .send(input)
+      .expect(200);
     const base = await request(app).post(`${api}/calculate/benefit-base`).send(input).expect(200);
     const sick = await request(app).post(`${api}/calculate/sickness`).send(input).expect(200);
     expect(sick.body.data.periods).toEqual([]);
@@ -33,22 +41,45 @@ describe('API v1', () => {
     expect(base.body.data).toEqual({ benefit_base_pln: null });
   });
   it('zmienia termin ojca po zmianie rzeczywistego planu', async () => {
-    const next = { ...input, other_parent: { employment_type: 'UOP', payer_insured_count_nov_30: '> 20',
-      benefit_base_amount_pln: null, voluntary_sickness_insured: false }, parental_leave_parts: [{
-      parent_role: 'FATHER', start_date: '2027-11-09', end_date: '2028-01-10',
-    }] };
+    const next = {
+      ...input,
+      other_parent: {
+        employment_type: 'UOP',
+        payer_insured_count_nov_30: '> 20',
+        benefit_base_amount_pln: null,
+        voluntary_sickness_insured: false,
+      },
+      parental_leave_parts: [
+        {
+          parent_role: 'FATHER',
+          start_date: '2027-11-09',
+          end_date: '2028-01-10',
+        },
+      ],
+    };
     const { body } = await request(app).post(`${api}/documents`).send(next).expect(200);
     const documents: CaseDocument[] = body.data;
-    expect(documents.find((doc) => doc.id === 'PARENTAL_REQUEST' && doc.parent_role === 'FATHER')).toMatchObject({
-      deadline: '2027-10-19', submit_to: 'EMPLOYER',
+    expect(
+      documents.find((doc) => doc.id === 'PARENTAL_REQUEST' && doc.parent_role === 'FATHER'),
+    ).toMatchObject({
+      deadline: '2027-10-19',
+      submit_to: 'EMPLOYER',
     });
   });
   it('odrzuca stary kontrakt, złą datę, dodatkowe pola i niepoprawny JSON', async () => {
-    for (const data of [{ situation: 'afterBirth' }, { ...input, due_or_birth_date: '2026-02-30' }, { ...input, pesel: '00000000000' }]) {
+    for (const data of [
+      { situation: 'afterBirth' },
+      { ...input, due_or_birth_date: '2026-02-30' },
+      { ...input, pesel: '00000000000' },
+    ]) {
       const { body } = await request(app).post(`${api}/plan`).send(data).expect(422);
       expect(body).toMatchObject({ data: null, error: { code: 'VALIDATION_ERROR' } });
     }
-    await request(app).post(`${api}/plan`).set('Content-Type', 'application/json').send('{').expect(422);
+    await request(app)
+      .post(`${api}/plan`)
+      .set('Content-Type', 'application/json')
+      .send('{')
+      .expect(422);
     await request(app).get(`${api}/missing`).expect(404);
   });
 });

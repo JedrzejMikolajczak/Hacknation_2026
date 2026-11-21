@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { ScenarioInput } from '../../types';
+import type { WizardScenario } from '../../types';
 import { CalculationError, calculateParentalLeaveWithWork, planParentalSplit } from '../index';
 
-function testScenario(): ScenarioInput {
+function testScenario(): WizardScenario {
   const mother = {
     role: 'mother' as const,
     insuranceTitle: 'employment' as const,

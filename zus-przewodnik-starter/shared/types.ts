@@ -60,7 +60,8 @@ export interface SpecialCircumstances {
   employerBankruptcyOrLiquidation: boolean;    // zasiłek w wysokości macierzyńskiego
 }
 
-export interface ScenarioInput {
+/** Wewnętrzny format szkicu kreatora oraz testów wcześniejszych reguł. */
+export interface WizardScenario {
   situation: SituationType;
   referenceDate: IsoDate;                 // „dzisiaj” – engine nie używa Date.now()
   expectedBirthDate: IsoDate | null;
@@ -179,7 +180,7 @@ export interface LeavePartRequest {
 }
 
 export interface ParentalSplitInput {
-  scenario: ScenarioInput;
+  scenario: WizardScenario;
   parts: LeavePartRequest[];
 }
 
@@ -191,7 +192,7 @@ export interface ParentalSplitResult {
 }
 
 export interface ParentalWithWorkInput {
-  scenario: ScenarioInput;
+  scenario: WizardScenario;
   parentRole: ParentRole;
   workTimeFraction: number;      // 0 < x <= 0.5 (część etatu)
   startDate: IsoDate;
@@ -247,31 +248,6 @@ export interface ZusData {
   incomes: MonthlyIncome[];
   sickLeaveCertificates: SickLeaveCertificate[];
   contributionDebt: Pln;
-}
-
-/* ---------- przykładowe sprawy ZUS ---------- */
-
-export interface ZusCaseSummary {
-  caseId: string;
-  title: string;
-  expectedGranted: boolean;
-}
-
-export interface ZusCase {
-  caseId: string;
-  title: string;
-  scenario: ScenarioInput;
-  benefitBaseInput: BenefitBaseInput | null;
-  zusDecision: { granted: boolean; benefitBase: Pln | null; amount: Pln | null; note: string | null };
-}
-
-export interface CaseEvaluationResult {
-  caseId: string;
-  eligibility: EligibilityResult;
-  calculation: MaternityCalculationResult | null;
-  benefitBase: BenefitBaseResult | null;
-  matchesZusDecision: boolean;
-  differences: string[];
 }
 
 /* ---------- API ---------- */
@@ -550,6 +526,7 @@ export interface CasePlan {
   entitlements: CaseEntitlement[];
   documents: CaseDocument[];
   validation_errors: CaseWarning[];
+  support: SupportResources;
   default_father_parental_start_date: IsoDate | null;
 }
 
@@ -584,4 +561,26 @@ export interface CaseEvaluation {
 export interface AssistantAnswer {
   answer: string;
   sources: string[];
+}
+
+export interface CharitableOrganization {
+  id: string;
+  name: string;
+  legal_form: string;
+  helps_with: string;
+  description: string;
+  url: string;
+  related_situations: string[];
+}
+
+export interface OfficialLink {
+  id: string;
+  label: string;
+  description: string;
+  href: string;
+}
+
+export interface SupportResources {
+  organizations: CharitableOrganization[];
+  official_links: OfficialLink[];
 }

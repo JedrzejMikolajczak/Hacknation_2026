@@ -5,7 +5,7 @@ import type {
   Explanation,
   ParentData,
   Payer,
-  ScenarioInput,
+  WizardScenario,
   SicknessResult,
   Warning,
 } from '../types';
@@ -21,7 +21,7 @@ import {
   validateParams,
 } from './core';
 
-export type EligibilityInput = ScenarioInput & {
+export type EligibilityInput = WizardScenario & {
   sicknessStartDate?: string;
   creditedInsuranceDays?: number;
   waitingPeriodExempt?: boolean;
@@ -76,7 +76,7 @@ export function debtBlocks(parent: ParentData, params: BenefitParams): boolean {
   );
 }
 
-export function getAdoptionAgeLimit(input: ScenarioInput, params: BenefitParams): number | null {
+export function getAdoptionAgeLimit(input: WizardScenario, params: BenefitParams): number | null {
   if (input.situation !== 'adoption' || input.adoptionType === null) return null;
   if (input.adoptionType === 'adoption') {
     return params.adoptionMaternityLeave.adoptionMaxChildAgeYears;

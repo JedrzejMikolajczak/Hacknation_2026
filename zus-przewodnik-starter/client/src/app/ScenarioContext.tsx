@@ -1,5 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { SituationType } from '@shared/types';
+import { useSearchParams } from 'react-router-dom';
+import type { CaseInputs, SituationType } from '@shared/types';
+import { readPlanAddress } from './planAddress';
+import { wizardCase } from '../features/plan/caseScenario';
 import type { ManualFormState, ScenarioDraft } from './scenarioDraft';
 import { isSituationType } from './situation';
 
@@ -7,6 +10,8 @@ export type { ScenarioDraft } from './scenarioDraft';
 
 interface ScenarioContextValue {
   scenario: ScenarioDraft;
+  planInputs: CaseInputs | null;
+  updatePlanInputs: (inputs: CaseInputs | null) => void;
   manualForm: ManualFormState | null;
   storageAvailable: boolean;
   setSituation: (situation: SituationType | null) => void;
@@ -73,6 +78,22 @@ interface ScenarioProviderProps {
 export function ScenarioProvider({ children, initialScenario }: ScenarioProviderProps) {
   const [state, setState] = useState<ScenarioState>(() => loadState(initialScenario));
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [query, setQuery] = useSearchParams();
+  const serialized = query.get('inputs');
+  const hasCase = query.has('case');
+  const planInputs = useMemo(
+    () => (serialized ? readPlanAddress(serialized) : hasCase ? null : wizardCase(state.scenario)),
+    [serialized, hasCase, state.scenario],
+  );
+  const updatePlanInputs = useCallback(
+    (inputs: CaseInputs | null) => {
+      const next = new URLSearchParams(query);
+      if (inputs) next.set('inputs', JSON.stringify(inputs));
+      else next.delete('inputs');
+      setQuery(next, { replace: true });
+    },
+    [query, setQuery],
+  );
 
   const commit = useCallback((next: ScenarioState) => {
     setState(next);
@@ -124,12 +145,23 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
     () => ({
       ...state,
       storageAvailable,
+      planInputs,
+      updatePlanInputs,
       setSituation,
       updateScenario,
       saveManualForm,
       clearScenario,
     }),
-    [state, storageAvailable, setSituation, updateScenario, saveManualForm, clearScenario],
+    [
+      state,
+      storageAvailable,
+      planInputs,
+      updatePlanInputs,
+      setSituation,
+      updateScenario,
+      saveManualForm,
+      clearScenario,
+    ],
   );
 
   return <ScenarioContext.Provider value={value}>{children}</ScenarioContext.Provider>;

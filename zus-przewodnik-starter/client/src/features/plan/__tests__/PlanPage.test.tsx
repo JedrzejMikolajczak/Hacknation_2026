@@ -10,20 +10,39 @@ import { PlanPage } from '../PlanPage';
 
 const fixture = data as CaseRecord;
 const api = vi.fn(async (url: string, request?: RequestInit) => {
-  const result = url.endsWith('/params') ? params : url.endsWith('/case-04') ? fixture :
-    calculateCasePlan(JSON.parse(String(request?.body)) as CaseInputs, params);
+  const result = url.endsWith('/params')
+    ? params
+    : url.endsWith('/case-04')
+      ? fixture
+      : calculateCasePlan(JSON.parse(String(request?.body)) as CaseInputs, params);
   return new Response(JSON.stringify({ data: result, error: null }), { status: 200 });
 });
-const tabs = ['Uprawnienia', 'Kalkulator', 'Plan urlopów', 'Dokumenty i terminy', 'Wnioski', 'Wsparcie'];
+const tabs = [
+  'Uprawnienia',
+  'Kalkulator',
+  'Plan urlopów',
+  'Dokumenty i terminy',
+  'Wnioski',
+  'Wsparcie',
+];
 
 function openPlan(tab = 'entitlements') {
-  render(<MemoryRouter initialEntries={[`/plan/${tab}?case=case-04`]}><ScenarioProvider>
-    <Routes><Route path="/plan/:tab" element={<PlanPage />} /></Routes>
-  </ScenarioProvider></MemoryRouter>);
+  render(
+    <MemoryRouter initialEntries={[`/plan/${tab}?case=case-04`]}>
+      <ScenarioProvider>
+        <Routes>
+          <Route path="/plan/:tab" element={<PlanPage />} />
+        </Routes>
+      </ScenarioProvider>
+    </MemoryRouter>,
+  );
 }
 
 function tabLink(title: string) {
-  return within(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).getByRole('link', { name: title });
+  return within(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).getByRole(
+    'link',
+    { name: title },
+  );
 }
 
 describe('Twój plan', () => {
@@ -40,22 +59,34 @@ describe('Twój plan', () => {
     }
     expect(api.mock.calls.some(([url]) => url === '/api/v1/cases/case-04')).toBe(true);
     const input = api.mock.calls.find(([url]) => url === '/api/v1/plan')?.[1];
-    expect(JSON.parse(String(input?.body))).toMatchObject({ applicant_role: 'MOTHER', stage: 'POST_BIRTH', pregnancy_week_at_birth: '28+5' });
+    expect(JSON.parse(String(input?.body))).toMatchObject({
+      applicant_role: 'MOTHER',
+      stage: 'POST_BIRTH',
+      pregnancy_week_at_birth: '28+5',
+    });
   });
 
   it('synchronizuje zmianę daty ojca z dokumentami i wnioskiem', async () => {
     openPlan('leave-plan');
-    fireEvent.change(await screen.findByLabelText('Koniec części 2'), { target: { value: '2028-01-10' } });
-    fireEvent.change(await screen.findByLabelText('Początek części 2'), { target: { value: '2027-11-09' } });
+    fireEvent.change(await screen.findByLabelText('Koniec części 2'), {
+      target: { value: '2028-01-10' },
+    });
+    fireEvent.change(await screen.findByLabelText('Początek części 2'), {
+      target: { value: '2027-11-09' },
+    });
     fireEvent.click(tabLink('Dokumenty i terminy'));
     expect(await screen.findByText('19.10.2027')).toBeInTheDocument();
     const link = tabLink('Wnioski');
-    expect(new URL((link as HTMLAnchorElement).href).searchParams.get('inputs')).toContain('2027-11-09');
+    expect(new URL((link as HTMLAnchorElement).href).searchParams.get('inputs')).toContain(
+      '2027-11-09',
+    );
     fireEvent.click(link);
     expect(await screen.findByText(/DANE PRZYKŁADOWE/)).toBeInTheDocument();
     expect(screen.getByLabelText('PESEL')).toHaveValue('00000000000');
     const selected = screen.getByLabelText('Wzór wniosku');
-    const father = within(selected).getByRole('option', { name: /Ojciec.*rodzicielskiego.*09.11.2027/ });
+    const father = within(selected).getByRole('option', {
+      name: /Ojciec.*rodzicielskiego.*09.11.2027/,
+    });
     fireEvent.change(selected, { target: { value: (father as HTMLOptionElement).value } });
     expect(screen.getByText(/09.11.2027–10.01.2028/)).toBeInTheDocument();
   });

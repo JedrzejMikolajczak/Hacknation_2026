@@ -4,7 +4,7 @@ import type {
   LeavePeriod,
   MaternityCalculationResult,
   ParentRole,
-  ScenarioInput,
+  WizardScenario,
   SupplementaryCase,
 } from '../types';
 import {
@@ -38,7 +38,7 @@ export interface SupplementaryResolution {
 }
 
 export function resolveSupplementaryMaternityLeave(
-  input: ScenarioInput,
+  input: WizardScenario,
   params: BenefitParams,
 ): SupplementaryResolution {
   const { pregnancyWeekAtBirth, birthWeightGrams, hospitalizationDays } = input.special;

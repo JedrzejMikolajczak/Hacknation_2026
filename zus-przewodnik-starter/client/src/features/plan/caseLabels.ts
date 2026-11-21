@@ -20,5 +20,7 @@ export const payerLabels: Record<CasePayer | 'USC', string> = {
   SPLIT_EMPLOYER_THEN_ZUS: 'Najpierw pracodawca, następnie ZUS',
   USC: 'Urząd stanu cywilnego',
 };
-export const payerLabel = (payer: CasePayer | 'USC' | null) => payer ? payerLabels[payer] : 'Do ustalenia';
-export const percent = (value: number | null) => value === null ? '—' : `${value.toLocaleString('pl-PL')}%`;
+export const payerLabel = (payer: CasePayer | 'USC' | null) =>
+  payer ? payerLabels[payer] : 'Do ustalenia';
+export const percent = (value: number | null) =>
+  value === null ? '—' : `${value.toLocaleString('pl-PL')}%`;

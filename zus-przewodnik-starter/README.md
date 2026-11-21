@@ -162,7 +162,7 @@ Obszary w nazwie brancha: `engine`, `api`, `ui`, `mock`, `guide`, `admin`, `case
 Wymagania (Node.js ≥ 20, npm ≥ 10), pełna lista zależności i opis skryptów: **[`REQUIREMENTS.md`](REQUIREMENTS.md)**.
 
 ```bash
-npm install          # root: workspaces client, server, shared
+npm ci               # katalog zus-przewodnik-starter, workspaces client, server, shared
 npm run dev          # client :5173 + server :3001
 npm test             # testy shared + server + client
 npm run build
@@ -172,5 +172,23 @@ npm run build
 
 Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez AI” i wpisujemy do listy poniżej.
 
-- [x] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny) — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`)
+- [x] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny) — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`. Odpowiedzi pochodzą z bazy demonstracyjnej)
 - [ ] Odczyt danych z PDF przykładowej sprawy (opcjonalny)
+
+## Test wersji konkursowej
+
+1. Otwórz `http://localhost:5173/cases` i wybierz jedną z sześciu spraw.
+2. Przejdź przez sześć zakładek planu. W sprawie 04 ustaw drugą część od 09.11.2027 do 10.01.2028. Sprawdź termin 19.10.2027 w dokumentach i zakres dat we wniosku ojca.
+3. Sprawdź `/api/v1/health` na porcie API. Porównanie z decyzją jest dostępne w katalogu spraw oraz w `POST /api/v1/cases/:caseId/evaluate`.
+
+Gdy domyślne porty są zajęte, uruchom w PowerShell:
+
+```powershell
+$env:PORT = '3301'
+$env:VITE_PORT = '5276'
+npm run dev
+```
+
+Panel `/admin` przyjmuje token ustawiony w zmiennej środowiskowej serwera `ADMIN_TOKEN`. Testowe zmiany parametrów obowiązują do restartu API. Plik `shared/params.json` zawiera wartości początkowe. Używaj przykładowych danych we wnioskach. Link planu zawiera dane scenariusza potrzebne do wyliczenia.
+
+[Raport integracji i wyniki spraw](../docs/FIX_ALL_REPORT.md)

@@ -10,13 +10,22 @@ describe('Katalog spraw konkursowych', () => {
   it('podaje dokładnie sześć publicznych identyfikatorów, kontrakt sprawy i wynik silnika', async () => {
     const { body } = await request(app).get(`${api}/cases`).expect(200);
     const summaries: CaseSummary[] = body.data;
-    expect(summaries.map(({ case_id }) => case_id)).toEqual(['case-01', 'case-02', 'case-03', 'case-04', 'case-05', 'case-06']);
+    expect(summaries.map(({ case_id }) => case_id)).toEqual([
+      'case-01',
+      'case-02',
+      'case-03',
+      'case-04',
+      'case-05',
+      'case-06',
+    ]);
     for (const { case_id } of summaries) {
       const response = await request(app).get(`${api}/cases/${case_id}`).expect(200);
       const detail: CaseRecord = response.body.data;
       expect(detail.case_id).toBe(case_id);
       expect(detail.inputs.applicant_role).toBe('MOTHER');
-      const evaluation: CaseEvaluation = (await request(app).post(`${api}/cases/${case_id}/evaluate`).send({}).expect(200)).body.data;
+      const evaluation: CaseEvaluation = (
+        await request(app).post(`${api}/cases/${case_id}/evaluate`).send({}).expect(200)
+      ).body.data;
       expect(evaluation.case_id).toBe(case_id);
       expect(evaluation.outcome.is_qualified).toBe(true);
       expect(evaluation.matches).toBe(!['case-02', 'case-06'].includes(case_id));
