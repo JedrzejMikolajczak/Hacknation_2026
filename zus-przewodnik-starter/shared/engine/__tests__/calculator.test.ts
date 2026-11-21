@@ -1,11 +1,11 @@
 
 import { test, assert } from 'vitest';
 import params from '../../params.json' ;
-import type { ScenarioInput } from '../../types';
+import type { WizardScenario } from '../../types';
 import { calculateBenefitAmount, calculateBenefitBase, calculateMaternity, calculateSicknessInPregnancy, checkEligibility, CalculationError } from '../index';
 import type { BaseInput } from '../index';
 
-function scenario(): ScenarioInput {
+function scenario(): WizardScenario {
   const parent = { role: 'mother' as const, insuranceTitle: 'employment' as const, sicknessInsurance: 'mandatory' as const, insuredSince: '2025-01-01', insuranceEndDate: null, benefitBase: 6000, employerInsuredCount: 21, age: 30, contributionDebt: null, wantsLeave: true };
   return { situation: 'afterBirth', referenceDate: '2026-11-21', expectedBirthDate: null, birthDate: '2026-11-01', childrenCount: 1, adoptionType: null, childAcceptanceDate: null, childAgeYears: null, schoolObligationDeferred: false, rateVariant: 'standard', mother: parent, father: { ...parent, role: 'father', benefitBase: 9000 }, special: { zaZyciemCertificate: false, pregnancyWeekAtBirth: null, birthWeightGrams: null, hospitalizationDays: null, stillbirth: false, childDeathDate: null, motherHospitalized: false, motherIncapableOfIndependentLiving: false, motherDeceased: false, employerBankruptcyOrLiquidation: false } };
 }

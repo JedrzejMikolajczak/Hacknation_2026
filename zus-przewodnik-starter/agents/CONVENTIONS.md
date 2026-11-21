@@ -1,192 +1,90 @@
-# Wspólne konwencje (kontrakt) dla ludzi i agentów AI
+# Kontrakt projektu
 
-> Ten plik jest **jedynym źródłem prawdy** o nazwach, typach, formatach i API.
-> Claude, Gemini i ChatGPT/Codex czytają ten sam plik, więc piszą zgodny kod.
-> Jeśli coś tu nie pasuje do Twojego zadania, **nie wymyślaj własnej nazwy**: zaproponuj zmianę kontraktu (README §7).
+## 1. Język i nazwy
 
----
+- Teksty interfejsu są po polsku.
+- Funkcje i zmienne lokalne używają `camelCase`. Typy i komponenty używają `PascalCase`.
+- Dane domenowe przesyłane przez REST oraz zapisane w JSON i URL używają kluczy `snake_case` i wartości wyliczeniowych `UPPER_SNAKE_CASE`.
 
-## 1. Język i nazewnictwo
+## 2. Słownik
 
-| Co | Konwencja | Przykład |
-|---|---|---|
-| Kod (zmienne, funkcje, typy, pola JSON, endpointy) | **angielski** | `maternityLeave`, `benefitBase` |
-| Teksty widoczne dla użytkownika | **polski** | „Zasiłek macierzyński” |
-| Komentarze w kodzie | polski lub angielski, krótko | |
-| Zmienne, funkcje, pola JSON | `camelCase` | `birthDate`, `calculateMaternityBenefit()` |
-| Typy, interfejsy, komponenty React | `PascalCase` | `MaternityCalculationResult`, `WizardStep` |
-| Stałe | `UPPER_SNAKE_CASE` | `API_BASE_URL` |
-| Pliki TS (nie komponenty) | `camelCase.ts` | `benefitBase.ts` |
-| Pliki komponentów | `PascalCase.tsx` | `LeaveTimeline.tsx` |
-| Wartości enumów (string unions) | `camelCase` | `'selfEmployed'` |
-| Ścieżki URL API | `kebab-case`, `/api/v1/...` | `/api/v1/calculate/benefit-base` |
-
-## 2. Słownik domeny (PL → kod). UŻYWAJ DOKŁADNIE TYCH NAZW
-
-| Polski termin | Nazwa w kodzie |
+| Termin | Pole lub wartość |
 |---|---|
-| zasiłek chorobowy | `sicknessBenefit` |
-| wynagrodzenie chorobowe (od pracodawcy) | `employerSickPay` |
-| zasiłek macierzyński | `maternityBenefit` |
-| zasiłek w wysokości zasiłku macierzyńskiego | `maternityEquivalentBenefit` |
-| świadczenie rehabilitacyjne | `rehabilitationBenefit` |
-| urlop macierzyński | `maternityLeave` |
-| urlop na warunkach urlopu macierzyńskiego | `adoptionMaternityLeave` |
-| uzupełniający urlop macierzyński | `supplementaryMaternityLeave` |
-| urlop rodzicielski | `parentalLeave` |
-| urlop ojcowski | `paternityLeave` |
-| łączenie urlopu rodzicielskiego z pracą | `parentalLeaveWithWork` |
-| podstawa wymiaru zasiłku | `benefitBase` |
-| podstawa wymiaru składek | `contributionBase` |
-| okres zasiłkowy | `benefitPeriod` |
-| okres wyczekiwania (30/90 dni) | `waitingPeriod` |
-| tytuł ubezpieczenia | `insuranceTitle` |
-| umowa o pracę | `'employment'` |
-| umowa zlecenie | `'mandateContract'` |
-| działalność gospodarcza (JDG) | `'selfEmployed'` |
-| brak ubezpieczenia | `'none'` |
-| ubezpieczenie chorobowe obowiązkowe / dobrowolne | `sicknessInsurance: 'mandatory' \| 'voluntary' \| 'none'` |
-| płatnik składek (kto wypłaca) | `payer: 'employer' \| 'zus'` |
-| zaświadczenie „Za życiem” | `zaZyciemCertificate: boolean` |
-| przewidywana / faktyczna data porodu | `expectedBirthDate` / `birthDate` |
-| data przyjęcia dziecka na wychowanie | `childAcceptanceDate` |
-| rodzina zastępcza / przysposobienie | `adoptionType: 'fosterFamily' \| 'adoption'` |
-| matka / ojciec (drugi rodzic) | `parentRole: 'mother' \| 'father'` |
-| zadłużenie składkowe | `contributionDebt` |
-| e-ZLA (zwolnienie lekarskie) | `sickLeaveCertificate` (ZLA) |
-| kod literowy „B” (ciąża) | `pregnancyCode: true` |
-| przykładowa sprawa ZUS | `case` (`ZusCase`) |
-| profil testowy (symulacja) | `mockProfile` |
-| wniosek | `application` |
+| Dane sprawy i scenariusza | `CaseInputs`, w sprawie pod `inputs` |
+| Wynik silnika i dane porównawcze | `CaseOutcome`, `CaseRecord.ground_truth_outcome` |
+| Wnioskodawca | `applicant_role` · `MOTHER`, `FATHER` |
+| Etap | `stage` · `PLANNING`, `PREGNANCY`, `POST_BIRTH`, `ADOPTION` |
+| Tytuł ubezpieczenia | `employment_type` · `UOP`, `B2B`, `ZLECENIE`, `NONE` |
+| Wariant wypłaty | `requested_payment_variant` · `COMBINED_81_5`, `SPLIT_100_70` |
+| Płatnik świadczenia | `who_pays` · `EMPLOYER`, `ZUS`, `SPLIT_EMPLOYER_THEN_ZUS` |
+| Data porodu lub przewidywana data | `due_or_birth_date` |
+| Data złożenia u płatnika | `application_to_payer_date` ma pierwszeństwo przed `application_date` |
+| Liczba dzieci z porodu / żyjących dzieci | `children_count` / `living_children_count` |
+| Okresy świadczeń | `periods` i `leave_type` |
+| Części rodzicielskiego | `parental_leave_parts`, opcjonalne `parent_role` i `work_fraction` |
+| Przychody do podstawy | `monthly_bases`, elementy `{ month, amount_pln, excluded_bonus_pln? }` |
+| Ostrzeżenie | `{ code, message_pl, legal_basis }` |
 
-## 3. Formaty danych
+## 3. Formaty
 
-| Typ | Format | Przykład |
-|---|---|---|
-| Data | ISO `YYYY-MM-DD` (string), bez godzin | `"2027-03-10"` |
-| Kwota | `number` w **PLN**, zaokrąglenie do 2 miejsc **tylko na wyjściu** (`roundPln()` w engine) | `4147.10` |
-| Stawka procentowa | ułamek dziesiętny | `0.815` (nie `81.5`) |
-| Okres urlopu | `weeks` (liczba całkowita) **i** `startDate` / `endDate` | |
-| Dni | `days` (liczba całkowita) | |
-| Wartość nieznana | `null` (nie `""`, nie `0`, nie `undefined` w JSON) | |
-| Waluta w UI | `Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' })` | `4 147,10 zł` |
-| Data w UI | `Intl.DateTimeFormat('pl-PL')` | `10.03.2027` |
+Daty kalendarzowe w formacie `YYYY-MM-DD`, miesiące w formacie `YYYY-MM`. Kwoty w PLN są zaokrąglane do grosza na wyjściu. Stawki świadczeń mają wartości procentowe, np. `81.5`, `70` i `100`. `work_fraction` jest częścią etatu, np. `0.5`. Nieustalone wyniki mają wartość `null`. Opcjonalne pola wejściowe mogą być pominięte.
 
-## 4. Typy i parametry (kod, nie opis)
+## 4. Typy i parametry
 
-- Typy: **`shared/types.ts`**. Importuj stamtąd zarówno w `client`, jak i w `server`. Nie duplikuj typów lokalnie.
-- Parametry: **`shared/params.json`** (typ `BenefitParams`). Engine dostaje parametry jako argument: `calculateX(input, params)`. Dzięki temu panel admina i testy mogą podać inne wartości.
+Typy domenowe pochodzą z `shared/types.ts`. `shared/params.json` jest początkowym źródłem parametrów. Nazwy pól konfiguracji administracyjnej zachowują swój dotychczasowy format, a stawki w konfiguracji są współczynnikami obliczeniowymi. Typy pomocnicze szkicu kreatora służą także do odczytu istniejących zapisów przeglądarki. Przed wywołaniem API szkic przechodzi na `CaseInputs`.
 
-## 5. Silnik obliczeń (`shared/engine`)
+## 5. Silnik i terminy
 
-- **Czyste funkcje:** bez `fetch`, bez `fs`, bez `Date.now()` (datę „dzisiaj” podaje się jako argument `referenceDate`).
-- Jedna funkcja publiczna na moduł, eksportowana z `shared/engine/index.ts`:
-  - `checkEligibility(input: ScenarioInput, params): EligibilityResult`
-  - `calculateMaternity(input: ScenarioInput, params): MaternityCalculationResult`
-  - `calculateBenefitBase(input: BenefitBaseInput, params): BenefitBaseResult`
-  - `planParentalSplit(input: ParentalSplitInput, params): ParentalSplitResult`
-  - `calculateParentalLeaveWithWork(input: ParentalWithWorkInput, params): ParentalWithWorkResult`
-  - `calculateSicknessInPregnancy(input: ScenarioInput, params): SicknessResult`
-  - `getRequiredDocuments(input: ScenarioInput, params): DocumentChecklist`
-- Każdy wynik zawiera `explanations: Explanation[]` (dlaczego tak wyszło + źródło prawne), żeby UI mógł pokazać uzasadnienie.
-- **Testy:** `shared/engine/__tests__/*.test.ts` (Vitest). Każda reguła ma test. Każda przykładowa sprawa z `data/cases` ma test porównujący z decyzją ZUS.
+`calculateCasePlan(input, params)` jest czystą funkcją. Zwraca wynik, uprawnienia, dokumenty, walidację podziału urlopu oraz materiały wsparcia. Harmonogram w dokumentach i wnioskach wynika z tych samych części, które zatwierdził silnik. Datę porównania terminów podaje klient przez `reference_date`. Ostrzeżenia o możliwej weryfikacji przez ZUS nie wpływają na kwalifikację.
 
 ## 6. REST API
 
-Bazowy prefiks: **`/api/v1`**. Wszystko JSON. Odpowiedź zawsze w kopercie:
+Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error: null`. Błąd zwraca `data: null`, kod i komunikat. Nieprawidłowy JSON lub kontrakt zwracają 422. Nieznana sprawa zwraca 404.
 
-```json
-{ "data": { ... }, "error": null }
-{ "data": null, "error": { "code": "VALIDATION_ERROR", "message": "birthDate is required", "details": [...] } }
-```
-
-Kody błędów: `VALIDATION_ERROR` (422), `NOT_FOUND` (404), `UNAUTHORIZED` (401), `INTERNAL_ERROR` (500).
-
-| Metoda | Ścieżka | Body → `data` | Właściciel |
+| Metoda | Ścieżka | Wejście | `data` |
 |---|---|---|---|
-| GET | `/api/v1/health` | → `{ status: 'ok' }` (endpoint techniczny) | Osoba 4 |
-| POST | `/api/v1/eligibility` | `ScenarioInput` → `EligibilityResult` | Osoba 4 (engine: 3/5) |
-| POST | `/api/v1/calculate/maternity` | `ScenarioInput` → `MaternityCalculationResult` | Osoba 4 (engine: 5) |
-| POST | `/api/v1/calculate/benefit-base` | `BenefitBaseInput` → `BenefitBaseResult` | Osoba 4 (engine: 6) |
-| POST | `/api/v1/calculate/sickness` | `ScenarioInput` → `SicknessResult` | Osoba 4 (engine: 3) |
-| POST | `/api/v1/plan/parental-split` | `ParentalSplitInput` → `ParentalSplitResult` | Osoba 4 (engine: 5) |
-| POST | `/api/v1/plan/parental-with-work` | `ParentalWithWorkInput` → `ParentalWithWorkResult` | Osoba 4 (engine: 5) |
-| POST | `/api/v1/documents` | `ScenarioInput` → `DocumentChecklist` | Osoba 4 (treść: 1) |
-| GET | `/api/v1/cases` | → `ZusCaseSummary[]` | Osoba 6 |
-| GET | `/api/v1/cases/:caseId` | → `ZusCase` | Osoba 6 |
-| POST | `/api/v1/cases/:caseId/evaluate` | → `CaseEvaluationResult` | Osoba 6 |
-| GET | `/api/v1/mock/profiles` | → `MockProfileSummary[]` | Osoba 3 |
-| POST | `/api/v1/mock/login` | `{ profileId }` → `{ sessionToken, profile: UserProfile }` | Osoba 3 |
-| GET | `/api/v1/mock/zus-data` | (nagłówek `Authorization: Bearer <sessionToken>`) → `ZusData` | Osoba 3 |
-| GET | `/api/v1/params` | → `BenefitParams` | Osoba 4 |
-| PUT | `/api/v1/admin/params` | `BenefitParams` → `BenefitParams` (wymaga admina) | Osoba 4 |
-| POST | `/api/v1/assistant/ask` | `{ question }` → `{ answer, sources[] }` (AI, opcjonalne) | Osoba 4 |
+| GET | `/health` | — | `{ status: 'ok' }` |
+| POST | `/plan` | `CaseInputs` | `CasePlan` |
+| POST | `/eligibility` | `CaseInputs` | `{ entitlements, warnings }` |
+| POST | `/calculate/maternity` | `CaseInputs` | `CaseOutcome` |
+| POST | `/calculate/sickness` | `CaseInputs` | `{ periods, employer_sick_pay, warnings }` |
+| POST | `/calculate/benefit-base` | `CaseInputs` | `{ benefit_base_pln }` |
+| POST | `/plan/parental-split` | `CaseInputs` z `parental_leave_parts` | `CasePlan` |
+| POST | `/plan/parental-with-work` | `CaseInputs` z `part_time_work_fraction` lub częściami | `CasePlan` |
+| POST | `/documents` | `CaseInputs` | `CaseDocument[]` |
+| GET | `/cases` | — | `CaseSummary[]` |
+| GET | `/cases/:caseId` | — | `CaseRecord` |
+| POST | `/cases/:caseId/evaluate` | puste żądanie | `{ case_id, outcome, matches, differences }` |
+| GET | `/params` | — | `BenefitParams` |
+| PUT | `/admin/params` | `BenefitParams`, nagłówek `Authorization: Bearer …` | Parametry aktywne do restartu |
+| POST | `/assistant/ask` | `{ question }` | `{ answer, sources, is_demo_fallback }` |
 
-Frontend woła API **tylko** przez `client/src/api/client.ts` (jedno miejsce z `API_BASE_URL` i obsługą koperty).
+`matches` porównuje kwalifikację, płatnika, stawkę, wymiary, formularze, okresy oraz znane kwoty. Streszczenie i cytaty źródłowe są zwracane obok wyniku jako treść decyzji.
 
 ## 7. Frontend
 
-- Routing (React Router): `/`, `/login`, `/wizard`, `/plan`, `/plan/:tab`, `/guide`, `/guide/:slug`, `/cases`, `/cases/:caseId`, `/admin`.
-- Zakładki `/plan/:tab`: `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`.
-- Stan scenariusza: jeden obiekt `ScenarioInput` w kontekście `ScenarioContext`, zsynchronizowany z query stringiem URL.
-- Struktura: `client/src/features/<feature>/` (komponenty + hooki danej funkcji), `client/src/components/` (wspólne UI), `client/src/api/`.
-- Responsywność: mobile-first; punkty przerwania 640 / 1024 px.
-- Funkcje AI oznaczone komponentem `<AiBadge />`.
-- Teksty dla użytkownika: prosty, empatyczny polski; przy trudnych sytuacjach (śmierć dziecka) bez wykrzykników i bez „gratulacji”.
+`/plan/:tab` obsługuje `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`. Kontekst scenariusza odczytuje i zapisuje aktualne wejście do obliczeń w URL. `?case=case-04` wskazuje sprawę katalogową, a zapisane edycje są w `inputs`. Wnioski demo przechowują wpisane wartości tylko w pamięci komponentu. Klient wywołuje HTTP przez `client/src/api/client.ts`.
 
-### 7.1 Wygląd: zgodny z www.zus.pl
+### 7.1 Wygląd
 
-Aplikacja ma wyglądać jak część serwisu ZUS, żeby jury i użytkownik od razu rozpoznali „urzędowy” styl zus.pl.
-**Jedyne źródło wartości:** `client/src/styles/tokens.css`. W CSS komponentów używaj tylko zmiennych `var(--...)`, bez wpisanych kolorów, odstępów i fontów.
-
-| Element | Jak na zus.pl | Token |
-|---|---|---|
-| Font | **Lato** 400 / 700 (lokalnie w `client/public/fonts`, bez Google Fonts) | `--font-family-base` |
-| Tło | białe; sekcje wyróżnione szarym pasem `#f3f3f3` | `--color-bg`, `--color-surface-muted` |
-| Tekst, nagłówki | prawie czarne `#1a1a1a`, nagłówki pogrubione; tekst pomocniczy `#4d4d4d` | `--color-text`, `--color-text-muted` |
-| Zieleń ZUS | `#007834`: ikony, akcenty, zaznaczenie; linki `#11783b`; hover `#025a28` | `--color-primary`, `--color-link`, `--color-primary-hover` |
-| Granat ZUS | `#00416e`: przyciski drugorzędne, etykiety informacyjne | `--color-navy` |
-| Pomarańcz ZUS | `#fab856`: **tylko** tło głównego CTA z granatowym tekstem (jak „Zaloguj do PUE/eZUS”) | `--color-cta`, `--color-on-cta` |
-| Błąd | `#cd0000` | `--color-error` |
-| Pasy | gruby zielony pas 7 px (karty, stopka, wyróżnienia), szary pas 8 px pod nagłówkiem | `--accent-bar-width`, `--divider-bar-width` |
-| Promienie | 3 px (przyciski, kafelki); bez „pigułek” poza znacznikami okrągłymi | `--radius-sm/md/lg` |
-| Fokus | pomarańczowy obrys 3 px + granatowa obwódka | `--color-focus`, `--focus-ring-shadow` |
-| Ikony | liniowe, zielone, inline SVG (bez bibliotek ikon) | `--icon-size-*` |
-
-**Przyciski (wzór z nagłówka zus.pl):**
-- główny (`.button--primary`): pomarańczowe tło, granatowy tekst, strzałka „›”; hover: granatowe tło, pomarańczowy tekst;
-- drugorzędny (`.button--secondary`): biały, granatowa ramka i tekst, strzałka „›”; hover: granatowe tło, biały tekst;
-- na telefonie na pełną szerokość, cel klikalny ≥ 44×44 px.
-
-**Zasady:**
-- Bez gradientów, bez dużych cieni, bez animacji poza subtelnym hover/focus (respektuj `prefers-reduced-motion`).
-- WCAG 2.1 AA ma pierwszeństwo przed zgodnością kolorów: tekst ≥ 4.5:1, granice kontrolek ≥ 3:1. Pomarańczu `#fab856` **nie używaj** jako koloru tekstu ani jedynego obrysu na białym (1.7:1).
-- **Nie kopiuj logo ZUS, godła ani grafik z zus.pl** i nie udawaj oficjalnego serwisu: przejmujemy tylko styl (kolory, typografię, układ). Etykieta „Wersja demonstracyjna – dane i logowanie są symulowane” zostaje na stronie startowej.
-- Nowy kolor lub rozmiar? Najpierw dodaj token w `tokens.css` (z komentarzem o kontraście), dopiero potem go użyj.
-- Wzorcowa implementacja: `client/src/features/landing/` (kafelki, przyciski, pasy, stopka).
+Stosuj Lato, tokeny z `client/src/styles/tokens.css` i istniejące polskie etykiety. Zachowaj czytelność przy 375 px i widoczny fokus klawiatury. Nazwa i elementy projektu mają być rozpoznawalne jako wersja demonstracyjna.
 
 ## 8. Backend
 
-- `server/src/routes/*.ts` → walidacja (zod) → wywołanie `shared/engine` → koperta.
-- Adaptery: `server/src/adapters/AuthProvider.ts`, `ZusDataProvider.ts` (interfejsy) + `Mock*` (implementacje). Nikt poza adapterem nie czyta `data/profiles` bezpośrednio.
-- Port domyślny: `3001`. CORS dla `http://localhost:5173` i adresu demo.
-- Parametry: odczyt z `shared/params.json`; zapis z panelu admina do tego samego pliku (wersja demo).
+Express i Zod walidują kontrakt na granicy HTTP. Adaptery i symulacje nie zapisują danych formularzy. Podstawowe dane katalogowe pochodzą z `data/cases`. Dokumenty konkursowe i surowe dane są poza indeksem Git.
 
 ## 9. Jakość
 
-- TypeScript `strict: true`. Bez `any` (wyjątek z komentarzem `// eslint-disable-next-line` i powodem).
-- ESLint + Prettier (konfiguracja w root). `npm run lint`, `npm run typecheck`, `npm test` przed każdym pushem.
-- Dane z przykładowych spraw ZUS: tylko wyciągnięte wartości w `data/cases/<caseId>.json`, **bez** skanów i PDF-ów.
+Uruchom `npm ci`, `npm run lint`, `npm run typecheck`, `npm test` i `npm run build` w katalogu `zus-przewodnik-starter`.
 
-## 10. Otwarte kwestie (do potwierdzenia u mentorów ZUS)
+## 10. Otwarte kwestie
 
-- [ ] Minimalna podstawa wymiaru 2026: tabela w załączniku jest pusta. Roboczo `minimumWage × (1 − 0.1371)` ≈ 4147,10 zł (art. 45).
-- [ ] Granice tygodnia ciąży w tabeli urlopu uzupełniającego („przed 28.” / „po 28.”): interpretujemy jako `< 28` i `>= 28 && < 37`.
+Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case-02 i zaokrągleniu case-06 mają opis w [raporcie](../../docs/FIX_ALL_REPORT.md).
 
 ## 11. Changelog kontraktu
 
-| Data | Zmiana | Autor |
-|---|---|---|
-| 2026-11-21 | Wersja początkowa | zespół |
-| 2026-11-21 | Dodano GET /api/v1/health – endpoint techniczny | JedrzejMikolajczak |
-| 2026-11-21 | Dodano §7.1 Wygląd: zgodność z www.zus.pl (tokeny w `client/src/styles/tokens.css`) | JedrzejMikolajczak |
+| Data | Zmiana |
+|---|---|
+| 2026-11-21 | Początkowy kontrakt, endpoint health i reguły stylu projektu |
+| 2026-11-21 | `CaseInputs`, `CaseOutcome`, `CasePlan`, format spraw ZUS oraz katalog i porównanie wyników |
+| 2026-11-21 | Wspólne okresy planu, dokumenty według zapisanych dat, ostrzeżenia z parametrami i symulacja odpowiedzi asystenta |

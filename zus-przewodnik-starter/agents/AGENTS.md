@@ -13,12 +13,12 @@
 
 ## Zasady, których nie łamiesz
 
-- **Nazwy:** kod po angielsku, `camelCase` / `PascalCase` dokładnie wg słownika w `CONVENTIONS.md` §2 (np. `maternityLeave`, `parentalLeave`, `paternityLeave`, `benefitBase`, `insuranceTitle: 'employment' | 'mandateContract' | 'selfEmployed' | 'none'`). Teksty dla użytkownika po polsku.
-- **Formaty:** daty `YYYY-MM-DD`, kwoty `number` w PLN (zaokrąglane tylko na wyjściu), stawki jako ułamek (`0.815`), brak wartości = `null`.
+- **Nazwy:** pola domenowe API, JSON i URL używają `snake_case`. Wartości wyliczeniowe mają zapis `UPPER_SNAKE_CASE`. Funkcje i zmienne lokalne używają `camelCase`.
+- **Formaty:** daty `YYYY-MM-DD`, kwoty `number` w PLN (zaokrąglane tylko na wyjściu), stawki w odpowiedziach jako procenty (`81.5`), brak wartości = `null`.
 - **Bez liczb w kodzie:** żadnych `20`, `41`, `0.7`, `0.1371` itp. w logice. Wszystko z `params: BenefitParams`.
 - **Silnik (`shared/engine`):** czyste funkcje `fn(input, params)`, bez I/O, bez `Date.now()`; każda reguła ma test w Vitest.
 - **API:** tylko ścieżki z `CONVENTIONS.md` §6, prefiks `/api/v1`, odpowiedź w kopercie `{ data, error }`. Nowy endpoint = zmiana kontraktu.
-- **Frontend:** API wołasz tylko przez `client/src/api/client.ts`; stan scenariusza w `ScenarioContext` (typ `ScenarioInput`).
+- **Frontend:** API wołasz tylko przez `client/src/api/client.ts`; stan scenariusza w `ScenarioContext` (dane planu typu `CaseInputs`).
 - **Kontrakt** (`shared/types.ts`, `shared/params.json`, ścieżki API): nie zmieniaj w zwykłym feature branchu. Jeśli musisz, zaproponuj zmianę człowiekowi i dopisz ją do *Changelog kontraktu*.
 - **Zakres:** rób tylko to, o co poproszono. Bez refaktorów „przy okazji”, bez zmiany plików innych właścicieli (README §6), bez nowych zależności bez pytania.
 - **Dane ZUS:** nigdy nie commituj `docs/zus/`, `data/cases-raw/`, `.env`, kluczy. Do `data/cases/*.json` trafiają tylko wyciągnięte wartości.

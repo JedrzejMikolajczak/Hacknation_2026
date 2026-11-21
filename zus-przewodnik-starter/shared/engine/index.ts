@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   BenefitBaseInput,
   BenefitBaseResult,
   BenefitParams,
@@ -9,7 +9,7 @@
   ParentalSplitResult,
   ParentalWithWorkInput,
   ParentalWithWorkResult,
-  ScenarioInput,
+  WizardScenario,
   SicknessResult,
 } from '../types';
 
@@ -34,6 +34,7 @@ export type {
   ParentalSplitResult,
   ParentalWithWorkInput,
   ParentalWithWorkResult,
-  ScenarioInput,
+  WizardScenario,
   SicknessResult,
 };
+export { calculateCasePlan } from './casePlan';

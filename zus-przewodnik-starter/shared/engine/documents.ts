@@ -3,7 +3,7 @@ import type {
   DocumentChecklist,
   Payer,
   RequiredDocument,
-  ScenarioInput,
+  WizardScenario,
 } from '../types';
 import { addDays, addMonths, formatPercentPl, validateParams } from './core';
 import { resolveParentPayer } from './eligibility';
@@ -14,7 +14,7 @@ function effectivePayerOrZus(payer: Payer | null): Payer {
 }
 
 export function getRequiredDocuments(
-  input: ScenarioInput,
+  input: WizardScenario,
   params: BenefitParams,
 ): DocumentChecklist {
   const eventDate =

@@ -33,3 +33,14 @@ Hacknation_2026/
 │   └── sample-cases/             # Przykładowe sprawy i dokumenty testowe ZUS
 └── docs/
     └── test-cases.md             # Matryca weryfikacji wyników na bazie spraw konkursowych
+```
+
+## Uruchomienie wersji konkursowej
+
+```bash
+cd zus-przewodnik-starter
+npm ci
+npm run dev
+```
+
+Otwórz `http://localhost:5173/cases`. Katalog prowadzi do sześciu spraw i panelu „Twój plan”. [Instrukcja aplikacji](zus-przewodnik-starter/README.md) · [Raport integracji](docs/FIX_ALL_REPORT.md)

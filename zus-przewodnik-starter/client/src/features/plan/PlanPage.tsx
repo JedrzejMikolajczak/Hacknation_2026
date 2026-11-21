@@ -1,248 +1,124 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import type { BenefitBaseResult, ScenarioInput } from '@shared/types';
-import { DEFAULT_PARAMS } from '../../app/benefitParams';
+import type { BenefitParams, CaseInputs, CasePlan, CaseRecord } from '@shared/types';
+import { apiGet, apiPost } from '../../api/client';
 import { useScenario } from '../../app/ScenarioContext';
-import {
-  computePlanBundleLocally,
-  fetchPlanBundle,
-  resolveBenefitBasesForPlan,
-  type PlanBundleResult,
-} from './planApi';
-import { PlanControlsBar } from './PlanControlsBar';
 import { PlanHub } from './PlanHub';
-import {
-  getMissingFieldsForTab,
-  isDifficultSituation,
-  isPlanTab,
-  PLAN_TABS,
-  resolvePlanContext,
-  scenarioToDraftPatch,
-  scenarioToSearchParams,
-  type PlanTabId,
-  type ScenarioMeta,
-} from './planScenario';
-import { ApplicationsTab } from './tabs/ApplicationsTab';
-import { CalculatorTab } from './tabs/CalculatorTab';
-import { DocumentsTab } from './tabs/DocumentsTab';
-import { EntitlementsTab } from './tabs/EntitlementsTab';
-import { LeavePlanTab } from './tabs/LeavePlanTab';
-import { SupportTab } from './tabs/SupportTab';
+import { isPlanTab, PLAN_TABS, todayIsoDate } from './planScenario';
+import { CaseCalculator, CaseRights } from './tabs/CaseResults';
+import { CasePlanner } from './tabs/CasePlanner';
+import { CaseApplications, CaseDocuments } from './tabs/CasePaperwork';
+import { CaseSupport } from './tabs/CaseSupport';
 import './PlanPage.css';
-
-export interface ComputedBaseInfo {
-  mother: BenefitBaseResult | null;
-  father: BenefitBaseResult | null;
-  sickness: BenefitBaseResult | null;
-}
+import './CasePlan.css';
 
 export function PlanPage() {
-  const { tab } = useParams<{ tab?: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { scenario: draft, updateScenario } = useScenario();
-  const [shareCopied, setShareCopied] = useState(false);
-  const activeTabRef = useRef<HTMLAnchorElement | null>(null);
-
-  const initialContext = useMemo(
-    () => resolvePlanContext(draft, searchParams),
-    // Inicjalizacja z draftu + URL; dalsze zmiany sterowane przez live controls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  const [scenario, setScenario] = useState<ScenarioInput>(initialContext.scenario);
-  const [meta, setMeta] = useState<ScenarioMeta>(initialContext.meta);
-  const [computedBases, setComputedBases] = useState<ComputedBaseInfo>({
-    mother: null,
-    father: null,
-    sickness: null,
-  });
-
-  const sicknessStartDate = draft.pregnancySickLeave?.startDate ?? undefined;
-
-  const [bundle, setBundle] = useState<PlanBundleResult>(() =>
-    computePlanBundleLocally(initialContext.scenario, DEFAULT_PARAMS, {
-      sicknessStartDate,
-    }),
-  );
-
+  const { tab } = useParams();
+  const [query] = useSearchParams();
+  const caseId = query.get('case');
+  const search = query.size ? `?${query.toString()}` : '';
+  const { scenario, planInputs, updatePlanInputs } = useScenario();
+  const [fixture, setFixture] = useState<{ key: string; item: CaseRecord | null } | null>(null);
+  const [computed, setComputed] = useState<{
+    key: string;
+    plan: CasePlan | null;
+    params: BenefitParams | null;
+    error?: string;
+  } | null>(null);
+  const serialized = query.get('inputs');
+  const currentFixture = fixture?.key === caseId ? fixture : null;
   useEffect(() => {
+    if (!caseId) return;
     let active = true;
-
-    async function loadPlan() {
-      const needsBaseResolution =
-        (scenario.mother.benefitBase === null &&
-          Boolean(draft.benefitBaseInputs?.mother || draft.sicknessBenefitBaseInput)) ||
-        (scenario.father !== null &&
-          scenario.father.benefitBase === null &&
-          Boolean(draft.benefitBaseInputs?.father));
-
-      let effectiveScenario = scenario;
-      let nextComputed: ComputedBaseInfo = { mother: null, father: null, sickness: null };
-      let basesUsedApi = true;
-
-      if (needsBaseResolution) {
-        const resolved = await resolveBenefitBasesForPlan(draft, scenario, bundle.params);
-        if (!active) return;
-        effectiveScenario = resolved.scenarioWithBases;
-        nextComputed = {
-          mother: resolved.motherBaseResult,
-          father: resolved.fatherBaseResult,
-          sickness: resolved.sicknessBaseResult,
-        };
-        basesUsedApi = resolved.usingApi;
-        setComputedBases(nextComputed);
-      } else {
-        setComputedBases({ mother: null, father: null, sickness: null });
-      }
-
-      const nextBundle = await fetchPlanBundle(effectiveScenario, {
-        sicknessStartDate,
-        sicknessBenefitBase: nextComputed.sickness?.benefitBase ?? null,
+    void apiGet<CaseRecord>(`/cases/${encodeURIComponent(caseId)}`)
+      .then((item) => {
+        if (active) setFixture({ key: caseId, item });
+      })
+      .catch(() => {
+        if (active) setFixture({ key: caseId, item: null });
       });
-      if (!active) return;
-      setBundle({
-        ...nextBundle,
-        usingApi: nextBundle.usingApi && basesUsedApi,
-      });
-    }
-
-    void loadPlan();
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario, draft.benefitBaseInputs, draft.sicknessBenefitBaseInput, sicknessStartDate]);
-
+  }, [caseId]);
+  const input = useMemo(() => {
+    if (serialized) return planInputs;
+    if (caseId)
+      return currentFixture?.item
+        ? { ...currentFixture.item.inputs, reference_date: todayIsoDate() }
+        : null;
+    return planInputs;
+  }, [serialized, caseId, currentFixture, planInputs]);
+  const key = input ? JSON.stringify(input) : '';
+  const current = computed?.key === key ? computed : null;
+  const plan = current?.plan ?? null;
+  const params = current?.params ?? null;
   useEffect(() => {
-    if (typeof activeTabRef.current?.scrollIntoView === 'function') {
-      activeTabRef.current.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    }
-  }, [tab]);
-
-  const effectiveScenario: ScenarioInput = useMemo(
-    () => ({
-      ...scenario,
-      mother: {
-        ...scenario.mother,
-        benefitBase: scenario.mother.benefitBase ?? computedBases.mother?.benefitBase ?? null,
-      },
-      father: scenario.father
-        ? {
-            ...scenario.father,
-            benefitBase: scenario.father.benefitBase ?? computedBases.father?.benefitBase ?? null,
-          }
-        : null,
-    }),
-    [scenario, computedBases],
-  );
-
-  const currentQuery = searchParams.toString();
-  const querySuffix = currentQuery ? `?${currentQuery}` : '';
-
-  if (tab !== undefined && !isPlanTab(tab)) {
-    return <Navigate to={`/plan${querySuffix}`} replace />;
-  }
-
-  const activeTab: PlanTabId | null = tab ?? null;
-  const activeTabMeta = activeTab ? PLAN_TABS.find((item) => item.id === activeTab) : null;
-  const difficult = isDifficultSituation(effectiveScenario);
-  const wizardHref = `/wizard?situation=${effectiveScenario.situation}`;
-
-  const missingEntitlements = getMissingFieldsForTab('entitlements', effectiveScenario, meta);
-  const missingCalculator = getMissingFieldsForTab('calculator', effectiveScenario, meta);
-  const missingDocuments = getMissingFieldsForTab('documents', effectiveScenario, meta);
-
-  function handleScenarioChange(next: ScenarioInput, nextMetaPatch?: Partial<ScenarioMeta>) {
-    const nextMeta: ScenarioMeta = nextMetaPatch ? { ...meta, ...nextMetaPatch } : meta;
-    setScenario(next);
-    setMeta(nextMeta);
-    updateScenario(scenarioToDraftPatch(next, nextMeta));
-    setSearchParams(scenarioToSearchParams(next, nextMeta), { replace: true });
-    setShareCopied(false);
-  }
-
-  function handleCopyShareLink() {
-    const nextParams = scenarioToSearchParams(effectiveScenario, meta);
-    setSearchParams(nextParams, { replace: true });
-    const section = activeTab ? `/${activeTab}` : '';
-    const shareUrl = `${window.location.origin}/plan${section}?${nextParams.toString()}`;
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(shareUrl).catch(() => {
-        // ignore clipboard denial in test/sandbox environments
+    if (!key || !tab || !isPlanTab(tab)) return;
+    let active = true;
+    void Promise.all([
+      apiPost<CasePlan>('/plan', JSON.parse(key)),
+      apiGet<BenefitParams>('/params'),
+    ])
+      .then(([plan, params]) => {
+        if (active) setComputed({ key, plan, params });
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setComputed({
+            key,
+            plan: null,
+            params: null,
+            error: error instanceof Error ? error.message : 'Błąd API',
+          });
       });
-    }
-    setShareCopied(true);
-  }
+    return () => {
+      active = false;
+    };
+  }, [key, tab]);
 
+  if (tab && !isPlanTab(tab)) return <Navigate replace to={`/plan${search}`} />;
+
+  function update(patch: Partial<CaseInputs>) {
+    if (!input) return;
+    updatePlanInputs({ ...input, ...patch });
+  }
+  const wizardUrl = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
+  const fixtureError = caseId && currentFixture && !currentFixture.item;
+  const waiting = !fixtureError && ((caseId && !fixture && !input) || (input && !current));
   return (
     <div className="plan-page">
       <div className="plan-page__demo-strip">
-        <div className="plan-page__container plan-page__demo-strip-inner">
-          <p className="plan-page__demo-note">
-            Wersja demonstracyjna – dane są symulowane
-            {!bundle.usingApi && activeTab !== null && (
-              <span className="plan-page__mode-inline" role="status">
-                {' '}
-                · tryb demonstracyjny – obliczenia w przeglądarce
-              </span>
-            )}
-          </p>
-        </div>
+        <p className="plan-page__container plan-page__demo-note">
+          Wersja demonstracyjna · dane i wysyłka są symulowane
+        </p>
       </div>
-
-      <header
-        className={
-          activeTab !== null ? 'plan-page__header plan-page__header--section' : 'plan-page__header'
-        }
-      >
+      <header className="plan-page__header">
         <div className="plan-page__container">
-          <div className="plan-page__nav-row">
-            {activeTabMeta ? (
-              <nav className="plan-breadcrumb" aria-label="Ścieżka nawigacji">
-                <Link to={`/plan${querySuffix}`} className="plan-breadcrumb__back">
-                  ← Twój plan
-                </Link>
-                <span className="plan-breadcrumb__sep" aria-hidden="true">
-                  ›
-                </span>
-                <span className="plan-breadcrumb__current" aria-current="page">
-                  {activeTabMeta.label}
-                </span>
-              </nav>
-            ) : (
-              <span className="plan-page__hub-kicker">Twój plan</span>
-            )}
-
-            <Link to={wizardHref} className="plan-page__wizard-link">
-              Zmień odpowiedzi
-            </Link>
-          </div>
-
+          <nav className="case-plan-links" aria-label="Nawigacja projektu">
+            <Link to="/">Start</Link>
+            <Link to="/cases">Przykładowe sprawy</Link>
+            <Link to={wizardUrl}>Kreator</Link>
+            <Link to="/guide">Przewodnik</Link>
+          </nav>
           <h1 className="plan-page__title">Twój plan zasiłkowy i urlopowy</h1>
-          {activeTab === null && (
-            <p className="plan-page__subtitle">
-              {difficult
-                ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
-                : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
-            </p>
+          {currentFixture?.item && (
+            <p className="plan-page__subtitle">{currentFixture.item.short_title}</p>
           )}
         </div>
       </header>
-
       <main className="plan-page__main">
         <div className="plan-page__container">
-          {activeTab === null ? (
-            <PlanHub querySuffix={querySuffix} />
+          {!tab ? (
+            <PlanHub querySuffix={search} />
           ) : (
             <>
-              <nav className="plan-tabs" aria-label="Zakładki Twojego planu">
+              <nav className="plan-tabs case-plan-nav" aria-label="Zakładki Twojego planu">
                 <ul className="plan-tabs__list">
                   {PLAN_TABS.map((item) => (
-                    <li key={item.id} className="plan-tabs__item">
+                    <li className="plan-tabs__item" key={item.id}>
                       <NavLink
-                        ref={item.id === activeTab ? activeTabRef : undefined}
-                        to={`/plan/${item.id}${querySuffix}`}
+                        to={`/plan/${item.id}${search}`}
                         className={({ isActive }) =>
                           isActive ? 'plan-tabs__link plan-tabs__link--active' : 'plan-tabs__link'
                         }
@@ -253,96 +129,71 @@ export function PlanPage() {
                   ))}
                 </ul>
               </nav>
-
-              <PlanControlsBar
-                scenario={effectiveScenario}
-                meta={meta}
-                params={bundle.params}
-                onChange={handleScenarioChange}
-                onCopyShareLink={handleCopyShareLink}
-                shareCopied={shareCopied}
-              />
-
-              <div
-                className="plan-panel"
-                role="region"
-                aria-label="Zawartość wybranej zakładki planu"
-              >
-                {activeTab === 'entitlements' && (
-                  <EntitlementsTab
-                    eligibility={bundle.eligibility}
-                    missingFields={missingEntitlements}
-                    wizardHref={wizardHref}
-                    hasMotherInPlan={meta.hasMotherInPlan}
-                  />
+              <section className="plan-panel case-plan-panel" aria-label="Zawartość zakładki">
+                {fixtureError && (
+                  <p role="alert">
+                    Nie udało się otworzyć sprawy. <Link to="/cases">Wybierz sprawę z listy.</Link>
+                  </p>
                 )}
-                {activeTab === 'calculator' && (
-                  <CalculatorTab
-                    scenario={effectiveScenario}
-                    params={bundle.params}
-                    maternity={bundle.maternity}
-                    sickness={bundle.sickness}
-                    onScenarioChange={(next) => handleScenarioChange(next)}
-                    missingFields={missingCalculator}
-                    wizardHref={wizardHref}
-                    computedBases={computedBases}
-                    hasMotherInPlan={meta.hasMotherInPlan}
-                  />
+                {waiting && <p role="status">Pobieranie planu z API…</p>}
+                {!waiting && !fixtureError && !input && (
+                  <p>
+                    Uzupełnij dane w <Link to={wizardUrl}>kreatorze</Link> lub wybierz{' '}
+                    <Link to="/cases">sprawę testową</Link>.
+                  </p>
                 )}
-                {activeTab === 'leave-plan' && (
-                  <LeavePlanTab
-                    scenario={effectiveScenario}
-                    params={bundle.params}
-                    maternity={bundle.maternity}
-                    usingApi={bundle.usingApi}
-                  />
+                {current?.error && (
+                  <p role="alert">
+                    Nie udało się wyliczyć planu. {current.error}{' '}
+                    {serialized && (
+                      <button
+                        type="button"
+                        className="plan-btn plan-btn--secondary"
+                        onClick={() => {
+                          updatePlanInputs(null);
+                        }}
+                      >
+                        Cofnij zmiany
+                      </button>
+                    )}
+                  </p>
                 )}
-                {activeTab === 'documents' && (
-                  <DocumentsTab
-                    checklist={bundle.documents}
-                    scenario={effectiveScenario}
-                    params={bundle.params}
-                    missingFields={missingDocuments}
-                    wizardHref={wizardHref}
-                  />
+                {input && plan && params && (
+                  <>
+                    {plan.validation_errors.length > 0 && (
+                      <div className="plan-callout plan-callout--warning" role="alert">
+                        <strong>Sprawdź plan urlopów</strong>
+                        <ul>
+                          {plan.validation_errors.map((item, index) => (
+                            <li key={`${item.code}-${index}`}>
+                              {item.message_pl} <small>{item.legal_basis}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {tab === 'entitlements' && <CaseRights plan={plan} />}
+                    {tab === 'calculator' && (
+                      <CaseCalculator plan={plan} input={input} update={update} />
+                    )}
+                    {tab === 'leave-plan' && (
+                      <CasePlanner plan={plan} input={input} params={params} update={update} />
+                    )}
+                    {tab === 'documents' && (
+                      <CaseDocuments
+                        documents={plan.documents}
+                        effectiveDate={params.forms2026EffectiveDate}
+                      />
+                    )}
+                    {tab === 'applications' && <CaseApplications documents={plan.documents} />}
+                    {tab === 'support' && <CaseSupport input={input} plan={plan} params={params} />}
+                  </>
                 )}
-                {activeTab === 'applications' && (
-                  <ApplicationsTab
-                    scenario={effectiveScenario}
-                    params={bundle.params}
-                    maternity={bundle.maternity}
-                    checklist={bundle.documents}
-                  />
-                )}
-                {activeTab === 'support' && (
-                  <SupportTab scenario={effectiveScenario} params={bundle.params} />
-                )}
-              </div>
+              </section>
             </>
           )}
         </div>
       </main>
-
-      <footer className="plan-page__footer">
-        <div className="plan-page__container">
-          <nav aria-label="Dodatkowa nawigacja" className="plan-page__footer-nav">
-            <ul className="plan-page__footer-links">
-              <li>
-                <Link to="/">Strona startowa</Link>
-              </li>
-              <li>
-                <Link to={wizardHref}>Wróć do kreatora</Link>
-              </li>
-              <li>
-                <Link to="/guide">Przewodnik</Link>
-              </li>
-              <li>
-                <Link to="/cases">Przykładowe sprawy</Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </footer>
     </div>
   );
 }

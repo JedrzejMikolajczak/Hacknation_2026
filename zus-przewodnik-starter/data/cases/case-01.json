@@ -1,0 +1,156 @@
+{
+  "case_id": "case-01",
+  "short_title": "Zasiłek chorobowy w ciąży (100%) oraz zasiłek macierzyński 81,5% za urlop macierzyński i rodzicielski przedłużony o 24 tygodnie na podstawie ustawy 'Za życiem' po uchyleniu odmowy w trybie autokontroli.",
+  "scenario_category": "SYTUACJA_SZCZEGOLNA",
+  "inputs": {
+    "applicant_role": "MOTHER",
+    "stage": "POST_BIRTH",
+    "co_parenting": true,
+    "other_parent_insured": null,
+    "employment_type": "UOP",
+    "contract_type": "INDEFINITE",
+    "contract_end_date": null,
+    "payer_insured_count_nov_30": "<= 20",
+    "voluntary_sickness_insured": false,
+    "insurance_duration_days": null,
+    "has_b2b_arrears": false,
+    "applicant_age_50_plus": false,
+    "benefit_base_amount_pln": 3710.47,
+    "due_or_birth_date": "2024-10-15",
+    "application_date": "2024-11-04",
+    "days_from_birth_to_application": 20,
+    "children_count": 1,
+    "requested_payment_variant": "COMBINED_81_5",
+    "father_parental_weeks": 0,
+    "part_time_work_fraction": 0.0,
+    "special_circumstances": {
+      "has_code_b_on_ezla": true,
+      "premature_or_hospitalized_newborn": true,
+      "za_zyciem_certificate": true,
+      "stillbirth_or_child_death": "NONE",
+      "mother_hospitalized_or_incapable": false,
+      "employer_bankruptcy_or_liquidation": false,
+      "adopted_or_foster_child_age_years": null,
+      "is_professional_foster_family": false
+    },
+    "sickness_leave_start_date": "2024-02-26",
+    "sickness_leave_end_date": "2024-10-31",
+    "sickness_benefit_start_date": "2024-04-01",
+    "sickness_waiting_period_confirmed": true,
+    "za_zyciem_certificate_date": "2025-11-26",
+    "sickness_base_changes": [
+      {
+        "effective_date": "2024-04-01",
+        "amount_pln": 3660.42
+      },
+      {
+        "effective_date": "2024-07-01",
+        "amount_pln": 3710.47
+      }
+    ]
+  },
+  "ground_truth_outcome": {
+    "is_qualified": true,
+    "decision_summary_pl": "Przyznano zasiłek chorobowy w ciąży (kod B, 100%) za 197 dni (01.04.2024–14.10.2024) z odmową za 15.10.2024–31.10.2024 z uwagi na poród. Przyznano zasiłek macierzyński w stawce 81,5% za urlop macierzyński (15.10.2024–03.03.2025, 20 tyg.) i rodzicielski (04.03.2025–13.10.2025, 32 tyg.). Decyzją z 04.12.2025 r. (autokontrola) uchylono decyzję odmowną z 05.11.2025 r. i przyznano zasiłek macierzyński za dodatkowe 24 tygodnie urlopu rodzicielskiego (14.10.2025–30.03.2026) na podstawie ustawy 'Za życiem'.",
+    "denial_or_reduction_reason_pl": "Częściowa odmowa zasiłku chorobowego za okres 15.10.2024–31.10.2024 z powodu porodu w dniu 15.10.2024 r. (zbieg z zasiłkiem macierzyńskim). Pierwotna odmowa z 05.11.2025 r. przedłużenia urlopu rodzicielskiego o 24 tygodnie wynikała z dostarczenia zaświadczeń szpitalnych pod kątem uzupełniającego urlopu macierzyńskiego (do którego brak było prawa, gdyż 19.03.2025 r. ubezpieczona przebywała już na urlopie rodzicielskim, a nie macierzyńskim) zamiast właściwego zaświadczenia 'Za życiem' z art. 4 ust. 3 ustawy (uchylona po dostarczeniu dokumentu z odwołaniem 27.11.2025 r.).",
+    "who_pays": "SPLIT_EMPLOYER_THEN_ZUS",
+    "granted_rate_percent": 81.5,
+    "granted_duration_days": 532,
+    "granted_duration_weeks": 76,
+    "calculated_amount_pln": null,
+    "mapped_forms_2026": [
+      "Z-3",
+      "ZAS-12",
+      "e-ZLA",
+      "ZAM"
+    ],
+    "legal_basis_cited": [
+      "art. 92 Kodeksu pracy",
+      "art. 180 § 1 pkt 1 Kodeksu pracy",
+      "art. 182(1a) § 2 Kodeksu pracy",
+      "art. 184 Kodeksu pracy",
+      "art. 29a ust. 1 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa",
+      "art. 4 ust. 3 ustawy z dnia 4 listopada 2016 r. o wsparciu kobiet w ciąży i rodzin 'Za życiem'",
+      "ustawa z dnia 6 grudnia 2024 r. o zmianie ustawy - Kodeks pracy oraz niektórych innych ustaw",
+      "art. 83 ust. 6 ustawy z dnia 13 października 1998 r. o systemie ubezpieczeń społecznych"
+    ],
+    "periods": [
+      {
+        "leave_type": "SICKNESS",
+        "parent_role": "MOTHER",
+        "start_date": "2024-04-01",
+        "end_date": "2024-10-14",
+        "days": 197,
+        "weeks": 28.142857142857142,
+        "rate_percent": 100,
+        "denied": false,
+        "work_fraction": 0,
+        "amount_segments": [
+          {
+            "start_date": "2024-04-01",
+            "end_date": "2024-06-30",
+            "benefit_base_pln": 3660.42,
+            "daily_amount_pln": 122.01,
+            "monthly_amount_pln": 3660.42
+          },
+          {
+            "start_date": "2024-07-01",
+            "end_date": "2024-10-14",
+            "benefit_base_pln": 3710.47,
+            "daily_amount_pln": 123.68,
+            "monthly_amount_pln": 3710.47
+          }
+        ]
+      },
+      {
+        "leave_type": "SICKNESS",
+        "parent_role": "MOTHER",
+        "start_date": "2024-10-15",
+        "end_date": "2024-10-31",
+        "days": 17,
+        "weeks": 2.4285714285714284,
+        "rate_percent": null,
+        "denied": true,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "MATERNITY",
+        "parent_role": "MOTHER",
+        "start_date": "2024-10-15",
+        "end_date": "2025-03-03",
+        "days": 140,
+        "weeks": 20.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 3710.47,
+        "daily_amount_pln": 100.8,
+        "monthly_amount_pln": 3024.03
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2025-03-04",
+        "end_date": "2025-10-13",
+        "days": 224,
+        "weeks": 32.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "PARENTAL_ZA_ZYCIEM_EXTENSION",
+        "parent_role": "MOTHER",
+        "start_date": "2025-10-14",
+        "end_date": "2026-03-30",
+        "days": 168,
+        "weeks": 24.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0
+      }
+    ],
+    "benefit_base_pln": 3710.47
+  },
+  "edge_case_notes": "Wieloetapowa sprawa z licznymi pułapkami: (1) Płatnik zgłasza <= 20 ubezpieczonych – pracodawca wypłacił 33 dni wynagrodzenia chorobowego (26.02–31.03.2024), a ZUS wypłaca zasiłek chorobowy od 01.04.2024 (podstawa przeliczona z 3660,42 zł na 3710,47 zł od lipca 2024 r. po wyłączeniu premii uznaniowych) oraz zasiłek macierzyński. (2) eZLA do 31.10.2024 r. ucięte z dniem porodu 15.10.2024 r. (odmowa za 17 dni 15–31.10.2024). (3) Brak prawa do uzupełniającego urlopu macierzyńskiego z przepisów przejściowych (w dniu wejścia w życie ustawy 19.03.2025 r. matka była już na urlopie rodzicielskim od 04.03.2025 r.). (4) Skuteczna autokontrola ZUS z art. 83 ust. 6 u.s.u.s. po dostarczeniu wraz z odwołaniem właściwego zaświadczenia 'Za życiem' z 26.11.2025 r. (łącznie 76 tygodni dla matki: 20 + 32 + 24 tyg.)."
+}

@@ -1,4 +1,4 @@
-import type { CharitableOrganization } from './supportData';
+import type { CharitableOrganization } from '@shared/types';
 
 interface OrganizationsDetailsProps {
   organizations: CharitableOrganization[];
@@ -20,8 +20,8 @@ export function OrganizationsDetails({ organizations, defaultOpen }: Organizatio
           {organizations.map((org) => (
             <article key={org.id} className="support-org-tile">
               <div className="support-org-tile__meta">
-                <span className="plan-badge plan-badge--navy">{org.helpsWith}</span>
-                <span className="support-org-tile__form">{org.legalForm}</span>
+                <span className="plan-badge plan-badge--navy">{org.helps_with}</span>
+                <span className="support-org-tile__form">{org.legal_form}</span>
               </div>
               <h3 className="support-org-tile__title">{org.name}</h3>
               <p className="support-org-tile__desc">{org.description}</p>

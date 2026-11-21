@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { BenefitBaseInput, ScenarioInput } from '../../types';
+import type { BenefitBaseInput, WizardScenario } from '../../types';
 import {
   calculateBenefitBase,
   calculateMaternity,
@@ -8,7 +8,7 @@ import {
   checkEligibility,
 } from '../index';
 
-function testScenario(): ScenarioInput {
+function testScenario(): WizardScenario {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
