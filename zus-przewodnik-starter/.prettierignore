@@ -1,0 +1,8 @@
+# Kontrakt i dokumenty zespołu – nie formatujemy automatycznie (zmiany tylko przez feature/contract-*)
+shared/types.ts
+shared/params.json
+agents/
+docs/
+README.md
+package-lock.json
+**/dist/

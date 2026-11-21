@@ -157,12 +157,14 @@ Obszary w nazwie brancha: `engine`, `api`, `ui`, `mock`, `guide`, `admin`, `case
 - ❌ commit z czerwonymi testami
 - ❌ „przy okazji” refaktory poza zakresem zadania
 
-## 8. Uruchomienie (docelowo)
+## 8. Uruchomienie
+
+Wymagania (Node.js ≥ 20, npm ≥ 10), pełna lista zależności i opis skryptów: **[`REQUIREMENTS.md`](REQUIREMENTS.md)**.
 
 ```bash
 npm install          # root: workspaces client, server, shared
 npm run dev          # client :5173 + server :3001
-npm test             # testy engine + api
+npm test             # testy shared + server + client
 npm run build
 ```
 
