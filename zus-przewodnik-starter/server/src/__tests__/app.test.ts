@@ -82,4 +82,15 @@ describe('API v1', () => {
       .expect(422);
     await request(app).get(`${api}/missing`).expect(404);
   });
+
+  it('wyjaśnia po polsku, jak poprawić odwrócone daty zwolnienia', async () => {
+    const { body } = await request(app).post(`${api}/plan`).send({
+      ...input,
+      sickness_leave_start_date: '2026-11-10',
+      sickness_leave_end_date: '2026-11-09',
+    }).expect(422);
+    expect(body.error.message).toMatch(/Koniec zwolnienia lekarskiego.*Ustaw koniec zwolnienia/);
+    expect(body.error.message).not.toContain('sickness_leave_end_date');
+    expect(body.error.details[0].path).toEqual(['sickness_leave_end_date']);
+  });
 });

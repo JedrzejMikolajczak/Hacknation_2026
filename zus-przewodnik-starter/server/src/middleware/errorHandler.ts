@@ -2,10 +2,11 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { CalculationError } from '@shared/engine';
 import { fail } from '../lib/envelope';
+import { validationMessage } from '../lib/validationMessage';
 
 /** Brak dopasowanej ścieżki → 404 NOT_FOUND w kopercie. */
 export const notFoundHandler: RequestHandler = (req, res) => {
-  res.status(404).json(fail('NOT_FOUND', `Route ${req.method} ${req.path} not found`));
+  res.status(404).json(fail('NOT_FOUND', 'Nie znaleziono żądanego zasobu.'));
 };
 
 function isJsonParseError(err: unknown): boolean {
@@ -26,16 +27,14 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next
     return;
   }
   if (err instanceof ZodError) {
-    const first = err.issues[0];
-    const path = first?.path?.length ? `${first.path.join('.')}: ` : '';
-    const message = first ? `${path}${first.message}` : 'Nieprawidłowe dane wejściowe.';
-    res.status(422).json(fail('VALIDATION_ERROR', message, err.issues));
+    const issues = err.issues.map((issue) => ({ ...issue, message: validationMessage(issue) }));
+    res.status(422).json(fail('VALIDATION_ERROR', issues[0]?.message ?? 'Sprawdź dane w formularzu.', issues));
     return;
   }
   if (isJsonParseError(err)) {
-    res.status(422).json(fail('VALIDATION_ERROR', 'Request body is not valid JSON'));
+    res.status(422).json(fail('VALIDATION_ERROR', 'Dane mają nieprawidłowy format. Wprowadź je ponownie lub sprawdź plik.'));
     return;
   }
   console.error(err);
-  res.status(500).json(fail('INTERNAL_ERROR', 'Internal server error'));
+  res.status(500).json(fail('INTERNAL_ERROR', 'Wystąpił błąd serwera. Spróbuj ponownie.'));
 };

@@ -27,18 +27,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers: { Accept: 'application/json', ...init.headers },
     });
   } catch (cause) {
-    throw new ApiError('INTERNAL_ERROR', 'Network error', cause);
+    throw new ApiError('INTERNAL_ERROR', 'Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.', cause);
   }
 
   const body: unknown = await response.json().catch(() => null);
   if (!isEnvelope(body)) {
-    throw new ApiError('INTERNAL_ERROR', `Unexpected response (HTTP ${response.status})`);
+    throw new ApiError('INTERNAL_ERROR', 'Serwer zwrócił nieprawidłową odpowiedź. Spróbuj ponownie.');
   }
   if (body.error) {
     throw new ApiError(body.error.code, body.error.message, body.error.details);
   }
   if (!response.ok) {
-    throw new ApiError('INTERNAL_ERROR', `Request failed (HTTP ${response.status})`);
+    throw new ApiError('INTERNAL_ERROR', 'Serwer nie przetworzył danych. Spróbuj ponownie.');
   }
   return body.data as T;
 }

@@ -17,7 +17,10 @@ import { formatPolishDate } from '../../planScenario';
 import { LoginPage } from '../../../login/LoginPage';
 import { CaseApplications, CaseDocuments } from '../CasePaperwork';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function renderWithRouter(ui: React.ReactElement, initialEntry = '/plan/documents?case=case-04') {
   return render(
@@ -393,6 +396,11 @@ describe('FilingMap (mapa składania)', () => {
 
 describe('FilingMap – zapamiętywanie', () => {
   it('przywraca zaznaczenia „Mam to załatwione” po ponownym wejściu', () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    });
     const first = renderWithRouter(
       <CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />,
     );
@@ -400,11 +408,13 @@ describe('FilingMap – zapamiętywanie', () => {
     expect(document.querySelector('.fmap__progress')?.textContent).toMatch(/:\s*1\s*z/);
     first.unmount();
 
-    renderWithRouter(<CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />);
+    const second = renderWithRouter(<CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />);
     expect(document.querySelector('.fmap__progress')?.textContent).toMatch(/:\s*1\s*z/);
 
     // inna sprawa ma własny, czysty stan
-    first.unmount();
+    second.unmount();
+    renderWithRouter(<CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />, '/plan/documents?case=case-05');
+    expect(document.querySelector('.fmap__progress')?.textContent).toMatch(/:\s*0\s*z/);
   });
 });
 
@@ -434,7 +444,7 @@ describe('CaseApplications – wejście z mapy (?open=)', () => {
 });
 
 describe('CaseApplications', () => {
-  it('renderuje kompaktowe karty, puste pola osobowe bez wymyślonych danych i waliduje przed wysyłką', () => {
+  it('renderuje kompaktowe karty, puste pola osobowe i waliduje przed pobraniem', () => {
     renderWithRouter(
       <CaseApplications documents={sampleDocuments} />,
       '/plan/applications?case=case-04',
@@ -456,20 +466,12 @@ describe('CaseApplications', () => {
     expect(mother.getByLabelText('Numer rachunku')).toHaveValue('');
     expect(father.queryByLabelText('PESEL')).not.toBeInTheDocument();
 
-    // Walidacja przy pustych polach
-    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
+    const download = screen.getByRole('button', { name: /Pobierz PDF: Wniosek o urlop rodzicielski/ });
+    fireEvent.click(download);
     expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/i);
 
-    // Uzupełnienie i symulowana wysyłka wszystkich
-    fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
-      target: { value: 'Janina Nowak' },
-    });
-    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '90010112345' } });
-    fireEvent.change(mother.getByLabelText('Numer rachunku'), {
-      target: { value: '12345678901234567890123456' },
-    });
     fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Nowak' } });
-    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
+    fireEvent.click(download);
     expect(screen.getByRole('alert')).toHaveTextContent(/dotychczas wykorzystanego urlopu/);
     fireEvent.change(screen.getByLabelText(/Okres dotychczas/), {
       target: { value: 'Nie korzystałem' },
@@ -478,9 +480,11 @@ describe('CaseApplications', () => {
     fireEvent.change(screen.getByLabelText(/Oświadczenie pracownika o urlopie/), {
       target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
-    expect(screen.getByRole('status')).toHaveTextContent(/Zakończono symulację wysyłki pakietu/);
-    expect(screen.getByRole('button', { name: 'Wszystkie wnioski wysłane' })).toBeDisabled();
+    fireEvent.click(download);
+    const preview = within(screen.getByRole('dialog'));
+    expect(preview.getByText('Jan Nowak')).toBeInTheDocument();
+    expect(preview.getByRole('button', { name: 'Drukuj lub zapisz PDF' })).toBeEnabled();
+    expect(screen.queryByText(/UPO – Potwierdzenie/)).not.toBeInTheDocument();
 
     // Podstawa z Rozporządzenia 2025 poz. 322 i link dalej
     expect(screen.getAllByText(/Dz\.U\. z 2025 r\. poz\. 322/).length).toBeGreaterThan(0);
@@ -538,7 +542,7 @@ describe('CaseApplications', () => {
     expect(preview.getByText(/Skrócony odpis aktu urodzenia/)).toBeInTheDocument();
     expect(preview.getByText(/§ 15 rozporządzenia/)).toBeInTheDocument();
   });
-  it('dla planu dwojga rodziców na UoP usuwa duplikaty USC/ZAM, wpisuje realne daty i wysyła pojedynczo oraz zbiorczo', () => {
+  it('dla planu dwojga rodziców na UoP usuwa duplikaty USC/ZAM i przygotowuje PDF dla właściwego rodzica', () => {
     const draft: ScenarioDraft = {
       situation: 'afterBirth',
       referenceDate: '2026-11-21',
@@ -635,7 +639,7 @@ describe('CaseApplications', () => {
     expect(screen.getAllByText(/09\.11\.2027–10\.01\.2028/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Pracodawca \(przekazuje Z-3 do ZUS\)/).length).toBeGreaterThan(0);
 
-    // Wysyłka pojedynczego wniosku matki (> 20 ubezpieczonych: wystarczy imię i PESEL)
+    // Podgląd zawiera dane wnioskodawcy wybranego wniosku.
     const mother = within(screen.getByRole('group', { name: 'Matka' }));
     const father = within(screen.getByRole('group', { name: 'Ojciec' }));
     fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
@@ -644,39 +648,27 @@ describe('CaseApplications', () => {
     fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '95050512345' } });
     fireEvent.click(
       screen.getByRole('button', {
-        name: /Wyślij Wniosek o urlop macierzyński i rodzicielski/,
+        name: /Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski/,
       }),
     );
-    expect(screen.getByRole('status')).toHaveTextContent(/UPO-\d{4}-WNIOSEK815-001/);
-    expect(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' })).toBeInTheDocument();
+    const motherPreview = within(screen.getByRole('dialog'));
+    expect(motherPreview.getByText('Anna Kowalska')).toBeInTheDocument();
+    fireEvent.click(motherPreview.getByRole('button', { name: 'Zamknij podgląd' }));
 
-    // Pozostałe wnioski wymagają danych ich wnioskodawców i oświadczeń dla danego urlopu.
-    for (const period of screen.getAllByLabelText(/Okres dotychczas/)) {
-      fireEvent.change(period, { target: { value: 'Brak' } });
-    }
-    for (const parts of screen.getAllByLabelText(/Liczba wykorzystanych/)) {
-      fireEvent.change(parts, { target: { value: '0' } });
-    }
-    for (const statement of screen.getAllByLabelText(/Oświadczenie pracownika o urlopie/)) {
-      fireEvent.change(statement, {
-        target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
-      });
-    }
+    const fatherDownload = screen.getByRole('button', { name: /Pobierz PDF: Wniosek o urlop ojcowski/ });
     fireEvent.change(screen.getByLabelText(/Oświadczenie ojca, czy korzystał/), {
       target: { value: 'Nie korzystałem.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
+    fireEvent.click(fatherDownload);
     expect(screen.getByRole('alert')).toHaveTextContent('Ojciec');
     fireEvent.change(father.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Jan Kowalski' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
-    expect(screen.getByRole('button', { name: 'Wszystkie wnioski wysłane' })).toBeDisabled();
+    fireEvent.click(fatherDownload);
 
     // Podgląd do druku zawiera notkę poz. 322
-    const printButtons = screen.getAllByRole('button', { name: 'Drukuj lub zapisz PDF' });
-    fireEvent.click(printButtons[0]);
     const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Jan Kowalski')).toBeInTheDocument();
     expect(
       within(dialog).getByText(
         /Wzór zgodny z rozporządzeniem MRPiPS 2025 poz\. 322 – do weryfikacji/,

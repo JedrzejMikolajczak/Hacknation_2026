@@ -69,6 +69,34 @@ describe('Twój plan', () => {
     });
   });
 
+  it('pokazuje w Uprawnieniach sposób poprawy zakresu zwolnienia i przelicza plan', async () => {
+    api.mockImplementationOnce(async () => Response.json({
+      data: null,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Koniec zwolnienia lekarskiego. Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później.',
+        details: [{
+          path: ['sickness_leave_end_date'],
+          message: 'Koniec zwolnienia lekarskiego. Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później.',
+        }],
+      },
+    }, { status: 422 }));
+    openPlan('entitlements', {
+      ...fixture.inputs,
+      sickness_leave_start_date: '2026-11-05',
+      sickness_leave_end_date: '2026-11-04',
+    });
+    const error = await screen.findByRole('alert');
+    expect(error).toHaveTextContent(/Ustaw koniec zwolnienia.*lub później/);
+    expect(error).not.toHaveTextContent('sickness_leave_end_date');
+    fireEvent.change(screen.getByLabelText('Koniec zwolnienia lekarskiego'), {
+      target: { value: '2026-11-09' },
+    });
+    expect(await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 })).toBeInTheDocument();
+    expect(api.mock.calls.some(([url, request]) => url.endsWith('/plan') &&
+      JSON.parse(String(request?.body)).sickness_leave_end_date === '2026-11-09')).toBe(true);
+  });
+
   it('wyświetla odrębną podstawę i płatnika drugiego tytułu w kalkulatorze', async () => {
     openPlan('calculator', {
       ...fixture.inputs,
@@ -134,7 +162,7 @@ describe('Twój plan', () => {
     expect(screen.getByRole('link', { name: 'Dalej: Dokumenty i terminy ›' })).toBeInTheDocument();
   });
 
-  it('edytuje dane osobowe w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
+  it('edytuje dane osobowe w pamięci zakładki i zapisuje PDF bez żądania API', async () => {
     openPlan('applications');
     const mother = within(await screen.findByRole('group', { name: 'Matka' }));
     const nameInput = mother.getByLabelText('Imię i nazwisko');
@@ -149,8 +177,13 @@ describe('Twój plan', () => {
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: /^Wyślij Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
-    expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    fireEvent.click(screen.getByRole('button', { name: /^Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
+    const preview = within(screen.getByRole('dialog'));
+    fireEvent.click(preview.getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
+    expect(print).toHaveBeenCalledOnce();
+    print.mockRestore();
+    fireEvent.click(preview.getByRole('button', { name: 'Zamknij podgląd' }));
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
 

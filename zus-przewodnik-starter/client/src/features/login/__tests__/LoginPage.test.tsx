@@ -194,7 +194,7 @@ describe('LoginPage – symulacja mObywatela, danych ZUS, zadłużenia JDG i e-Z
     await user.click(screen.getByRole('button', { name: /^Dalej/ }));
     await user.click(screen.getByRole('checkbox')); // Nie znamy terminu
     await user.click(screen.getByRole('button', { name: /^Dalej/ }));
-    await user.type(screen.getByRole('spinbutton'), '1');
+    await user.click(screen.getByRole('radio', { name: '1' }));
     await user.click(screen.getByRole('button', { name: /^Dalej/ }));
     await user.click(screen.getByRole('radio', { name: 'Nie' })); // Za życiem
     await user.click(screen.getByRole('button', { name: /^Dalej/ }));
