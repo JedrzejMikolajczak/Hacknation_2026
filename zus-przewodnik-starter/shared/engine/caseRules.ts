@@ -30,6 +30,8 @@ export const KP = {
   debt: 'Ustawa zasiłkowa, art. 2a',
   shamContract: 'Ustawa o systemie ubezpieczeń społecznych, art. 68 i 83; Kodeks cywilny, art. 83',
   baseIncrease: 'Ustawa o systemie ubezpieczeń społecznych, art. 41 ust. 12–13 i art. 83',
+  multipleTitles: 'Ustawa o systemie ubezpieczeń społecznych, art. 9; ustawa zasiłkowa, art. 29 i 36',
+  maternityEquivalent: 'Ustawa zasiłkowa, art. 30 ust. 1 i 3',
 } as const;
 
 function formatDatePl(iso: string): string {
@@ -214,7 +216,8 @@ export function applicantDenial(
       input.employment_type === 'UOP' &&
       input.applicant_role === 'MOTHER' &&
       input.due_or_birth_date &&
-      input.special_circumstances.employer_bankruptcy_or_liquidation
+      (input.special_circumstances.employer_bankruptcy_or_liquidation ||
+        input.special_circumstances.unlawful_termination_confirmed_by_court)
     ) {
       return null;
     }
@@ -298,6 +301,8 @@ function warningSeverity(warning: CaseWarning): number {
       return 43;
     case 'NON_TRANSFERABLE_PARENTAL_PART':
       return 44;
+    case 'MULTIPLE_INSURANCE_TITLES':
+      return 45;
     default:
       return 50;
   }
@@ -386,12 +391,14 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
         legal_basis: KP.contractProtection,
         message_pl: `Umowa o pracę na czas określony kończąca się po 3. miesiącu ciąży (${formatDatePl(input.contract_end_date)}) przedłuża się z mocy prawa do dnia porodu — prawo do zasiłku macierzyńskiego zostaje zachowane (nie dotyczy umowy na zastępstwo ani okresu próbnego do 1 miesiąca). Co zrobić: przekaż pracodawcy zaświadczenie lekarskie o ciąży; po dniu porodu zasiłek macierzyński wypłaci ZUS.`,
       });
-    } else if (!(
-      input.employment_type === 'UOP' &&
-      input.applicant_role === 'MOTHER' &&
-      input.due_or_birth_date &&
-      input.special_circumstances.employer_bankruptcy_or_liquidation
-    )) {
+    } else if (
+      !(
+        input.employment_type === 'UOP' &&
+        input.applicant_role === 'MOTHER' &&
+        input.due_or_birth_date &&
+        input.special_circumstances.employer_bankruptcy_or_liquidation
+      )
+    ) {
       if (input.employment_type === 'UOP') {
         if (
           input.applicant_role === 'MOTHER' &&
@@ -555,6 +562,22 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
       legal_basis: KP.shamContract,
       message_pl:
         'Wskazano zatrudnienie u członka rodziny lub na nowo utworzonym stanowisku. ZUS może przeprowadzić postępowanie wyjaśniające dotyczące faktycznego wykonywania pracy i wysokości wynagrodzenia. Co zrobić: zachowaj umowę, zakres obowiązków, ewidencję czasu pracy, efekty zadań oraz potwierdzenia wypłaty wynagrodzenia. Sam sygnał nie odbiera prawa do świadczeń.',
+    });
+  }
+
+  // 8. Zbieg dwóch tytułów ubezpieczenia naraz
+  if (input.additional_insurance_titles?.length ||
+      (input.secondary_employment_type && input.secondary_employment_type !== 'NONE')) {
+    const secondaryInsured = input.additional_insurance_titles?.length
+      ? input.additional_insurance_titles.some((title) => title.sickness_insured === true)
+      : input.secondary_employment_type !== 'UOP' &&
+        input.secondary_voluntary_sickness_insured === true;
+    warnings.push({
+      code: 'MULTIPLE_INSURANCE_TITLES',
+      legal_basis: KP.multipleTitles,
+      message_pl: secondaryInsured
+        ? 'Wskazano dwa równoległe tytuły ubezpieczenia chorobowego — zasiłek przysługuje odrębnie z każdego tytułu, z którego opłacana jest składka chorobowa (osobne podstawy wymiaru i wnioski). Co zrobić: złóż osobny wniosek o zasiłek dla drugiego tytułu (np. ZUS ZAM dla JDG lub zlecenia albo u drugiego pracodawcy).'
+        : 'Wskazano dodatkowy tytuł ubezpieczenia bez potwierdzonej składki chorobowej — zasiłek przysługuje wyłącznie z tytułu objętego ubezpieczeniem chorobowym. Co zrobić: sprawdź na PUE/eZUS, czy z drugiego tytułu odprowadzana jest składka chorobowa.',
     });
   }
 

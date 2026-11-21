@@ -1,5 +1,6 @@
 import type {
   BenefitParams,
+  CaseAdditionalInsuranceTitle,
   CaseAdditionalTitleOutcome,
   CaseInputs,
   CasePlan,
@@ -10,11 +11,27 @@ export function calculateAdditionalTitleOutcomes(
   params: BenefitParams,
   calculate: (input: CaseInputs, params: BenefitParams) => CasePlan,
 ): CaseAdditionalTitleOutcome[] {
-  return (input.additional_insurance_titles ?? []).map((title) => {
+  const legacyType = input.secondary_employment_type;
+  const legacyCoverage =
+    legacyType === 'UOP' ? null : (input.secondary_voluntary_sickness_insured ?? null);
+  const legacyTitle: CaseAdditionalInsuranceTitle[] =
+    legacyType && legacyType !== 'NONE'
+      ? [{
+          employment_type: legacyType,
+          sickness_insured: legacyCoverage,
+          voluntary_sickness_insured: legacyCoverage,
+          benefit_base_amount_pln: null,
+          payer_insured_count_nov_30: null,
+        }]
+      : [];
+  return (input.additional_insurance_titles ?? legacyTitle).map((title) => {
     const covered = title.sickness_insured === true;
     const plan = calculate(
       {
         ...input,
+        additional_insurance_titles: undefined,
+        secondary_employment_type: undefined,
+        secondary_voluntary_sickness_insured: undefined,
         employment_type: covered ? title.employment_type : 'NONE',
         contract_type: title.contract_type ?? null,
         contract_end_date: title.contract_end_date ?? null,

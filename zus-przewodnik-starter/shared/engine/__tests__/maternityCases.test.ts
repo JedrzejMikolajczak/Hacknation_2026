@@ -499,4 +499,50 @@ describe('maternity leave extended scenarios', () => {
     };
     expect(calculateBenefitBase(continuityInput, params).benefitBase).toBe(5500);
   });
+
+  it('supports single father without mother data (mother: null), abandonment, court judgment, dual titles, and multiple-birth deceased count', () => {
+    // 1. Samotny ojciec bez danych matki (mother: null)
+    const singleFather: WizardScenario = { ...testScenario(), mother: null };
+    const singleFatherElig = checkEligibility(singleFather, params);
+    expect(singleFatherElig.entitlements).toHaveLength(1);
+    expect(singleFatherElig.entitlements[0]).toMatchObject({
+      parentRole: 'father',
+      entitled: true,
+    });
+    const singleFatherMat = calculateMaternity(singleFather, params);
+    expect(singleFatherMat.periods.map((p) => p.leaveType)).toEqual(
+      expect.arrayContaining(['parentalLeave', 'paternityLeave']),
+    );
+    expect(calculateSicknessInPregnancy(singleFather, params).entitled).toBe(false);
+
+    // 2. Porzucenie dziecka przez matkę w kontrakcie SpecialCircumstances
+    const abandoned = testScenario();
+    const abandonedMat = calculateMaternity(
+      { ...abandoned, motherAbandonedChild: true, motherUsedWeeksBeforeTakeover: 8 },
+      params,
+    );
+    expect(
+      abandonedMat.periods.some((p) => p.parentRole === 'father' && p.leaveType === 'maternityLeave'),
+    ).toBe(true);
+
+    // 3. Bezprawne zwolnienie potwierdzone wyrokiem w SpecialCircumstances + dwa tytuły naraz
+    const unlawful = testScenario();
+    unlawful.special.unlawfulTerminationConfirmedByCourt = true;
+    unlawful.mother!.insuranceEndDate = '2026-10-01';
+    const unlawfulElig = checkEligibility(unlawful, params);
+    expect(
+      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityEquivalentBenefit')?.entitled,
+    ).not.toBe(true);
+    expect(
+      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother'),
+    ).toMatchObject({ entitled: true, payer: 'zus' });
+
+    // 4. Liczba zmarłych dzieci przy porodzie mnogim (trojaczki, 2 zmarłe -> 1 żywe -> 20 tyg. macierzyńskiego)
+    const multipleLoss = testScenario();
+    multipleLoss.childrenCount = 3;
+    multipleLoss.special.childDeathDate = '2026-11-25';
+    multipleLoss.special.deceasedChildrenCount = 2;
+    const multipleLossMat = calculateMaternity(multipleLoss, params);
+    expect(multipleLossMat.periods.find((p) => p.leaveType === 'maternityLeave')?.weeks).toBe(20);
+  });
 });

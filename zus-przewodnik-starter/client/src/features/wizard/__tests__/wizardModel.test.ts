@@ -395,4 +395,58 @@ describe('conditional family paths', () => {
       motherDeceased: false,
     });
   });
+
+  it('supports mother abandonment, court-confirmed unlawful termination, dual titles, and multiple-birth deceased count', () => {
+    // 1. Porzucenie dziecka przez matkę
+    const abandonedAnswers = {
+      family: 'both',
+      birthDate: '2026-10-01',
+      motherSituation: 'abandoned',
+      motherAbandonmentDate: '2026-10-15',
+      'father.insuranceTitle': 'employment',
+      'father.wantsLeave': 'yes',
+    };
+    expect(ids('afterBirth', abandonedAnswers)).toContain('motherAbandonmentDate');
+    expect(ids('afterBirth', abandonedAnswers)).not.toContain('mother.insuranceTitle');
+    const abandonedDraft = buildScenario('afterBirth', abandonedAnswers);
+    expect(abandonedDraft.mother).toBeNull();
+    expect(abandonedDraft.motherAbandonmentDate).toBe('2026-10-15');
+    expect(abandonedDraft.special?.motherAbandonedChild).toBe(true);
+
+    // 2. Bezprawne zwolnienie potwierdzone wyrokiem + dwa tytuły naraz
+    const dualAnswers = {
+      family: 'motherOnly',
+      'mother.insuranceTitle': 'employment',
+      unlawfulTerminationConfirmedByCourt: 'yes',
+      'mother.hasSecondaryTitle': 'yes',
+      'mother.secondaryInsuranceTitle': 'selfEmployed',
+      'mother.secondarySicknessInsurance': 'yes',
+    };
+    expect(ids('pregnant', dualAnswers)).toEqual(
+      expect.arrayContaining([
+        'employerBankruptcyOrLiquidation',
+        'additionalInsurance.insuranceTitle',
+      ]),
+    );
+    const dualDraft = buildScenario('pregnant', dualAnswers);
+    expect(dualDraft.special?.unlawfulTerminationConfirmedByCourt).toBe(true);
+    expect(dualDraft.additionalInsurance).toMatchObject({
+      parent: { insuranceTitle: 'selfEmployed', sicknessInsurance: 'voluntary' },
+      sicknessInsured: true,
+    });
+
+    // 3. Poród mnogi z liczbą zmarłych dzieci (trojaczki, 1 zmarłe -> 2 żywe -> pytania o szpital i wariant zostają)
+    const multipleLossAnswers = {
+      family: 'motherOnly',
+      birthDate: '2026-11-15',
+      childrenCount: '3',
+      birthOutcome: 'childDeath',
+      deceasedChildrenCount: '1',
+      childDeathDate: '2026-11-16',
+    };
+    expect(ids('afterBirth', multipleLossAnswers)).toEqual(
+      expect.arrayContaining(['deceasedChildrenCount', 'hospitalization', 'zaZyciemCertificate']),
+    );
+    expect(buildScenario('afterBirth', multipleLossAnswers).special?.deceasedChildrenCount).toBe(1);
+  });
 });

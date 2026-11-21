@@ -19,7 +19,9 @@
 | Płatnik świadczenia | `who_pays` · `EMPLOYER`, `ZUS`, `SPLIT_EMPLOYER_THEN_ZUS` |
 | Data porodu lub przewidywana data | `due_or_birth_date` |
 | Data złożenia u płatnika | `application_to_payer_date` ma pierwszeństwo przed `application_date` |
-| Liczba dzieci z porodu / żyjących dzieci | `children_count` / `living_children_count` |
+| Liczba dzieci z porodu / żyjących / zmarłych | `children_count` / `living_children_count` / `deceased_children_count` |
+| Drugi tytuł ubezpieczenia | `secondary_employment_type`, `secondary_voluntary_sickness_insured` |
+| Szczególne sytuacje matki / zwolnienia | `mother_deceased`, `mother_abandoned_child`, `unlawful_termination_confirmed_by_court` |
 | Okresy świadczeń | `periods` i `leave_type` |
 | Części rodzicielskiego | `parental_leave_parts`, opcjonalne `parent_role` i `work_fraction` |
 | Przychody do podstawy | `monthly_bases`, elementy `{ month, amount_pln, excluded_bonus_pln? }` |
@@ -89,4 +91,5 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | `CaseInputs`, `CaseOutcome`, `CasePlan`, format spraw ZUS oraz katalog i porównanie wyników |
 | 2026-11-21 | Wspólne okresy planu, dokumenty według zapisanych dat, ostrzeżenia z parametrami i symulacja odpowiedzi asystenta |
 | 2026-11-21 | Opcjonalne pola w `CaseParentInsurance` (`monthly_bases`, `title_start_date`, `debt_amount_pln`) i `CaseCircumstances` (`mother_deceased`) dla obliczeń drugiego rodzica |
-| 2026-11-21 | Brak danych matki w `WizardScenario`; w `CaseInputs` dane przejęcia po porzuceniu, prawomocny wyrok w sprawie rozwiązania umowy, liczba zmarłych dzieci i dodatkowe tytuły wnioskodawcy. `CasePlan.additional_title_outcomes` podaje ich wyniki z osobną podstawą i płatnikiem, a dotychczasowy `outcome` opisuje tytuł główny. |
+| 2026-11-21 | Rozszerzenie kontraktu o przypadki z PDF: `mother_abandoned_child`, `unlawful_termination_confirmed_by_court`, `WizardScenario.mother: ParentData \| null` (samotny ojciec), `secondary_employment_type` / `secondary_voluntary_sickness_insured` (dwa tytuły naraz) oraz `deceased_children_count` (poród mnogi) |
+| 2026-11-21 | Dane przejęcia po porzuceniu wymagają daty i informacji o ubezpieczeniu matki. `CaseInputs.additional_insurance_titles` przechowuje odrębne dane każdego tytułu, a `CasePlan.additional_title_outcomes` jego wyliczenie. Pola `secondary_*` pozostają obsługiwane jako starszy format. |

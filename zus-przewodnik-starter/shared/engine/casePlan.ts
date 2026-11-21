@@ -76,7 +76,8 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
   const fosterFamily = adoption && input.adoption_type === 'FOSTER_FAMILY';
   const motherDeceased = Boolean(input.special_circumstances.mother_deceased);
   const abandonment =
-    event && !adoption && input.mother_abandonment_date
+    event && !adoption &&
+    (input.mother_abandonment_date || input.special_circumstances.mother_abandoned_child)
       ? abandonmentTakeover(input, event, params)
       : null;
   const courtMaternity = event !== null && qualifiesAfterUnlawfulTermination(input, event, params);
@@ -141,6 +142,13 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
     ? ((adoption ? adoptionDenial(input, params) : null) ?? applicantDenial(input, rightOn, params))
     : 'Uzupełnij datę zdarzenia i dane ubezpieczenia.';
 
+  if (abandonment?.reason && !input.mother_abandonment_date) {
+    warnings.push({
+      code: 'FATHER_TAKEOVER_ABANDONMENT',
+      legal_basis: KP.abandonment,
+      message_pl: abandonment.reason,
+    });
+  }
   if (courtMaternity && input.maternity_leave_start_date && input.maternity_leave_start_date < event) {
     warnings.push({
       code: 'MATERNITY_BEFORE_BIRTH_AFTER_TERMINATION',
@@ -802,9 +810,6 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
 
 export function calculateCasePlan(input: CaseInputs, params: BenefitParams): CasePlan {
   const plan = calculateSingleCase(input, params);
-  if (!input.additional_insurance_titles?.length) return plan;
-  return {
-    ...plan,
-    additional_title_outcomes: calculateAdditionalTitleOutcomes(input, params, calculateSingleCase),
-  };
+  const additionalTitles = calculateAdditionalTitleOutcomes(input, params, calculateSingleCase);
+  return additionalTitles.length ? { ...plan, additional_title_outcomes: additionalTitles } : plan;
 }

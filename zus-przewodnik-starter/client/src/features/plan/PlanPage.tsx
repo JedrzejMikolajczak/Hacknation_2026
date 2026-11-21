@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
   BenefitParams,
@@ -18,8 +18,13 @@ import { CaseCalculator, CaseRights } from './tabs/CaseResults';
 import { CasePlanner } from './tabs/CasePlanner';
 import { CaseApplications, CaseDocuments } from './tabs/CasePaperwork';
 import { CaseSupport } from './tabs/CaseSupport';
+import { HeroEmblem } from '../landing/HeroEmblem';
+import { usePointerParallax } from '../landing/useLandingMotion';
+import '../landing/LandingMotion.css';
 import './PlanPage.css';
 import './CasePlan.css';
+import './PlanMotion.css';
+import './PlanClean.css';
 
 function shortStageLabel(stage: CaseStage): string {
   switch (stage) {
@@ -430,6 +435,8 @@ export function PlanPage() {
   const search = query.size ? `?${query.toString()}` : '';
   const { scenario, planInputs, updatePlanInputs } = useScenario();
   const activeTabRef = useRef<HTMLAnchorElement | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePointerParallax(rootRef);
 
   const [fixture, setFixture] = useState<{ key: string; item: CaseRecord | null } | null>(null);
   const [computed, setComputed] = useState<{
@@ -521,7 +528,7 @@ export function PlanPage() {
   const effectiveParams = params ?? DEFAULT_PARAMS;
 
   return (
-    <div className="plan-page">
+    <div className="plan-page" ref={rootRef}>
       <div className="plan-page__demo-strip">
         <p className="plan-page__container plan-page__demo-note">
           Wersja demonstracyjna · dane i wysyłka są symulowane
@@ -533,6 +540,15 @@ export function PlanPage() {
           activeTabMeta ? 'plan-page__header plan-page__header--section' : 'plan-page__header'
         }
       >
+        <div className="landing__aurora" aria-hidden="true">
+          <span className="landing__blob landing__blob--1" />
+          <span className="landing__blob landing__blob--2" />
+          <span className="landing__blob landing__blob--3" />
+          <span className="landing__spark landing__spark--1" />
+          <span className="landing__spark landing__spark--2" />
+          <span className="landing__spark landing__spark--3" />
+          <span className="landing__spark landing__spark--4" />
+        </div>
         <div className="plan-page__container">
           <div className="plan-page__nav-row">
             {activeTabMeta ? (
@@ -556,14 +572,27 @@ export function PlanPage() {
             </Link>
           </div>
 
-          <h1 className="plan-page__title">Twój plan zasiłkowy i urlopowy</h1>
-          {!activeTabMeta && (
-            <p className="plan-page__subtitle">
-              {difficult
-                ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
-                : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
-            </p>
-          )}
+          <div className="plan-page__hero-row">
+            <div className="plan-page__hero-text">
+              <h1 className="plan-page__title">
+                {['Twój plan', 'zasiłkowy i', 'urlopowy'].map((part, index) => (
+                  <Fragment key={part}>
+                    <span className="landing__word" style={{ ['--i' as string]: index }}>
+                      <span className="landing__word-inner">{part}</span>
+                    </span>{' '}
+                  </Fragment>
+                ))}
+              </h1>
+              {!activeTabMeta && (
+                <p className="plan-page__subtitle">
+                  {difficult
+                    ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
+                    : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
+                </p>
+              )}
+            </div>
+            {!activeTabMeta && <HeroEmblem />}
+          </div>
         </div>
       </header>
 
@@ -614,7 +643,11 @@ export function PlanPage() {
                 />
               )}
 
-              <section className="plan-panel case-plan-panel" aria-label="Zawartość zakładki">
+              <section
+                key={tab}
+                className="plan-panel case-plan-panel"
+                aria-label="Zawartość zakładki"
+              >
                 {fixtureError && (
                   <p className="plan-callout plan-callout--warning" role="alert">
                     Nie udało się otworzyć sprawy. <Link to="/cases">Wybierz sprawę z listy.</Link>
@@ -682,7 +715,12 @@ export function PlanPage() {
                       />
                     )}
                     {tab === 'applications' && (
-                      <CaseApplications documents={plan.documents} input={input} plan={plan} params={params} />
+                      <CaseApplications
+                        documents={plan.documents}
+                        input={input}
+                        plan={plan}
+                        params={params}
+                      />
                     )}
                     {tab === 'support' && <CaseSupport input={input} plan={plan} params={params} />}
                   </>

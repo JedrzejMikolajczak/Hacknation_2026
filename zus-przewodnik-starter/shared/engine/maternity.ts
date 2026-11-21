@@ -239,15 +239,17 @@ export function calculateMaternity(
   const hasChildLoss = input.special.stillbirth || input.special.childDeathDate !== null;
   let aliveChildrenCount = input.childrenCount;
   if (hasChildLoss) {
-    if (input.childrenAliveCount !== undefined) {
+    const living = input.childrenAliveCount ??
+      (input.special.deceasedChildrenCount == null
+        ? undefined
+        : input.childrenCount - input.special.deceasedChildrenCount);
+    if (living !== undefined) {
       requireValue(
-        Number.isInteger(input.childrenAliveCount) &&
-          input.childrenAliveCount >= 0 &&
-          input.childrenAliveCount <= input.childrenCount,
+        Number.isInteger(living) && living >= 0 && living <= input.childrenCount,
         'childrenAliveCount',
         'Liczba dzieci pozostałych przy życiu (childrenAliveCount) musi mieścić się między 0 a liczbą urodzonych dzieci.',
       );
-      aliveChildrenCount = input.childrenAliveCount;
+      aliveChildrenCount = living;
     } else if (input.special.stillbirth) {
       aliveChildrenCount = 0;
     } else {

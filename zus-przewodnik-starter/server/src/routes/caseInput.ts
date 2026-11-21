@@ -65,6 +65,7 @@ export const caseInputSchema = z
       stillbirth_or_child_death: z.enum(['NONE', 'BEFORE_8_WEEKS', 'AFTER_8_WEEKS']),
       mother_hospitalized_or_incapable: z.boolean(),
       mother_deceased: z.boolean().optional(),
+      mother_abandoned_child: z.boolean().optional(),
       unlawful_termination_confirmed_by_court: z.boolean().optional(),
       employer_bankruptcy_or_liquidation: z.boolean(),
       adopted_or_foster_child_age_years: z.number().nonnegative().nullable(),
@@ -117,6 +118,8 @@ export const caseInputSchema = z
     sickness_benefit_days_already_used: count.optional(),
     other_parent: insuranceTitle.optional(),
     additional_insurance_titles: z.array(additionalInsuranceTitle).optional(),
+    secondary_employment_type: title.nullable().optional(),
+    secondary_voluntary_sickness_insured: yesNo.optional(),
     sickness_base_changes: z
       .array(z.strictObject({ effective_date: day, amount_pln: money }))
       .optional(),

@@ -40,7 +40,7 @@ export function getRequiredDocuments(
 
   const hasCourtRuling =
     input.situation !== 'adoption' &&
-    input.unlawfulTerminationConfirmedByCourt &&
+    (input.unlawfulTerminationConfirmedByCourt || input.special.unlawfulTerminationConfirmedByCourt) &&
     mother?.insuranceTitle === 'employment' &&
     mother.insuranceEndDate !== null &&
     mother.insuranceEndDate < eventDate;
@@ -57,7 +57,8 @@ export function getRequiredDocuments(
         : 'zus';
 
   const childLostAll =
-    (input.special.stillbirth || input.special.childDeathDate !== null) && input.childrenCount <= 1;
+    (input.special.stillbirth || input.special.childDeathDate !== null) &&
+    (input.special.deceasedChildrenCount ?? 1) >= input.childrenCount;
 
   const maternityWeeks = getMaternityWeeksForChildren(input.childrenCount, params);
   const suppWeeks =

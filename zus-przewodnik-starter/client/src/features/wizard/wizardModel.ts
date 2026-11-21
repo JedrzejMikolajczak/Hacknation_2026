@@ -91,6 +91,25 @@ function applicableParents(
     : roles;
 }
 
+function migrateContractAnswers(situation: SituationType, answers: Record<string, string>) {
+  const next = { ...answers };
+  const applicant = applicableParents(situation, answers)[0];
+  if (applicant && answers[`${applicant}.hasSecondaryTitle`] === 'yes' &&
+    next['additionalInsurance.insuranceTitle'] === undefined) {
+    const oldTitle = answers[`${applicant}.secondaryInsuranceTitle`];
+    if (oldTitle) {
+      next['additionalInsurance.insuranceTitle'] = oldTitle;
+      next['additionalInsurance.sicknessInsured'] =
+        answers[`${applicant}.secondarySicknessInsurance`] ?? 'unknown';
+    }
+  }
+  if (next.employerBankruptcyOrLiquidation === undefined &&
+      answers.unlawfulTerminationConfirmedByCourt === 'yes') {
+    next.employerBankruptcyOrLiquidation = 'unlawful';
+  }
+  return next;
+}
+
 export function getQuestions(
   situation: SituationType,
   answers: Record<string, string>,
@@ -900,7 +919,7 @@ export function changeAnswer(
   id: string,
   value: string,
 ): Record<string, string> {
-  const next = { ...answers, [id]: value };
+  const next = { ...migrateContractAnswers(situation, answers), [id]: value };
   if (id === 'adoptionStage' && answers[id] !== value) delete next.childAcceptanceDate;
   if (applicableParents(situation, answers)[0] !== applicableParents(situation, next)[0]) {
     for (const key of Object.keys(next)) {
@@ -999,11 +1018,12 @@ export function buildScenario(
   answers: Record<string, string>,
   params: BenefitParams = DEFAULT_PARAMS,
 ): ScenarioDraft {
-  const active = getQuestions(situation, answers, params);
+  const migrated = migrateContractAnswers(situation, answers);
+  const active = getQuestions(situation, migrated, params);
   const values = Object.fromEntries(
     active
-      .filter((question) => validateAnswer(question, answers[question.id]) === null)
-      .map((question) => [question.id, answers[question.id]]),
+      .filter((question) => validateAnswer(question, migrated[question.id]) === null)
+      .map((question) => [question.id, migrated[question.id]]),
   );
   const scenario: ScenarioDraft = {
     situation,
@@ -1142,6 +1162,7 @@ export function buildScenario(
     special.motherDeceased = values.motherSituation === 'deceased';
     if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
     if (situations.includes('abandoned')) {
+      special.motherAbandonedChild = true;
       scenario.motherAbandonmentDate = dateOrNull(values.motherAbandonmentDate);
       scenario.motherWasInsuredAtAbandonment = knownBoolean(values.motherWasInsuredAtAbandonment);
       scenario.motherMaternityDaysUsed = numberOrNull(values.motherMaternityDaysUsed) ?? undefined;
@@ -1149,9 +1170,14 @@ export function buildScenario(
     }
   }
   const deceasedChildrenCount = numberOrNull(values.deceasedChildrenCount);
-  if (deceasedChildrenCount !== null) scenario.deceasedChildrenCount = deceasedChildrenCount;
-  if (values.employerBankruptcyOrLiquidation === 'unlawful')
+  if (deceasedChildrenCount !== null) {
+    scenario.deceasedChildrenCount = deceasedChildrenCount;
+    special.deceasedChildrenCount = deceasedChildrenCount;
+  }
+  if (values.employerBankruptcyOrLiquidation === 'unlawful') {
     scenario.unlawfulTerminationConfirmedByCourt = true;
+    special.unlawfulTerminationConfirmedByCourt = true;
+  }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
   scenario.special = special;

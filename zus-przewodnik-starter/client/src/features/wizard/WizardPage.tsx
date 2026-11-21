@@ -332,7 +332,9 @@ export function WizardPage() {
                         <dd>
                           {item.id === 'family' && ['deceased', 'abandoned'].includes(answers.motherSituation)
                             ? 'Plan taty po zgonie mamy'
-                            : formatAnswer(item, answers[item.id])}
+                            : item.id === 'family' && answers.motherSituation === 'abandoned'
+                              ? 'Plan taty po porzuceniu dziecka przez mamę'
+                              : formatAnswer(item, answers[item.id])}
                         </dd>
                         <button
                           type="button"

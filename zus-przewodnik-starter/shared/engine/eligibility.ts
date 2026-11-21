@@ -129,7 +129,10 @@ export function checkEligibility(
 
   const { mother } = input;
   const isBankruptcy = !isAdoption && input.special.employerBankruptcyOrLiquidation;
-  const isUnlawfulTermination = !isAdoption && Boolean(input.unlawfulTerminationConfirmedByCourt);
+  const isUnlawfulTermination =
+    !isAdoption && Boolean(
+      input.unlawfulTerminationConfirmedByCourt || input.special.unlawfulTerminationConfirmedByCourt,
+    );
   const motherIsInsuredOrActive = mother !== null && insuranceActive(mother, on);
 
   for (const parent of [input.mother, input.father]) {
@@ -338,7 +341,8 @@ export function checkEligibility(
 
   // Termin 21 dni na wniosek o stawkę 81,5%
   const childLostAll =
-    (input.special.stillbirth || Boolean(input.special.childDeathDate)) && input.childrenCount <= 1;
+    (input.special.stillbirth || Boolean(input.special.childDeathDate)) &&
+    (input.special.deceasedChildrenCount ?? 1) >= input.childrenCount;
   if (
     input.rateVariant === 'combined' &&
     (mother !== null || isAdoption) &&
