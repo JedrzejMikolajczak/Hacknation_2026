@@ -1,4 +1,14 @@
-import type { InsuranceTitle, ParentData, ParentRole, SituationType } from '@shared/types';
+import type {
+  BenefitBaseInput,
+  BenefitParams,
+  InsuranceTitle,
+  IsoDate,
+  MonthlyIncome,
+  ParentData,
+  ParentRole,
+  SituationType,
+} from '@shared/types';
+import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import type { ScenarioDraft } from '../../app/scenarioDraft';
 
 export const STAGES = ['Rodzina', 'Dziecko', 'Ubezpieczenie', 'Plany i kwoty', 'Podsumowanie'];
@@ -186,8 +196,40 @@ export function getQuestions(
       : {}),
   });
 
+  // Martwe urodzenie / zgon dziecka zmieniają wymiar urlopu; pytamy spokojnie, bez nacisku (CONVENTIONS §7).
+  const childLost =
+    situation === 'afterBirth' &&
+    (answers.birthOutcome === 'stillbirth' || answers.birthOutcome === 'childDeath');
+
   // Dane faktycznego porodu są dostępne wyłącznie na ścieżce po narodzinach.
   if (situation === 'afterBirth') {
+    questions.push({
+      id: 'birthOutcome',
+      stage: 1,
+      type: 'choice',
+      title: 'Czy dotyczy Was któraś z tych sytuacji?',
+      label: 'Szczególne okoliczności',
+      hint: 'Pytamy, ponieważ w takiej sytuacji przysługuje urlop w innym wymiarze. Uwzględnimy to w planie.',
+      options: [
+        { value: 'none', label: 'Nie dotyczy' },
+        { value: 'stillbirth', label: 'Dziecko urodziło się martwe' },
+        { value: 'childDeath', label: 'Dziecko zmarło po porodzie' },
+      ],
+    });
+    if (answers.birthOutcome === 'childDeath') {
+      questions.push({
+        id: 'childDeathDate',
+        stage: 1,
+        type: 'date',
+        title: 'Kiedy zmarło dziecko?',
+        label: 'Data śmierci dziecka',
+        min: answers.birthDate && answers.birthDate !== 'unknown' ? answers.birthDate : undefined,
+        max: todayLocal(),
+      });
+    }
+  }
+
+  if (situation === 'afterBirth' && !childLost) {
     questions.push({
       id: 'hospitalization',
       stage: 1,
@@ -232,13 +274,42 @@ export function getQuestions(
         },
       );
     }
+  }
+
+  // Zaświadczenie „Za życiem” wydaje się także w czasie ciąży – wydłuża urlop rodzicielski.
+  if (situation === 'pregnant' || (situation === 'afterBirth' && !childLost)) {
     questions.push({
       id: 'zaZyciemCertificate',
       stage: 1,
       type: 'choice',
       title: 'Czy macie zaświadczenie „Za życiem”?',
       label: 'Zaświadczenie „Za życiem”',
+      hint: 'Lekarz wystawia je w ciąży albo po porodzie. Wydłuża urlop rodzicielski.',
       options: YES_NO,
+    });
+  }
+
+  // Sytuacja mamy decyduje, czy tata może przejąć część urlopu macierzyńskiego.
+  if (
+    (situation === 'pregnant' || situation === 'afterBirth') &&
+    parentRoles(answers).includes('father')
+  ) {
+    questions.push({
+      id: 'motherSituation',
+      stage: 1,
+      type: 'choice',
+      title: 'Czy któraś z tych sytuacji dotyczy mamy?',
+      label: 'Sytuacja mamy',
+      hint: 'Te informacje pozwolą sprawdzić, czy tata może przejąć część urlopu macierzyńskiego.',
+      options: [
+        { value: 'none', label: 'Nie dotyczy' },
+        { value: 'hospitalized', label: 'Mama przebywa w szpitalu' },
+        {
+          value: 'incapable',
+          label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
+        },
+        ...(situation === 'afterBirth' ? [{ value: 'deceased', label: 'Mama zmarła' }] : []),
+      ],
     });
   }
 
@@ -290,6 +361,113 @@ export function getQuestions(
         unknownLabel: 'Umowa bezterminowa lub data nie jest jeszcze znana',
       });
     }
+    if (title === 'employment' || title === 'mandateContract') {
+      const payerName = title === 'employment' ? 'pracodawca' : 'zleceniodawca';
+      questions.push({
+        id: `${role}.employerInsuredCount`,
+        stage: 2,
+        type: 'number',
+        title: `Ile osób ${payerName} ${person} zgłasza do ubezpieczenia chorobowego?`,
+        label: `Liczba osób zgłoszonych przez płatnika ${person}`,
+        min: 1,
+        step: '1',
+        hint: `Jeśli więcej niż ${DEFAULT_PARAMS.payerThresholdInsuredCount}, zasiłek wypłaca ${payerName}. W innym przypadku wypłaca ZUS. Wystarczy przybliżona liczba.`,
+        unknownLabel: 'Nie wiem – sprawdzimy to później',
+      });
+    }
+    if (role === 'mother' && title === 'employment' && situation !== 'adoption') {
+      questions.push({
+        id: 'mother.age',
+        stage: 2,
+        type: 'number',
+        title: 'Ile lat ma mama?',
+        label: 'Wiek mamy',
+        min: 15,
+        max: 70,
+        step: '1',
+        hint: 'Od 50. roku życia pracodawca wypłaca wynagrodzenie chorobowe przez krótszy okres, a potem zasiłek wypłaca ZUS.',
+        unknownLabel: 'Wolę nie podawać',
+      });
+    }
+    if (
+      role === 'mother' &&
+      title === 'employment' &&
+      (situation === 'pregnant' || situation === 'afterBirth')
+    ) {
+      questions.push({
+        id: 'employerBankruptcyOrLiquidation',
+        stage: 2,
+        type: 'choice',
+        title:
+          'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
+        label: 'Upadłość lub likwidacja pracodawcy',
+        hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
+        options: YES_NO,
+      });
+    }
+    const motherSicknessInsured =
+      title === 'employment' || answers['mother.sicknessInsurance'] === 'yes';
+    if (
+      role === 'mother' &&
+      motherSicknessInsured &&
+      (situation === 'pregnant' || situation === 'afterBirth')
+    ) {
+      const pregnant = situation === 'pregnant';
+      questions.push({
+        id: 'mother.pregnancySickLeave',
+        stage: 2,
+        type: 'choice',
+        title: pregnant
+          ? 'Czy mama jest albo była na zwolnieniu lekarskim w tej ciąży?'
+          : 'Czy mama była na zwolnieniu lekarskim w ciąży?',
+        label: 'Zwolnienie lekarskie w ciąży',
+        hint: 'Od daty zwolnienia zależy zasiłek chorobowy. Gdy zwolnienie trwa do porodu, wpływa też na podstawę zasiłku macierzyńskiego.',
+        options: YES_NO,
+      });
+      if (answers['mother.pregnancySickLeave'] === 'yes') {
+        const start = answers['mother.sickLeaveStart'];
+        questions.push(
+          {
+            id: 'mother.sickLeaveStart',
+            stage: 2,
+            type: 'date',
+            title: pregnant
+              ? 'Od kiedy trwa (lub trwało) zwolnienie?'
+              : 'Od kiedy trwało zwolnienie?',
+            label: 'Początek zwolnienia w ciąży',
+            max: todayLocal(),
+            unknownLabel: 'Nie pamiętam dokładnej daty',
+          },
+          {
+            id: 'mother.sickLeaveUntilBirth',
+            stage: 2,
+            type: 'choice',
+            title: pregnant
+              ? 'Czy zwolnienie potrwa aż do porodu?'
+              : 'Czy zwolnienie trwało aż do porodu?',
+            label: 'Zwolnienie do porodu',
+            options: YES_NO,
+          },
+        );
+        if (answers['mother.sickLeaveUntilBirth'] === 'no') {
+          questions.push({
+            id: 'mother.sickLeaveEnd',
+            stage: 2,
+            type: 'date',
+            title: pregnant
+              ? 'Do kiedy trwa (lub trwało) zwolnienie?'
+              : 'Do kiedy trwało zwolnienie?',
+            label: 'Koniec zwolnienia w ciąży',
+            min: start && start !== 'unknown' ? start : undefined,
+            max:
+              !pregnant && answers.birthDate && answers.birthDate !== 'unknown'
+                ? answers.birthDate
+                : undefined,
+            unknownLabel: 'Nie znam jeszcze daty',
+          });
+        }
+      }
+    }
     if (title === 'selfEmployed') {
       questions.push({
         id: `${role}.contributionDebt`,
@@ -331,6 +509,74 @@ export function getQuestions(
         unknownLabel: 'Podstawę ustalimy później',
       });
     }
+    // Bez znanej podstawy pytamy o zarobki – z nich silnik policzy podstawę wymiaru.
+    const lookback = DEFAULT_PARAMS.benefitBase.lookbackMonths;
+    if (answers[`${role}.benefitBase`] === 'unknown') {
+      const title = answers[`${role}.insuranceTitle`];
+      if (title === 'employment' || title === 'mandateContract') {
+        questions.push({
+          id: `${role}.averageGross`,
+          stage: 3,
+          type: 'number',
+          title: `Ile wynosiło przeciętne miesięczne wynagrodzenie brutto ${person} w ostatnich ${lookback} miesiącach?`,
+          label: `Przeciętne wynagrodzenie brutto ${person} (zł)`,
+          min: 0,
+          step: '0.01',
+          hint: `Na tej podstawie policzymy podstawę wymiaru zasiłku. Jeśli zarobki się zmieniały, podajcie średnią. Przy zatrudnieniu krótszym niż ${lookback} miesięcy – średnią z przepracowanych miesięcy.`,
+          unknownLabel: 'Uzupełnię później',
+        });
+        questions.push({
+          id: `${role}.contractSalary`,
+          stage: 3,
+          type: 'number',
+          title: `Jakie jest miesięczne wynagrodzenie brutto ${person} według umowy?`,
+          label: `Wynagrodzenie z umowy ${person} (zł)`,
+          min: 0,
+          step: '0.01',
+          hint: 'Potrzebne, gdy ubezpieczenie trwa krócej niż pełny miesiąc albo któryś miesiąc nie był przepracowany w całości.',
+          unknownLabel: 'Uzupełnię później',
+        });
+      }
+      if (title === 'selfEmployed') {
+        questions.push({
+          id: `${role}.declaredContributionBase`,
+          stage: 3,
+          type: 'number',
+          title: `Od jakiej miesięcznej kwoty ${person} opłaca składkę chorobową?`,
+          label: `Zadeklarowana podstawa składek ${person} (zł)`,
+          min: 0,
+          step: '0.01',
+          hint: 'To zadeklarowana podstawa wymiaru składek, np. z deklaracji rozliczeniowej ZUS DRA.',
+          unknownLabel: 'Uzupełnię później',
+        });
+      }
+    }
+  }
+
+  if (!childLost && parentRoles(answers).length > 0) {
+    const rates = DEFAULT_PARAMS.rates;
+    const deadline = DEFAULT_PARAMS.combinedRateApplicationDeadlineDays;
+    questions.push({
+      id: 'rateVariant',
+      stage: 3,
+      type: 'choice',
+      title: 'Jak chcecie otrzymywać zasiłek macierzyński?',
+      label: 'Wariant wysokości zasiłku',
+      hint: `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
+      options: [
+        {
+          value: 'combined',
+          label: `${formatRate(rates.combined)} przez cały okres`,
+          description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
+        },
+        {
+          value: 'standard',
+          label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
+          description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
+        },
+        { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
+      ],
+    });
   }
   return questions;
 }
@@ -398,9 +644,72 @@ function knownBoolean(value: string | undefined): boolean | undefined {
   return value === 'yes' ? true : value === 'no' ? false : undefined;
 }
 
+/** 'YYYY-MM' miesiąca przesuniętego o `offset` względem miesiąca daty ISO. */
+function shiftMonth(date: IsoDate, offset: number): string {
+  const [year, month] = date.split('-').map(Number);
+  const index = year * 12 + (month - 1) + offset;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+function addDays(date: IsoDate, days: number): IsoDate {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Przygotowuje dane do wyliczenia podstawy wymiaru (bez liczenia – to robi silnik).
+ * Miesiące: pełne miesiące kalendarzowe przed miesiącem powstania prawa, nie dawniej niż
+ * `lookbackMonths` i nie wcześniej niż od początku ubezpieczenia.
+ */
+function buildBenefitBaseInput(
+  parent: Partial<ParentData>,
+  values: Record<string, string>,
+  role: ParentRole,
+  params: BenefitParams,
+  rightArisesOn: IsoDate,
+  previousBenefitEndDate: IsoDate | null,
+): BenefitBaseInput | null {
+  if (parent.benefitBase !== null || !parent.insuranceTitle) return null;
+  const averageGross = numberOrNull(values[`${role}.averageGross`]);
+  const declaredBase = numberOrNull(values[`${role}.declaredContributionBase`]);
+  const contractSalary = numberOrNull(values[`${role}.contractSalary`]);
+  if (averageGross === null && declaredBase === null && contractSalary === null) return null;
+
+  const insuredSince = parent.insuredSince ?? null;
+  const firstFullMonth = insuredSince
+    ? shiftMonth(insuredSince, insuredSince.endsWith('-01') ? 0 : 1)
+    : null;
+
+  const incomes: MonthlyIncome[] = [];
+  if (averageGross !== null) {
+    for (let offset = params.benefitBase.lookbackMonths; offset >= 1; offset -= 1) {
+      const month = shiftMonth(rightArisesOn, -offset);
+      if (firstFullMonth && month < firstFullMonth) continue;
+      incomes.push({
+        month,
+        grossAmount: averageGross,
+        workedDays: null,
+        requiredWorkingDays: null,
+      });
+    }
+  }
+
+  return {
+    insuranceTitle: parent.insuranceTitle,
+    rightArisesOn,
+    incomes,
+    contractMonthlySalary: contractSalary,
+    declaredContributionBase: declaredBase,
+    previousBenefitEndDate,
+    previousBenefitBase: null,
+  };
+}
+
 export function buildScenario(
   situation: SituationType,
   answers: Record<string, string>,
+  params: BenefitParams = DEFAULT_PARAMS,
 ): ScenarioDraft {
   const active = getQuestions(situation, answers);
   const values = Object.fromEntries(
@@ -427,6 +736,29 @@ export function buildScenario(
   if (childrenCount !== null) scenario.childrenCount = childrenCount;
   const deferred = knownBoolean(values.schoolObligationDeferred);
   if (deferred !== undefined) scenario.schoolObligationDeferred = deferred;
+  if (values.rateVariant === 'combined' || values.rateVariant === 'standard')
+    scenario.rateVariant = values.rateVariant;
+
+  // Zwolnienie w ciąży: koniec przy zwolnieniu do porodu = dzień przed (przewidywanym) porodem.
+  const birth = scenario.birthDate ?? scenario.expectedBirthDate ?? null;
+  if (values['mother.pregnancySickLeave'] === 'yes') {
+    const untilBirth = knownBoolean(values['mother.sickLeaveUntilBirth']) ?? null;
+    scenario.pregnancySickLeave = {
+      startDate: dateOrNull(values['mother.sickLeaveStart']),
+      untilBirth,
+      endDate:
+        untilBirth === true
+          ? birth && addDays(birth, -1)
+          : untilBirth === false
+            ? dateOrNull(values['mother.sickLeaveEnd'])
+            : null,
+    };
+  } else if (values['mother.pregnancySickLeave'] === 'no') {
+    scenario.pregnancySickLeave = null;
+  }
+  const maternityRightArisesOn =
+    birth ?? scenario.childAcceptanceDate ?? scenario.referenceDate ?? todayLocal();
+
   for (const role of parentRoles(values)) {
     const parent: Partial<ParentData> = { role };
     const title = values[`${role}.insuranceTitle`];
@@ -439,20 +771,64 @@ export function buildScenario(
     parent.insuranceEndDate = dateOrNull(values[`${role}.insuranceEndDate`]);
     parent.benefitBase = numberOrNull(values[`${role}.benefitBase`]);
     parent.contributionDebt = numberOrNull(values[`${role}.contributionDebt`]);
+    parent.employerInsuredCount = numberOrNull(values[`${role}.employerInsuredCount`]);
+    if (role === 'mother') parent.age = numberOrNull(values['mother.age']);
     const wantsLeave = knownBoolean(values[`${role}.wantsLeave`]);
     if (wantsLeave !== undefined) parent.wantsLeave = wantsLeave;
     scenario[role] = parent;
+
+    // Zasiłek macierzyński: przy ciągłości ze zwolnieniem silnik może przejąć podstawę chorobowego.
+    const previousEnd = role === 'mother' ? (scenario.pregnancySickLeave?.endDate ?? null) : null;
+    const baseInput = buildBenefitBaseInput(
+      parent,
+      values,
+      role,
+      params,
+      maternityRightArisesOn,
+      previousEnd,
+    );
+    if (baseInput)
+      scenario.benefitBaseInputs = { ...scenario.benefitBaseInputs, [role]: baseInput };
+
+    // Zasiłek chorobowy w ciąży: prawo powstaje w dniu rozpoczęcia zwolnienia.
+    const sickLeaveStart = role === 'mother' ? scenario.pregnancySickLeave?.startDate : null;
+    if (sickLeaveStart) {
+      const sicknessInput = buildBenefitBaseInput(
+        parent,
+        values,
+        role,
+        params,
+        sickLeaveStart,
+        null,
+      );
+      if (sicknessInput) scenario.sicknessBenefitBaseInput = sicknessInput;
+    }
   }
+  const special: NonNullable<ScenarioDraft['special']> = {};
   if (situation === 'afterBirth') {
-    scenario.special = {
-      pregnancyWeekAtBirth: numberOrNull(values.pregnancyWeekAtBirth),
-      birthWeightGrams: numberOrNull(values.birthWeightGrams),
-      hospitalizationDays:
-        values.hospitalization === 'no' ? 0 : numberOrNull(values.hospitalizationDays),
-    };
-    const certificate = knownBoolean(values.zaZyciemCertificate);
-    if (certificate !== undefined) scenario.special.zaZyciemCertificate = certificate;
+    const lost = values.birthOutcome === 'stillbirth' || values.birthOutcome === 'childDeath';
+    if (values.birthOutcome) {
+      special.stillbirth = values.birthOutcome === 'stillbirth';
+      special.childDeathDate =
+        values.birthOutcome === 'childDeath' ? dateOrNull(values.childDeathDate) : null;
+    }
+    if (!lost) {
+      special.pregnancyWeekAtBirth = numberOrNull(values.pregnancyWeekAtBirth);
+      special.birthWeightGrams = numberOrNull(values.birthWeightGrams);
+      special.hospitalizationDays =
+        values.hospitalization === 'no' ? 0 : numberOrNull(values.hospitalizationDays);
+    }
   }
+  const certificate = knownBoolean(values.zaZyciemCertificate);
+  if (certificate !== undefined) special.zaZyciemCertificate = certificate;
+  if (values.motherSituation) {
+    special.motherHospitalized = values.motherSituation === 'hospitalized';
+    special.motherIncapableOfIndependentLiving = values.motherSituation === 'incapable';
+    special.motherDeceased = values.motherSituation === 'deceased';
+  }
+  const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
+  if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
+  scenario.special = special;
   return scenario;
 }
 

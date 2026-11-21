@@ -11,6 +11,11 @@ Kreator zbiera dane rodziny do późniejszego sprawdzania uprawnień, wyliczeń 
 - Po porodzie: faktyczna data i liczba dzieci. Pytania o tydzień ciąży, masę urodzeniową i długość hospitalizacji pojawiają się po wskazaniu pobytu dziecka w szpitalu.
 - Adopcja lub rodzina zastępcza: rodzaj opieki, planowane lub zakończone przyjęcie, odpowiednia data, wiek i liczba dzieci.
 - Ubezpieczenie: pytania zależą od formy zatrudnienia każdego rodzica. Podstawa wymiaru jest opcjonalna; formularz nie utożsamia jej z wynagrodzeniem.
+- Po porodzie: pytanie o szczególne okoliczności (martwe urodzenie, zgon dziecka z datą). Po stracie dziecka formularz pomija pytania o szpital, „Za życiem” i wariant stawki.
+- „Za życiem” jest zadawane w ciąży i po porodzie. Gdy w planie jest tata, formularz pyta o sytuację mamy (szpital, niezdolność do samodzielnej egzystencji, a po porodzie także zgon).
+- Umowa o pracę i zlecenie: liczba osób zgłaszanych przez płatnika (kto wypłaca zasiłek). Mama na umowie o pracę: wiek (wynagrodzenie chorobowe) oraz, w ciąży i po porodzie, upadłość lub likwidacja pracodawcy.
+- Mama z ubezpieczeniem chorobowym, w ciąży lub po porodzie: zwolnienie lekarskie w ciąży – od kiedy i czy trwało (potrwa) do porodu, a jeśli nie – do kiedy.
+- Plany i kwoty: gdy podstawa wymiaru jest nieznana – przeciętne wynagrodzenie brutto i wynagrodzenie z umowy (umowa o pracę, zlecenie) albo zadeklarowana podstawa składek (JDG). Na końcu wariant stawki (81,5% albo 100% + 70%).
 
 Jedno główne pytanie jest wyświetlane na ekranie. Pasek postępu odnosi się do pięciu stałych etapów: rodzina, dziecko, ubezpieczenie, plany i kwoty, podsumowanie. Rozwinięcie pytań dodatkowych nie zmienia liczby etapów. Podsumowanie pozwala edytować dowolną odpowiedź; nowo wymagane pytania trzeba uzupełnić przed zapisaniem.
 
@@ -31,6 +36,19 @@ Wszystkie daty w polach formularza i podsumowaniu mają format `DD/MM/YYYY`, nie
 Każda odpowiedź i przejście między pytaniami zapisują oba obiekty. Po zmianie sytuacji na stronie startowej powstaje nowy formularz. Zmiana gałęzi usuwa nieaktualne odpowiedzi: np. wybór samodzielnego rodzica usuwa dane drugiego rodzica, zmiana zatrudnienia usuwa wcześniejsze dane tego ubezpieczenia, a rezygnacja z pytania o hospitalizację usuwa jej szczegóły. Stary numer kroku z pierwszej wersji kreatora jest wycofany; bez nowego stanu formularz rozpoczyna się od wyboru rodziny.
 
 **Zakończenie formularza nie oznacza gotowości do obliczeń.** Można świadomie pozostawić dane do uzupełnienia. Kwoty i daty nieznane są `null`; nieznane wartości logiczne i tytuł ubezpieczenia pozostają nieustawione. Nie są zamieniane na `false`, zero ani brak ubezpieczenia. Brak rodzica w planie to `mother: null` lub `father: null`.
+
+Nowe pola szkicu:
+
+- `rateVariant`: `'combined'` albo `'standard'`; brak pola = użytkownik chce porównania obu wariantów.
+- `mother.age`, `<rodzic>.employerInsuredCount`: liczby albo `null`.
+- `special`: `stillbirth`, `childDeathDate`, `zaZyciemCertificate`, `motherHospitalized`, `motherIncapableOfIndependentLiving`, `motherDeceased`, `employerBankruptcyOrLiquidation` – tylko gdy pytanie padło; nieznane wartości logiczne pozostają nieustawione.
+- `benefitBaseInputs.<rodzic>`: gotowy `BenefitBaseInput` dla `POST /api/v1/calculate/benefit-base`, tworzony tylko przy nieznanej podstawie. `rightArisesOn` = data porodu, przewidywany termin, data przyjęcia albo dzień wypełnienia. `incomes` to pełne miesiące kalendarzowe przed miesiącem powstania prawa (`params.benefitBase.lookbackMonths`, nie wcześniej niż od początku ubezpieczenia) z podanym przeciętnym wynagrodzeniem. Dla JDG `incomes` jest puste, a kwota trafia do `declaredContributionBase`. Formularz niczego nie liczy – podstawę liczy silnik.
+
+- `pregnancySickLeave`: `{ startDate, endDate, untilBirth }` albo `null` (mama nie była na zwolnieniu). Przy zwolnieniu do porodu `endDate` = dzień przed porodem (albo przed przewidywanym terminem).
+- `benefitBaseInputs.mother.previousBenefitEndDate` = koniec zwolnienia w ciąży – silnik decyduje, czy przerwa jest krótsza niż `params.benefitBase.newBaseAfterGapMonths` i czy przejąć podstawę zasiłku chorobowego. `contractMonthlySalary` = wynagrodzenie z umowy (brak pełnego miesiąca ubezpieczenia, miesiące nieprzepracowane w całości).
+- `sicknessBenefitBaseInput`: dane do podstawy zasiłku chorobowego w ciąży (`rightArisesOn` = początek zwolnienia). Kolejność dla planu: najpierw policzyć tę podstawę, potem przekazać ją jako `previousBenefitBase` do podstawy zasiłku macierzyńskiego.
+
+Liczby w treści pytań (próg płatnika, okres 12 miesięcy, stawki, termin 21 dni) pochodzą z `shared/params.json` przez `client/src/app/benefitParams.ts`.
 
 Przed wysłaniem do silnika trzeba sprawdzić wymagane dane i przygotować pełny `ScenarioInput`. Obecny wspólny kontrakt wymaga `mother: ParentData`, dlatego ścieżka samodzielnego taty wymaga przyszłego dostosowania kontraktu obliczeń. Formularz przechowuje ją poprawnie jako szkic, bez tworzenia fikcyjnego profilu mamy. `shared/types.ts` i REST API nie zostały zmienione.
 

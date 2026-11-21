@@ -66,6 +66,10 @@ describe('family wizard', () => {
     expect(screen.getByPlaceholderText('DD/MM/YYYY')).toHaveValue('01/04/2027');
     await view.next();
     await view.input('2');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Za życiem');
+    await view.choice('Nie');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
+    await view.choice('Nie dotyczy');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa mamy');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
     await view.choice('Umowa o pracę');
@@ -74,13 +78,32 @@ describe('family wizard', () => {
     view = renderWizard();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('data końca umowy mamy');
     await view.skip();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Ile osób pracodawca mamy');
+    await view.input('150');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Ile lat ma mama');
+    await view.input('31');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('upadłości lub likwidacji');
+    await view.choice('Nie');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zwolnieniu lekarskim');
+    await view.choice('Tak');
+    await view.input('2026-10-01');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('aż do porodu');
+    await view.choice('Tak');
     await view.choice('Działalność gospodarcza');
     await view.choice('Nie wiem / uzupełnię później');
     await view.skip();
     await view.choice('Tak');
     await view.skip();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'wynagrodzenie brutto mamy',
+    );
+    await view.input('8000');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('według umowy');
+    await view.input('8200');
     await view.choice('Nie wiem / uzupełnię później');
     await view.input('5000');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zasiłek macierzyński');
+    await view.choice(/^81,5%/);
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
     expect(screen.getByText('01/04/2027')).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
@@ -91,12 +114,15 @@ describe('family wizard', () => {
       childrenCount: 2,
       expectedBirthDate: '2027-04-01',
       birthDate: null,
+      rateVariant: 'combined',
       mother: {
         role: 'mother',
         insuranceTitle: 'employment',
         sicknessInsurance: 'mandatory',
         insuredSince: '2025-01-01',
         benefitBase: null,
+        employerInsuredCount: 150,
+        age: 31,
         wantsLeave: true,
       },
       father: {
@@ -105,8 +131,40 @@ describe('family wizard', () => {
         contributionDebt: null,
         benefitBase: 5000,
       },
-      special: {},
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+        employerBankruptcyOrLiquidation: false,
+      },
     });
+    // nieznana podstawa mamy → dane do wyliczenia podstawy z zarobków
+    expect(stored.pregnancySickLeave).toEqual({
+      startDate: '2026-10-01',
+      untilBirth: true,
+      endDate: '2027-03-31',
+    });
+    expect(stored.benefitBaseInputs.mother).toMatchObject({
+      insuranceTitle: 'employment',
+      rightArisesOn: '2027-04-01',
+      contractMonthlySalary: 8200,
+      declaredContributionBase: null,
+      // zwolnienie do porodu → silnik może przejąć podstawę zasiłku chorobowego
+      previousBenefitEndDate: '2027-03-31',
+    });
+    expect(stored.sicknessBenefitBaseInput).toMatchObject({
+      rightArisesOn: '2026-10-01',
+      previousBenefitEndDate: null,
+    });
+    expect(stored.sicknessBenefitBaseInput.incomes[0].month).toBe('2025-10');
+    expect(stored.sicknessBenefitBaseInput.incomes).toHaveLength(12);
+    expect(stored.benefitBaseInputs.mother.incomes).toHaveLength(12);
+    expect(stored.benefitBaseInputs.mother.incomes[0]).toMatchObject({
+      month: '2026-04',
+      grossAmount: 8000,
+    });
+    expect(stored.benefitBaseInputs).not.toHaveProperty('father');
     expect(stored.father).not.toHaveProperty('sicknessInsurance');
     expect(stored.father).not.toHaveProperty('wantsLeave');
     expect(
@@ -119,14 +177,18 @@ describe('family wizard', () => {
     await view.choice(/^Samodzielnie — tata/);
     await view.input('2026-01-10');
     await view.input('1');
+    await view.choice('Nie dotyczy');
     await view.choice('Tak');
     await view.input('35');
     await view.input('2100');
     await view.input('8');
     await view.choice('Nie');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
+    await view.choice('Mama zmarła');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     await view.choice('Tak');
+    await view.choice('Jeszcze nie wiemy – pokażcie porównanie');
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
@@ -137,7 +199,26 @@ describe('family wizard', () => {
       birthWeightGrams: 2100,
       hospitalizationDays: 8,
       zaZyciemCertificate: false,
+      stillbirth: false,
+      childDeathDate: null,
+      motherDeceased: true,
     });
+    expect(stored).not.toHaveProperty('rateVariant');
+  });
+
+  it('after a stillbirth skips hospital, „Za życiem” and rate questions and records it', async () => {
+    const view = renderWizard('afterBirth');
+    await view.choice(/^Samodzielnie — mama/);
+    await view.input('2026-01-10');
+    await view.input('1');
+    await view.choice('Dziecko urodziło się martwe');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa mamy');
+    await view.choice('Brak tytułu do ubezpieczenia chorobowego');
+    await view.choice('Tak');
+    expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
+    const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
+    expect(stored.special).toEqual({ stillbirth: true, childDeathDate: null });
   });
 
   it('removes hidden parent data when the family selection is edited', async () => {
@@ -149,6 +230,7 @@ describe('family wizard', () => {
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     await view.choice('Tak');
     await view.choice('Nie');
+    await view.choice('Jeszcze nie wiemy – pokażcie porównanie');
     await view.user.click(screen.getByRole('button', { name: 'Zmień: Rodzina' }));
     await view.user.click(screen.getByRole('radio', { name: /^Samodzielnie — mama/ }));
     await view.user.click(screen.getByRole('button', { name: /Wróć do podsumowania/ }));
