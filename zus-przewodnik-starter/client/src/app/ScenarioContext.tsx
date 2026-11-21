@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { CaseInputs, SituationType } from '@shared/types';
+import type { ApplicantRole, CaseInputs, SituationType } from '@shared/types';
 import { readPlanAddress } from './planAddress';
 import { wizardCase } from '../features/plan/caseScenario';
+import { buildScenario } from '../features/wizard/wizardModel';
 import type { ManualFormState, ScenarioDraft } from './scenarioDraft';
 import { isSituationType } from './situation';
 
@@ -18,6 +19,13 @@ interface ScenarioContextValue {
   updateScenario: (changes: Partial<ScenarioDraft>) => void;
   saveManualForm: (form: ManualFormState, scenario: ScenarioDraft) => void;
   clearScenario: () => void;
+  simulatedIdentities: Partial<Record<ApplicantRole, SimulatedIdentity>>;
+  setSimulatedIdentity: (role: ApplicantRole, identity: SimulatedIdentity) => void;
+}
+
+interface SimulatedIdentity {
+  name: string;
+  pesel: string;
 }
 
 interface ScenarioState {
@@ -62,7 +70,8 @@ function loadState(initialScenario?: ScenarioDraft): ScenarioState {
       !Array.isArray(form.answers) &&
       Object.values(form.answers).every((value) => typeof value === 'string')
     ) {
-      return { scenario, manualForm: form as ManualFormState };
+      const manualForm = form as ManualFormState;
+      return { scenario: buildScenario(manualForm.situation, manualForm.answers), manualForm };
     }
     return { scenario, manualForm: null };
   } catch {
@@ -78,6 +87,13 @@ interface ScenarioProviderProps {
 export function ScenarioProvider({ children, initialScenario }: ScenarioProviderProps) {
   const [state, setState] = useState<ScenarioState>(() => loadState(initialScenario));
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [simulatedIdentities, setSimulatedIdentities] = useState<
+    ScenarioContextValue['simulatedIdentities']
+  >({});
+  const setSimulatedIdentity: ScenarioContextValue['setSimulatedIdentity'] = useCallback(
+    (role, identity) => setSimulatedIdentities((current) => ({ ...current, [role]: identity })),
+    [],
+  );
   const [query, setQuery] = useSearchParams();
   const serialized = query.get('inputs');
   const hasCase = query.has('case');
@@ -138,6 +154,7 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
   );
 
   const clearScenario = useCallback(() => {
+    setSimulatedIdentities({});
     commit({ scenario: { situation: null }, manualForm: null });
   }, [commit]);
 
@@ -151,6 +168,8 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       updateScenario,
       saveManualForm,
       clearScenario,
+      simulatedIdentities,
+      setSimulatedIdentity,
     }),
     [
       state,
@@ -161,6 +180,8 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       updateScenario,
       saveManualForm,
       clearScenario,
+      simulatedIdentities,
+      setSimulatedIdentity,
     ],
   );
 

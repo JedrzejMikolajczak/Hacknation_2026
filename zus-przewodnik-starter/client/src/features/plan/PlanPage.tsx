@@ -13,7 +13,7 @@ import { apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { PlanHub } from './PlanHub';
-import { isPlanTab, PLAN_TABS, todayIsoDate } from './planScenario';
+import { combinedRateUnavailable, isPlanTab, PLAN_TABS, todayIsoDate } from './planScenario';
 import { CaseCalculator, CaseRights } from './tabs/CaseResults';
 import { CasePlanner } from './tabs/CasePlanner';
 import { CaseApplications, CaseDocuments } from './tabs/CasePaperwork';
@@ -64,7 +64,7 @@ function buildDataSummary(input: CaseInputs, params: BenefitParams): string {
     input.special_circumstances.stillbirth_or_child_death !== 'NONE' && living <= 0;
   if (!childLostAll) {
     parts.push(
-      input.requested_payment_variant === 'COMBINED_81_5'
+      input.requested_payment_variant === 'COMBINED_81_5' && !combinedRateUnavailable(input, params)
         ? formatRate(params.rates.combined)
         : `${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`,
     );
@@ -93,6 +93,7 @@ function PlanDataSummaryBar({
   const [shareCopied, setShareCopied] = useState(false);
 
   const summaryText = buildDataSummary(input, params);
+  const combinedUnavailable = combinedRateUnavailable(input, params);
   const isAdoption = input.stage === 'ADOPTION';
   const eventDateValue = isAdoption
     ? (input.adopted_or_foster_child_acceptance_date ?? '')
@@ -264,7 +265,7 @@ function PlanDataSummaryBar({
               <span className="plan-field__label">Wariant wypłaty</span>
               <select
                 className="plan-field__input"
-                value={input.requested_payment_variant}
+                value={combinedUnavailable ? 'SPLIT_100_70' : input.requested_payment_variant}
                 onChange={(event) =>
                   onUpdate({
                     requested_payment_variant:
@@ -274,7 +275,7 @@ function PlanDataSummaryBar({
                   })
                 }
               >
-                <option value="COMBINED_81_5">
+                <option value="COMBINED_81_5" disabled={combinedUnavailable}>
                   {formatRate(params.rates.combined)} za cały okres (wniosek w{' '}
                   {params.combinedRateApplicationDeadlineDays} dni)
                 </option>
@@ -669,7 +670,9 @@ export function PlanPage() {
                         effectiveDate={params.forms2026EffectiveDate}
                       />
                     )}
-                    {tab === 'applications' && <CaseApplications documents={plan.documents} />}
+                    {tab === 'applications' && (
+                      <CaseApplications documents={plan.documents} input={input} plan={plan} params={params} />
+                    )}
                     {tab === 'support' && <CaseSupport input={input} plan={plan} params={params} />}
                   </>
                 )}

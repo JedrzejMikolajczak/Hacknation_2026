@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { calculateCasePlan } from '@shared/engine/casePlan';
 import params from '@shared/params.json';
@@ -13,6 +13,7 @@ import case06 from '../../../../../../data/cases/case-06.json';
 import { ScenarioProvider, type ScenarioDraft } from '../../../../app/ScenarioContext';
 import { wizardCase } from '../../caseScenario';
 import { formatPolishDate } from '../../planScenario';
+import { LoginPage } from '../../../login/LoginPage';
 import { CaseApplications, CaseDocuments } from '../CasePaperwork';
 
 function renderWithRouter(ui: React.ReactElement, initialEntry = '/plan/documents?case=case-04') {
@@ -365,21 +366,33 @@ describe('CaseApplications', () => {
     // Brak wymyślonych danych osobowych
     expect(screen.queryByText(/Anna Przykładowa/i)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('00000000000')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Imię i nazwisko')).toHaveValue('');
-    expect(screen.getByLabelText('PESEL')).toHaveValue('');
-    expect(screen.getByLabelText('Numer rachunku')).toHaveValue('');
+    const mother = within(screen.getByRole('group', { name: 'Matka' }));
+    const father = within(screen.getByRole('group', { name: 'Ojciec' }));
+    expect(mother.getByLabelText('Imię i nazwisko')).toHaveValue('');
+    expect(father.getByLabelText('Imię i nazwisko')).toHaveValue('');
+    expect(mother.getByLabelText('PESEL')).toHaveValue('');
+    expect(mother.getByLabelText('Numer rachunku')).toHaveValue('');
+    expect(father.queryByLabelText('PESEL')).not.toBeInTheDocument();
 
     // Walidacja przy pustych polach
     fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
-    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/i);
 
     // Uzupełnienie i symulowana wysyłka wszystkich
-    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), {
+    fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Janina Nowak' },
     });
-    fireEvent.change(screen.getByLabelText('PESEL'), { target: { value: '90010112345' } });
-    fireEvent.change(screen.getByLabelText('Numer rachunku'), {
+    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '90010112345' } });
+    fireEvent.change(mother.getByLabelText('Numer rachunku'), {
       target: { value: '12345678901234567890123456' },
+    });
+    fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Nowak' } });
+    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/dotychczas wykorzystanego urlopu/);
+    fireEvent.change(screen.getByLabelText(/Okres dotychczas/), { target: { value: 'Nie korzystałem' } });
+    fireEvent.change(screen.getByLabelText(/Liczba wykorzystanych/), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/Oświadczenie pracownika o urlopie/), {
+      target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
     expect(screen.getByRole('status')).toHaveTextContent(/Zakończono symulację wysyłki pakietu/);
@@ -395,6 +408,33 @@ describe('CaseApplications', () => {
     expect(nextLink).toHaveAttribute('href', '/plan/support?case=case-04');
   });
 
+  it('przenosi dane testowe mObywatela tylko do wybranego wnioskodawcy i drukuje załączniki', () => {
+    render(
+      <MemoryRouter initialEntries={['/plan/applications?case=case-04']}>
+        <ScenarioProvider>
+          <Routes>
+            <Route path="/plan/applications" element={<CaseApplications documents={sampleDocuments} />} />
+            <Route path="/login" element={<LoginPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Pobierz dane z mObywatela (symulacja)' }));
+    fireEvent.change(screen.getByLabelText('Wnioskodawca'), { target: { value: 'FATHER' } });
+    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Testowy' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Przekaż dane testowe' }));
+    expect(within(screen.getByRole('group', { name: 'Ojciec' })).getByLabelText('Imię i nazwisko'))
+      .toHaveValue('Jan Testowy');
+    expect(within(screen.getByRole('group', { name: 'Matka' })).getByLabelText('Imię i nazwisko'))
+      .toHaveValue('');
+    const card = screen.getByRole('heading', { name: /Wniosek o urlop rodzicielski/ }).closest('article')!;
+    fireEvent.click(within(card).getByText('Podgląd wniosku'));
+    fireEvent.click(within(card).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
+    const preview = within(screen.getByRole('dialog'));
+    expect(preview.getByText('Jan Testowy')).toBeInTheDocument();
+    expect(preview.getByText(/Skrócony odpis aktu urodzenia/)).toBeInTheDocument();
+    expect(preview.getByText(/§ 15 rozporządzenia/)).toBeInTheDocument();
+  });
   it('dla planu dwojga rodziców na UoP usuwa duplikaty USC/ZAM, wpisuje realne daty i wysyła pojedynczo oraz zbiorczo', () => {
     const draft: ScenarioDraft = {
       situation: 'afterBirth',
@@ -493,10 +533,12 @@ describe('CaseApplications', () => {
     expect(screen.getAllByText(/Pracodawca \(przekazuje Z-3 do ZUS\)/).length).toBeGreaterThan(0);
 
     // Wysyłka pojedynczego wniosku matki (> 20 ubezpieczonych: wystarczy imię i PESEL)
-    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), {
+    const mother = within(screen.getByRole('group', { name: 'Matka' }));
+    const father = within(screen.getByRole('group', { name: 'Ojciec' }));
+    fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Anna Kowalska' },
     });
-    fireEvent.change(screen.getByLabelText('PESEL'), { target: { value: '95050512345' } });
+    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '95050512345' } });
     fireEvent.click(
       screen.getByRole('button', {
         name: /Wyślij Wniosek o urlop macierzyński i rodzicielski/,
@@ -505,13 +547,22 @@ describe('CaseApplications', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/UPO-\d{4}-WNIOSEK815-001/);
     expect(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' })).toBeInTheDocument();
 
-    // Zbiorcza wysyłka pozostałych wymaga rachunku (bo ojciec ma Z-3 -> wypłaca ZUS)
-    fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(/numer rachunku bankowego/);
-
-    fireEvent.change(screen.getByLabelText('Numer rachunku'), {
-      target: { value: '12345678901234567890123456' },
+    // Pozostałe wnioski wymagają danych ich wnioskodawców i oświadczeń dla danego urlopu.
+    for (const period of screen.getAllByLabelText(/Okres dotychczas/)) {
+      fireEvent.change(period, { target: { value: 'Brak' } });
+    }
+    for (const parts of screen.getAllByLabelText(/Liczba wykorzystanych/)) {
+      fireEvent.change(parts, { target: { value: '0' } });
+    }
+    for (const statement of screen.getAllByLabelText(/Oświadczenie pracownika o urlopie/)) {
+      fireEvent.change(statement, { target: { value: 'Drugi rodzic nie korzysta w tym okresie.' } });
+    }
+    fireEvent.change(screen.getByLabelText(/Oświadczenie ojca, czy korzystał/), {
+      target: { value: 'Nie korzystałem.' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Ojciec');
+    fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Kowalski' } });
     fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
     expect(screen.getByRole('button', { name: 'Wszystkie wnioski wysłane' })).toBeDisabled();
 

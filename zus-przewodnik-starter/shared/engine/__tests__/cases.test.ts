@@ -528,6 +528,21 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
     ).toBe(70);
   });
 
+  it('po 21 dniach bez złożonego wniosku wyłącza stawkę 81,5% i jej wniosek', () => {
+    const reference_date = '2026-12-02';
+    const missed = calculateCasePlan(baseTwoParentInput({ reference_date }), params);
+    expect(missed.outcome.applied_payment_variant).toBe('SPLIT_100_70');
+    expect(missed.documents.some((document) => document.id === 'COMBINED_RATE')).toBe(false);
+    const filed = calculateCasePlan(
+      baseTwoParentInput({
+        reference_date,
+        application_date: '2026-12-01',
+      }),
+      params,
+    );
+    expect(filed.outcome.applied_payment_variant).toBe('COMBINED_81_5');
+  });
+
   it('wylicza podstawę ojca z other_parent.monthly_bases gdy podstawa wprost jest nieznana', () => {
     const plan = calculateCasePlan(
       baseTwoParentInput({

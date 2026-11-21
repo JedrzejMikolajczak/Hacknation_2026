@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type {
   ApplicantRole,
@@ -15,6 +15,7 @@ import { useScenario } from '../../../app/ScenarioContext';
 import { parentLabels, roles } from '../caseLabels';
 import { addDaysIso, diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
+import { leaveApplication } from './leaveApplication';
 import './DocumentsTab.css';
 import './ApplicationsTab.css';
 import './CasePaperwork.css';
@@ -143,7 +144,9 @@ function describeDocumentDetails(
     case 'SUPPLEMENTARY_REQUEST':
       return `Jednorazowy wniosek składany najpóźniej ${deadlines.supplementaryMaternityLeave} dni przed zakończeniem podstawowego urlopu macierzyńskiego wraz z zaświadczeniem ze szpitala.`;
     case 'TAKEOVER':
-      return `Wniosek ojca o przejęcie części urlopu macierzyńskiego składa się co najmniej ${deadlines.fatherTakeoverPart} dni przed planowanym rozpoczęciem.`;
+      return doc.deadline
+        ? `Wniosek ojca o przejęcie części urlopu macierzyńskiego składa się co najmniej ${deadlines.fatherTakeoverPart} dni przed planowanym rozpoczęciem.`
+        : 'Sprawdź wymagane oświadczenia i załączniki w zakładce Wnioski.';
     case 'ADOPTION_LEAVE':
       return `Wniosek pracownika o urlop na warunkach urlopu macierzyńskiego składany w ciągu ${deadlines.fosterFamilyAfterAcceptance} dni od przyjęcia dziecka.`;
     default:
@@ -825,9 +828,9 @@ export function CaseDocuments({
 type PersonalFieldKey = 'name' | 'pesel' | 'bank';
 
 const PERSONAL_FIELD_LABELS: Record<PersonalFieldKey, string> = {
-  name: 'imię i nazwisko',
+  name: 'Imię i nazwisko',
   pesel: 'PESEL',
-  bank: 'numer rachunku bankowego',
+  bank: 'Numer rachunku',
 };
 
 const APPLICATION_IDS = new Set([
@@ -1257,7 +1260,8 @@ function applicationTitle(item: ApplicationItem, params: BenefitParams): string 
 
 function requiredFieldsForApplication(item: ApplicationItem): PersonalFieldKey[] {
   const { doc, parentCtx } = item;
-  if (doc.id === 'USC_COPY') return ['name'];
+  if (doc.id === 'USC_COPY' || (parentCtx.isEmployee && leaveApplication(doc, null, [], {})))
+    return ['name'];
   if (
     doc.id === 'ZAM' ||
     doc.id === 'ZAS-53' ||
@@ -1319,9 +1323,11 @@ function applicationChannel(item: ApplicationItem): string {
   return 'Uzupełnij dane płatnika, aby określić kanał złożenia';
 }
 
-function applicationLegalNote(item: ApplicationItem): string {
+function applicationLegalNote(item: ApplicationItem, section?: string): string {
   const { doc, parentCtx } = item;
   if (doc.id === 'USC_COPY') return doc.legal_basis;
+  if (section)
+    return `${section} rozporządzenia MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322). ${doc.legal_basis}`;
   if (parentCtx.isEmployee) {
     return `${doc.legal_basis}; Rozporządzenie MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322)`;
   }
@@ -1488,6 +1494,7 @@ interface PreviewModalState {
   code: string;
   fields: { label: string; value: string }[];
   legalNote: string;
+  attachments?: string[];
   verificationNote?: string;
 }
 
@@ -1504,23 +1511,20 @@ export function CaseApplications({
   plan: planProp,
   params: paramsProp,
 }: CaseApplicationsProps) {
-  const { search } = useLocation();
-  const { scenario, planInputs } = useScenario();
+  const { pathname, search } = useLocation();
+  const { scenario, planInputs, simulatedIdentities } = useScenario();
   const [fetchedCase, setFetchedCase] = useState<{ caseId: string; input: CaseInputs } | null>(
     null,
   );
-  const [name, setName] = useState('');
-  const [pesel, setPesel] = useState('');
-  const [bank, setBank] = useState('');
+  const [personal, setPersonal] = useState<
+    Partial<Record<ApplicantRole, Partial<Record<PersonalFieldKey, string>>>>
+  >({});
+  const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
   const [receipts, setReceipts] = useState<Record<string, SentReceipt>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [invalidFields, setInvalidFields] = useState<PersonalFieldKey[]>([]);
+  const [invalidField, setInvalidField] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<PreviewModalState | null>(null);
-
-  const nameRef = useRef<HTMLInputElement>(null);
-  const peselRef = useRef<HTMLInputElement>(null);
-  const bankRef = useRef<HTMLInputElement>(null);
 
   const caseId = useMemo(() => new URLSearchParams(search).get('case'), [search]);
   const params = paramsProp ?? DEFAULT_PARAMS;
@@ -1579,33 +1583,28 @@ export function CaseApplications({
     );
   }
 
-  const trimmedName = name.trim();
-  const trimmedPesel = pesel.trim();
-  const trimmedBank = bank.trim();
   const todayIso = todayIsoDate();
   const refYear = todayIso.slice(0, 4);
   const daysPerWeek = params.calendar.daysPerWeek;
 
-  function findMissing(required: PersonalFieldKey[]): PersonalFieldKey[] {
-    const missing: PersonalFieldKey[] = [];
-    if (required.includes('name') && !trimmedName) missing.push('name');
-    if (required.includes('pesel') && !trimmedPesel) missing.push('pesel');
-    if (required.includes('bank') && !trimmedBank) missing.push('bank');
-    return missing;
+  function personalValue(role: ApplicantRole, field: PersonalFieldKey) {
+    const imported = field === 'bank' ? '' : simulatedIdentities[role]?.[field];
+    return personal[role]?.[field] ?? imported ?? '';
   }
 
-  function focusFirst(missing: PersonalFieldKey[]) {
-    const first = missing[0];
-    if (first === 'name') nameRef.current?.focus();
-    else if (first === 'pesel') peselRef.current?.focus();
-    else if (first === 'bank') bankRef.current?.focus();
+  function personalId(role: ApplicantRole, field: PersonalFieldKey) {
+    return 'application-' + role + '-' + field;
   }
 
-  function clearError(field: PersonalFieldKey) {
-    if (!invalidFields.includes(field)) return;
-    const next = invalidFields.filter((item) => item !== field);
-    setInvalidFields(next);
-    if (next.length === 0) setValidationError(null);
+  function applicationDetails(item: ApplicationItem) {
+    return item.parentCtx.isEmployee
+      ? leaveApplication(
+          item.doc,
+          effectiveInput,
+          planProp?.outcome.periods ?? [],
+          answers[item.key] ?? {},
+        )
+      : null;
   }
 
   function buildFields(
@@ -1613,6 +1612,9 @@ export function CaseApplications({
   ): { label: string; value: string; missing?: boolean }[] {
     const { doc, parentCtx } = item;
     const required = requiredFieldsForApplication(item);
+    const trimmedName = personalValue(doc.parent_role, 'name').trim();
+    const trimmedPesel = personalValue(doc.parent_role, 'pesel').trim();
+    const trimmedBank = personalValue(doc.parent_role, 'bank').trim();
     const parentRoleValue = item.sharedWithBothParents
       ? 'Matka / Ojciec (jeden wniosek dla obojga rodziców)'
       : parentLabels[doc.parent_role];
@@ -1650,10 +1652,21 @@ export function CaseApplications({
 
     if (item.startDate && item.endDate) {
       const duration = formatDurationRange(item.startDate, item.endDate, daysPerWeek);
-      fields.push({
-        label: parentCtx.isNonEmployee ? 'Wnioskowany okres zasiłku' : 'Wnioskowany okres',
-        value: `${formatPolishDate(item.startDate)}–${formatPolishDate(item.endDate)}${duration ? ` (${duration})` : ''}`,
-      });
+      const start = formatPolishDate(item.startDate);
+      const startOnly =
+        doc.id === 'PRE_BIRTH_REQUEST' ||
+        (doc.id === 'TAKEOVER' &&
+          parentCtx.isEmployee &&
+          (effectiveInput?.special_circumstances.mother_deceased ||
+            answers[item.key]?.takeoverBasis === 'hospital'));
+      fields.push(
+        startOnly
+          ? { label: 'Data rozpoczęcia urlopu', value: start }
+          : {
+              label: parentCtx.isNonEmployee ? 'Wnioskowany okres zasiłku' : 'Wnioskowany okres',
+              value: `${start}–${formatPolishDate(item.endDate)}${duration ? ` (${duration})` : ''}`,
+            },
+      );
     }
 
     if (item.relatedParentalRange) {
@@ -1711,100 +1724,89 @@ export function CaseApplications({
       });
     }
 
-    fields.push({
-      label: 'Załączniki',
-      value: attachmentsForApplication(item, documents),
-    });
+    if (!applicationDetails(item)) {
+      fields.push({ label: 'Załączniki', value: attachmentsForApplication(item, documents) });
+    }
 
     return fields;
   }
 
-  function sendOne(item: ApplicationItem) {
-    const { doc } = item;
-    if (!doc.submit_to) return;
-    const code = applicationCode(item, params);
-    const missing = findMissing(requiredFieldsForApplication(item));
-    if (missing.length > 0) {
-      setInvalidFields(missing);
-      setStatusMessage(null);
-      setValidationError(
-        `Aby wysłać wniosek ${code}, uzupełnij dane osobowe: ${missing
-          .map((field) => PERSONAL_FIELD_LABELS[field])
-          .join(', ')}.`,
-      );
-      focusFirst(missing);
-      return;
-    }
-
-    const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-    const seq = String(Object.keys(receipts).length + 1).padStart(3, '0');
-    const ref = `UPO-${refYear}-${cleanCode}-${seq}`;
-    const recipient = recipientFull(item, params);
-
-    setInvalidFields([]);
+  function clearError() {
+    setInvalidField(null);
     setValidationError(null);
-    setReceipts((prev) => ({
-      ...prev,
-      [item.key]: {
-        referenceNumber: ref,
-        sentAt: formatPolishDate(todayIso),
-        recipient,
-        applicantName: trimmedName,
-      },
-    }));
-    setStatusMessage(`Zakończono symulację złożenia wniosku ${code} do: ${recipient} (${ref}).`);
   }
 
-  function sendAll() {
-    const pending = forms.filter((item) => item.doc.submit_to !== null && !receipts[item.key]);
-    if (pending.length === 0) return;
+  function showError(id: string, message: string) {
+    setStatusMessage(null);
+    setInvalidField(id);
+    setValidationError(message);
+    const element = document.getElementById(id);
+    element?.closest('details')?.setAttribute('open', '');
+    element?.focus();
+  }
 
-    const requiredSet = new Set<PersonalFieldKey>();
+  function send(requested: ApplicationItem[]) {
+    const pending = requested.filter(({ doc, key }) => doc.submit_to && !receipts[key]);
+    if (!pending.length) return;
+
     for (const item of pending) {
+      const { doc, key } = item;
+      const role = doc.parent_role;
       for (const field of requiredFieldsForApplication(item)) {
-        requiredSet.add(field);
+        const value = personalValue(role, field).trim();
+        const valid =
+          field === 'pesel'
+            ? /^\d{11}$/.test(value)
+            : field === 'bank'
+              ? /^\d{26}$/.test(value)
+              : !!value;
+        if (!valid) {
+          showError(
+            personalId(role, field),
+            `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
+          );
+          return;
+        }
+      }
+      for (const field of applicationDetails(item)?.fields ?? []) {
+        const value = (field.value ?? answers[key]?.[field.id] ?? '').trim();
+        if (!value || (field.type === 'number' && !/^\d+$/.test(value))) {
+          showError(
+            `${key}-${field.id}`,
+            `Uzupełnij pole „${field.label}” we wniosku „${doc.name_pl}”.`,
+          );
+          return;
+        }
       }
     }
-    const missing = findMissing(Array.from(requiredSet));
-    if (missing.length > 0) {
-      setInvalidFields(missing);
-      setStatusMessage(null);
-      setValidationError(
-        `Aby wysłać wszystkie wnioski, uzupełnij dane osobowe: ${missing
-          .map((field) => PERSONAL_FIELD_LABELS[field])
-          .join(', ')}.`,
-      );
-      focusFirst(missing);
-      return;
-    }
 
-    const nextReceipts: Record<string, SentReceipt> = { ...receipts };
-    const refs: string[] = [];
+    const nextReceipts = { ...receipts };
+    const references: string[] = [];
     let seq = Object.keys(receipts).length + 1;
     for (const item of pending) {
-      const code = applicationCode(item, params);
-      const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      const ref = `UPO-${refYear}-${cleanCode}-${String(seq).padStart(3, '0')}`;
-      refs.push(ref);
-      nextReceipts[item.key] = {
-        referenceNumber: ref,
+      const { doc, key } = item;
+      const code = applicationCode(item, params)
+        .replace(/[^A-Z0-9]/gi, '')
+        .toUpperCase();
+      const referenceNumber = `UPO-${refYear}-${code}-${String(seq).padStart(3, '0')}`;
+      references.push(referenceNumber);
+      nextReceipts[key] = {
+        referenceNumber,
         sentAt: formatPolishDate(todayIso),
         recipient: recipientFull(item, params),
-        applicantName: trimmedName,
+        applicantName: personalValue(doc.parent_role, 'name').trim(),
       };
       seq += 1;
     }
-
-    const skippedCount = forms.filter((item) => item.doc.submit_to === null).length;
-    const refSummary =
-      refs.length === 1 ? ` (${refs[0]})` : ` (${refs[0]} … ${refs[refs.length - 1]})`;
-    setInvalidFields([]);
-    setValidationError(null);
+    clearError();
     setReceipts(nextReceipts);
+    const skipped = requested.filter(({ doc }) => doc.submit_to === null).length;
+    const range =
+      references.length === 1 ? references[0] : `${references[0]} … ${references.at(-1)}`;
     setStatusMessage(
-      skippedCount > 0
-        ? `Zakończono symulację wysyłki ${pending.length} wniosków${refSummary}. Pozostałe (${skippedCount}) wymagają ustalenia płatnika.`
-        : `Zakończono symulację wysyłki pakietu ${pending.length} wniosków${refSummary}.`,
+      skipped
+        ? `Zakończono symulację wysyłki ${pending.length} wniosków (${range}). Pozostałe (${skipped}) wymagają ustalenia płatnika.`
+        : `Zakończono symulację wysyłki ${requested.length === 1 ? 'wniosku' : `pakietu ${pending.length} wniosków`} (${range}).`,
     );
   }
 
@@ -1863,7 +1865,7 @@ export function CaseApplications({
         <div className="apps-intro__top">
           <div className="apps-intro__copy">
             <h3 id="apps-intro-heading" className="plan-section__title">
-              Gotowe wnioski do wysłania
+              Przygotuj wnioski
             </h3>
             <p className="apps-intro__lead">{introSummaryParts.join(' ')}</p>
             {hasOverdue && (
@@ -1876,7 +1878,7 @@ export function CaseApplications({
             type="button"
             className="plan-btn plan-btn--primary apps-intro__cta"
             disabled={allSent || sendableForms.length === 0}
-            onClick={sendAll}
+            onClick={() => send(forms)}
           >
             {allSent
               ? 'Wszystkie wnioski wysłane'
@@ -1905,7 +1907,10 @@ export function CaseApplications({
             const title = applicationTitle(item, params);
             const receipt = receipts[item.key];
             const fields = buildFields(item);
-            const legalNote = applicationLegalNote(item);
+            const key = item.key;
+            const details = applicationDetails(item);
+            const attachments = details?.attachments;
+            const legalNote = applicationLegalNote(item, details?.section);
             const verificationNote = applicationVerificationNote(item, params);
             const parentBadge = item.sharedWithBothParents
               ? 'Matka / Ojciec'
@@ -1970,7 +1975,7 @@ export function CaseApplications({
                       type="button"
                       className="plan-btn plan-btn--secondary apps-card__action"
                       aria-label={`Wyślij ${title} (${parentBadge})`}
-                      onClick={() => sendOne(item)}
+                      onClick={() => send([item])}
                     >
                       Wyślij ›
                     </button>
@@ -2019,6 +2024,69 @@ export function CaseApplications({
                           zmiany terminu.
                         </p>
                       )}
+                    {details?.fields.map((field) => {
+                      const id = `${key}-${field.id}`;
+                      const value = field.value ?? answers[key]?.[field.id] ?? '';
+                      const update = (value: string) => {
+                        setAnswers((current) => ({
+                          ...current,
+                          [key]: { ...current[key], [field.id]: value },
+                        }));
+                        clearError();
+                      };
+                      return field.value !== undefined ? (
+                        <p key={id} className="plan-legal">
+                          <strong>{field.label}</strong>
+                          <br />
+                          {value}
+                        </p>
+                      ) : (
+                        <label key={id} className="plan-field">
+                          <span className="plan-field__label">{field.label}</span>
+                          {field.options ? (
+                            <select
+                              id={id}
+                              className="plan-field__input"
+                              aria-invalid={invalidField === id}
+                              value={value}
+                              onChange={(event) => update(event.target.value)}
+                            >
+                              <option value="">Wybierz odpowiedź</option>
+                              {field.options.map((option) => (
+                                <option value={option.value} key={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              id={id}
+                              className="plan-field__input"
+                              aria-invalid={invalidField === id}
+                              type={field.type ?? 'text'}
+                              min={field.type === 'number' ? 0 : undefined}
+                              autoComplete="off"
+                              value={value}
+                              onChange={(event) => update(event.target.value)}
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
+                    {attachments && (
+                      <section>
+                        <p className="plan-field__label">Załączniki</p>
+                        {attachments.length > 0 ? (
+                          <ul>
+                            {attachments.map((attachment) => (
+                              <li key={attachment}>{attachment}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>Brak wymaganych załączników.</p>
+                        )}
+                      </section>
+                    )}
                     <p className="plan-legal">Kanał: {applicationChannel(item)}</p>
                     <p className="plan-legal">Podstawa prawna: {legalNote}</p>
                     {verificationNote && <p className="plan-legal">{verificationNote}</p>}
@@ -2031,7 +2099,19 @@ export function CaseApplications({
                             title: `${title} (${parentBadge})`,
                             recipient: recipientFull(item, params),
                             code,
-                            fields: fields.map(({ label, value }) => ({ label, value })),
+                            fields: [
+                              ...fields,
+                              ...(details?.fields.map((field) => {
+                                const value = field.value ?? answers[key]?.[field.id] ?? '';
+                                return {
+                                  label: field.label,
+                                  value:
+                                    field.options?.find((option) => option.value === value)
+                                      ?.label ?? value,
+                                };
+                              }) ?? []),
+                            ],
+                            attachments,
                             legalNote,
                             verificationNote: verificationNote ?? undefined,
                           })
@@ -2059,77 +2139,66 @@ export function CaseApplications({
             ' W planie obojga rodziców każdy rodzic składa własne wnioski na swoje dane.'}
         </p>
 
+        <Link
+          to="/login"
+          state={{ returnTo: `${pathname}${search}` }}
+          className="plan-btn plan-btn--secondary"
+        >
+          Pobierz dane z mObywatela (symulacja)
+        </Link>
+
         {validationError && (
           <div className="plan-callout plan-callout--warning apps-validation-alert" role="alert">
             {validationError}
           </div>
         )}
 
-        <div className="plan-controls__grid">
-          <label className="plan-field">
-            <span className="plan-field__label">Imię i nazwisko</span>
-            <input
-              ref={nameRef}
-              type="text"
-              autoComplete="off"
-              className={
-                invalidFields.includes('name')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz imię i nazwisko"
-              aria-invalid={invalidFields.includes('name') || undefined}
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                clearError('name');
-              }}
-            />
-          </label>
-
-          <label className="plan-field">
-            <span className="plan-field__label">PESEL</span>
-            <input
-              ref={peselRef}
-              type="text"
-              autoComplete="off"
-              inputMode="numeric"
-              className={
-                invalidFields.includes('pesel')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz 11-cyfrowy numer PESEL"
-              aria-invalid={invalidFields.includes('pesel') || undefined}
-              value={pesel}
-              onChange={(event) => {
-                setPesel(event.target.value);
-                clearError('pesel');
-              }}
-            />
-          </label>
-
-          <label className="plan-field">
-            <span className="plan-field__label">Numer rachunku</span>
-            <input
-              ref={bankRef}
-              type="text"
-              autoComplete="off"
-              className={
-                invalidFields.includes('bank')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz 26-cyfrowy numer rachunku"
-              aria-invalid={invalidFields.includes('bank') || undefined}
-              value={bank}
-              onChange={(event) => {
-                setBank(event.target.value);
-                clearError('bank');
-              }}
-            />
-          </label>
-        </div>
+        {roles.map((role) => {
+          const fields = [
+            ...new Set(
+              forms
+                .filter((item) => item.doc.parent_role === role)
+                .flatMap(requiredFieldsForApplication),
+            ),
+          ];
+          if (!fields.length) return null;
+          return (
+            <fieldset key={role} className="plan-section">
+              <legend>{parentLabels[role]}</legend>
+              <div className="plan-controls__grid">
+                {fields.map((field) => {
+                  const id = personalId(role, field);
+                  return (
+                    <label key={field} className="plan-field">
+                      <span className="plan-field__label">{PERSONAL_FIELD_LABELS[field]}</span>
+                      <input
+                        id={id}
+                        type="text"
+                        autoComplete="off"
+                        inputMode={field === 'name' ? undefined : 'numeric'}
+                        className={
+                          invalidField === id
+                            ? 'plan-field__input apps-field-error'
+                            : 'plan-field__input'
+                        }
+                        aria-invalid={invalidField === id || undefined}
+                        value={personalValue(role, field)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setPersonal((current) => ({
+                            ...current,
+                            [role]: { ...current[role], [field]: value },
+                          }));
+                          clearError();
+                        }}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          );
+        })}
       </section>
 
       <nav className="apps-next-nav" aria-label="Następny krok planu">
@@ -2144,6 +2213,7 @@ export function CaseApplications({
           recipient={previewModal.recipient}
           code={previewModal.code}
           fields={previewModal.fields}
+          attachments={previewModal.attachments}
           legalNote={previewModal.legalNote}
           verificationNote={previewModal.verificationNote}
           onClose={() => setPreviewModal(null)}

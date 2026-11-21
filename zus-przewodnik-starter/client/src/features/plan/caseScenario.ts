@@ -136,6 +136,7 @@ export function wizardCase(
   const fatherOnly = !draft.mother;
   const other = fatherOnly ? draft.mother : draft.father;
   const special = draft.special ?? {};
+  if (special.motherDeceased && draft.motherDeathDate === null) return null;
   const isAdoption = draft.situation === 'adoption';
   const birth = draft.birthDate ?? draft.expectedBirthDate ?? null;
   const event = isAdoption ? (draft.childAcceptanceDate ?? null) : birth;
@@ -211,7 +212,9 @@ export function wizardCase(
       ? params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate
       : params.maternityLeave.motherMandatoryWeeksAfterBirth;
   const fatherTakeoverDate =
-    motherWantsResignTakeover && birth
+    special.motherDeceased && draft.motherDeathDate
+      ? addDaysIso(draft.motherDeathDate, 1)
+      : motherWantsResignTakeover && birth
       ? addDaysIso(birth, mandatoryMotherWeeks * params.calendar.daysPerWeek)
       : undefined;
 

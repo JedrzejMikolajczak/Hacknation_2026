@@ -12,7 +12,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { benefitLabels, parentLabels, payerLabel, percent, roles } from '../caseLabels';
-import { formatPln, formatPolishDate } from '../planScenario';
+import { combinedRateUnavailable, formatPln, formatPolishDate } from '../planScenario';
 import './CaseResults.css';
 
 const PARENT_GROUP_LABELS: Record<ApplicantRole, string> = {
@@ -579,6 +579,7 @@ export function CaseCalculator({
       : null;
 
   const showVariantSwitch = !childLostAll && !input.parental_only;
+  const combinedUnavailable = combinedRateUnavailable(input, params);
   const durationText = formatDurationPl(primarySummary.weeks, primarySummary.days);
   const secondaryLabel = secondaryRole === 'FATHER' ? 'tata' : 'mama';
 
@@ -700,11 +701,12 @@ export function CaseCalculator({
             <button
               type="button"
               className={
-                input.requested_payment_variant === 'COMBINED_81_5'
+                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
                   ? 'results-variant-bar__btn results-variant-bar__btn--active'
                   : 'results-variant-bar__btn'
               }
-              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5'}
+              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
+              disabled={combinedUnavailable}
               onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
             >
               {formatRate(params.rates.combined)} za cały okres
@@ -712,11 +714,11 @@ export function CaseCalculator({
             <button
               type="button"
               className={
-                input.requested_payment_variant === 'SPLIT_100_70'
+                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
                   ? 'results-variant-bar__btn results-variant-bar__btn--active'
                   : 'results-variant-bar__btn'
               }
-              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70'}
+              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
               onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
             >
               {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}

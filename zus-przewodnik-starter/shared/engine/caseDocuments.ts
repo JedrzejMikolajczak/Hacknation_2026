@@ -224,7 +224,27 @@ export function documentsForPlan(
         maternity,
         addDays(event, notice.fosterFamilyAfterAcceptance),
       );
-    if (maternity && role === 'FATHER' && input.father_takeover_date)
+    if (
+      maternity &&
+      input.stage !== 'ADOPTION' &&
+      role === 'MOTHER' &&
+      employee &&
+      event &&
+      maternity.start_date < event
+    )
+      add(
+        'PRE_BIRTH_REQUEST',
+        'Wniosek o część urlopu macierzyńskiego przed porodem',
+        role,
+        'EMPLOYER',
+        KP.maternity,
+        { ...maternity, end_date: addDays(event, -1) },
+      );
+    if (
+      maternity &&
+      role === 'FATHER' &&
+      (input.father_takeover_date || input.special_circumstances.mother_deceased)
+    )
       add(
         'TAKEOVER',
         'Wniosek ojca o przejęcie macierzyńskiego',
@@ -232,9 +252,12 @@ export function documentsForPlan(
         destination,
         KP.maternity,
         maternity,
-        addDays(maternity.start_date, -notice.fatherTakeoverPart),
+        input.special_circumstances.mother_deceased ||
+          input.special_circumstances.mother_hospitalized_or_incapable
+          ? null
+          : addDays(maternity.start_date, -notice.fatherTakeoverPart),
       );
-    for (const part of parental)
+    for (const part of parental) {
       add(
         'PARENTAL_REQUEST',
         'Wniosek o okres rodzicielskiego',
@@ -244,6 +267,17 @@ export function documentsForPlan(
         part,
         employee || !person ? addDays(part.start_date, -notice.parentalLeave) : part.start_date,
       );
+      if (employee && part.work_fraction > 0)
+        add(
+          'PARENTAL_WORK_REQUEST',
+          'Wniosek o łączenie urlopu rodzicielskiego z pracą',
+          role,
+          'EMPLOYER',
+          KP.work,
+          part,
+          addDays(part.start_date, -notice.parentalLeave),
+        );
+    }
     if (paternity)
       add(
         'PATERNITY_REQUEST',
@@ -264,7 +298,7 @@ export function documentsForPlan(
         destination,
         KP.supplementary,
         supplementary,
-        addDays(supplementary.start_date, -notice.supplementaryMaternityLeave),
+        addDays(supplementary.start_date, -notice.supplementaryMaternityLeave - 1),
       );
       add(
         'HOSPITAL_CERTIFICATE',

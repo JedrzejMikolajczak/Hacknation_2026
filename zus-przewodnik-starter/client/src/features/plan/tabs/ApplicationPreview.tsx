@@ -7,6 +7,7 @@ interface ApplicationPreviewProps {
   recipient: string;
   code?: string;
   fields: { label: string; value: string }[];
+  attachments?: string[];
   legalNote?: string;
   verificationNote?: string;
   onClose: () => void;
@@ -17,6 +18,7 @@ export function ApplicationPreview({
   recipient,
   code,
   fields,
+  attachments,
   legalNote,
   verificationNote,
   onClose,
@@ -54,6 +56,20 @@ export function ApplicationPreview({
           </div>
         ))}
       </dl>
+      {attachments && (
+        <section>
+          <h3>Załączniki</h3>
+          {attachments.length > 0 ? (
+            <ul>
+              {attachments.map((attachment) => (
+                <li key={attachment}>{attachment}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>Brak wymaganych załączników.</p>
+          )}
+        </section>
+      )}
       {(legalNote || verificationNote) && (
         <div className="application-preview__notes">
           {legalNote && (

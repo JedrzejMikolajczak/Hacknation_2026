@@ -25,6 +25,7 @@ export type ScenarioDraft = Partial<
   pregnancySickLeave?: PregnancySickLeave | null;
   /** Dane do podstawy zasiłku chorobowego w ciąży – prawo powstaje w dniu rozpoczęcia zwolnienia. */
   sicknessBenefitBaseInput?: BenefitBaseInput;
+  motherDeathDate?: IsoDate | null;
 };
 
 export interface PregnancySickLeave {

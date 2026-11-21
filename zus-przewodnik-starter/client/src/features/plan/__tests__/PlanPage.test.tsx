@@ -88,7 +88,7 @@ describe('Twój plan', () => {
     expect(
       await screen.findByText(/uzupełnisz po zalogowaniu przez mObywatela \(symulacja\)/),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('PESEL')).toHaveValue('');
+    expect(screen.getAllByLabelText('PESEL').every((field) => (field as HTMLInputElement).value === '')).toBe(true);
     expect(screen.getAllByText(/09\.11\.2027–10\.01\.2028/).length).toBeGreaterThan(0);
   });
 
@@ -114,9 +114,10 @@ describe('Twój plan', () => {
 
   it('edytuje dane osobowe w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
     openPlan('applications');
-    const nameInput = await screen.findByLabelText('Imię i nazwisko');
-    const peselInput = screen.getByLabelText('PESEL');
-    const bankInput = screen.getByLabelText('Numer rachunku');
+    const mother = within(await screen.findByRole('group', { name: 'Matka' }));
+    const nameInput = mother.getByLabelText('Imię i nazwisko');
+    const peselInput = mother.getByLabelText('PESEL');
+    const bankInput = mother.getByLabelText('Numer rachunku');
     expect(nameInput).toHaveValue('');
     expect(peselInput).toHaveValue('');
     expect(bankInput).toHaveValue('');
@@ -126,14 +127,14 @@ describe('Twój plan', () => {
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Wyślij Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
     expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
 
     fireEvent.click(tabLink('Plan urlopów'));
     fireEvent.click(tabLink('Wnioski'));
-    expect(await screen.findByLabelText('PESEL')).toHaveValue('');
+    expect(within(await screen.findByRole('group', { name: 'Matka' })).getByLabelText('PESEL')).toHaveValue('');
   });
 
   it('w zakładce Wnioski dla planu dwojga rodziców (UoP) pokazuje spójne wnioski z realnymi datami i bez duplikatów', async () => {

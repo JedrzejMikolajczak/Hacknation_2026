@@ -10,6 +10,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import type { ScenarioDraft } from '../../app/scenarioDraft';
+import { addDaysIso, formatPolishDate } from '../plan/planScenario';
 
 export const STAGES = ['Rodzina', 'Dziecko', 'Ubezpieczenie', 'Plany i kwoty', 'Podsumowanie'];
 export const SITUATION_LABELS: Record<SituationType, string> = {
@@ -32,7 +33,7 @@ export interface WizardQuestion {
   title: string;
   label: string;
   hint?: string;
-  type: 'choice' | 'date' | 'number';
+  type: 'choice' | 'multiple' | 'date' | 'number';
   options?: QuestionOption[];
   unknownLabel?: string;
   min?: number | string;
@@ -65,10 +66,41 @@ export function parentRoles(answers: Record<string, string>): ParentRole[] {
   return [];
 }
 
+function rateDeadlinePassed(
+  event: string | null | undefined,
+  reference: string,
+  params: BenefitParams,
+): boolean {
+  return (
+    !!event &&
+    isIsoCalendarDate(event) &&
+    reference > addDaysIso(event, params.combinedRateApplicationDeadlineDays)
+  );
+}
+
+function applicableParents(
+  situation: SituationType,
+  answers: Record<string, string>,
+): ParentRole[] {
+  const roles = parentRoles(answers);
+  return situation === 'afterBirth' &&
+    answers.motherSituation === 'deceased' &&
+    roles.includes('father')
+    ? roles.filter((role) => role !== 'mother')
+    : roles;
+}
+
 export function getQuestions(
   situation: SituationType,
   answers: Record<string, string>,
+  params: BenefitParams = DEFAULT_PARAMS,
 ): WizardQuestion[] {
+  const today = todayLocal();
+  const roles = applicableParents(situation, answers);
+  const motherDeceased =
+    situation === 'afterBirth' &&
+    answers.motherSituation === 'deceased' &&
+    roles.includes('father');
   const questions: WizardQuestion[] = [
     {
       id: 'family',
@@ -297,10 +329,10 @@ export function getQuestions(
     questions.push({
       id: 'motherSituation',
       stage: 1,
-      type: 'choice',
+      type: 'multiple',
       title: 'Czy któraś z tych sytuacji dotyczy mamy?',
       label: 'Sytuacja mamy',
-      hint: 'Te informacje pozwolą sprawdzić, czy tata może przejąć część urlopu macierzyńskiego.',
+      hint: 'Możesz zaznaczyć pobyt w szpitalu i orzeczenie jednocześnie. Te informacje pomagają ustalić, czy tata może przejąć część urlopu macierzyńskiego.',
       options: [
         { value: 'none', label: 'Nie dotyczy' },
         { value: 'hospitalized', label: 'Mama przebywa w szpitalu' },
@@ -308,17 +340,24 @@ export function getQuestions(
           value: 'incapable',
           label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
         },
-        {
-          value: 'hospitalizedIncapable',
-          label:
-            'Mama przebywa w szpitalu i ma orzeczenie o niezdolności do samodzielnej egzystencji',
-        },
         ...(situation === 'afterBirth' ? [{ value: 'deceased', label: 'Mama zmarła' }] : []),
       ],
     });
+    if (motherDeceased) {
+      questions.push({
+        id: 'motherDeathDate',
+        stage: 1,
+        type: 'date',
+        title: 'Kiedy zmarła mama dziecka?',
+        label: 'Data zgonu mamy',
+        min: answers.birthDate,
+        max: today,
+        hint: 'Ta data jest potrzebna do ustalenia początku urlopu taty.',
+      });
+    }
   }
 
-  for (const role of parentRoles(answers)) {
+  for (const role of roles) {
     const person = role === 'mother' ? 'mamy' : 'taty';
     const title = answers[`${role}.insuranceTitle`];
     questions.push({
@@ -488,10 +527,8 @@ export function getQuestions(
     }
   }
 
-  for (const role of parentRoles(answers)) {
+  for (const role of roles) {
     const person = role === 'mother' ? 'mamy' : 'taty';
-    // Po zgonie mamy nie pytamy o jej plany urlopowe – tata może przejąć urlop.
-    if (role === 'mother' && answers.motherSituation === 'deceased') continue;
     questions.push({
       id: `${role}.wantsLeave`,
       stage: 3,
@@ -560,57 +597,65 @@ export function getQuestions(
     }
   }
 
-  if (!childLost && parentRoles(answers).length > 0) {
-    const rates = DEFAULT_PARAMS.rates;
-    const deadline = DEFAULT_PARAMS.combinedRateApplicationDeadlineDays;
-    const combinedExpired = isCombinedRateExpired(situation, answers);
+  if (
+    !childLost &&
+    !motherDeceased &&
+    roles.length > 0 &&
+    (roles.includes('mother') || situation === 'adoption')
+  ) {
+    const { rates, combinedRateApplicationDeadlineDays: deadline } = params;
+    const event = combinedRateEvent(situation, answers);
+    const expired = isCombinedRateExpired(situation, answers, today, params);
+    const standard = {
+      value: 'standard',
+      label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
+      description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
+    };
     questions.push({
       id: 'rateVariant',
       stage: 3,
       type: 'choice',
-      title: 'Jak chcecie otrzymywać zasiłek macierzyński?',
+      title: expired
+        ? 'Obowiązują stawki rozdzielone'
+        : 'Jak chcecie otrzymywać zasiłek macierzyński?',
       label: 'Wariant wysokości zasiłku',
-      hint: combinedExpired
-        ? `Wariant ${formatRate(rates.combined)} był dostępny do ${deadline} dni od ${situation === 'adoption' ? 'przyjęcia dziecka' : 'porodu'}. Ten termin już minął, więc pokazujemy wariant ${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}.`
+      hint: expired
+        ? `Termin na złożenie nowego wniosku o ${formatRate(rates.combined)} upłynął ${formatPolishDate(addDaysIso(event!, deadline))}.`
         : `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
-      options: [
-        ...(combinedExpired
-          ? []
-          : [
-              {
-                value: 'combined',
-                label: `${formatRate(rates.combined)} przez cały okres`,
-                description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
-              },
-            ]),
-        {
-          value: 'standard',
-          label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
-          description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
-        },
-        ...(combinedExpired
-          ? []
-          : [{ value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' }]),
-      ],
+      options: expired
+        ? [standard]
+        : [
+            {
+              value: 'combined',
+              label: `${formatRate(rates.combined)} przez cały okres`,
+              description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
+            },
+            standard,
+            { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
+          ],
     });
   }
   return questions;
 }
 
-/** Wariant łączny wymaga wniosku w ciągu 21 dni od porodu (przyjęcia dziecka) – po tym terminie niedostępny. */
+function combinedRateEvent(situation: SituationType, answers: Record<string, string>) {
+  if (situation === 'afterBirth') return answers.birthDate;
+  if (situation === 'adoption' && answers.adoptionStage === 'accepted')
+    return answers.childAcceptanceDate;
+  return undefined;
+}
+
 export function isCombinedRateExpired(
   situation: SituationType,
   answers: Record<string, string>,
-  today: string = todayLocal(),
+  today = todayLocal(),
+  params: BenefitParams = DEFAULT_PARAMS,
 ): boolean {
-  const event =
-    situation === 'afterBirth'
-      ? answers.birthDate
-      : situation === 'adoption' && answers.adoptionStage === 'accepted'
-        ? answers.childAcceptanceDate
-        : undefined;
-  if (!event || !/^\d{4}-\d{2}-\d{2}$/.test(event)) return false;
-  return today > addDays(event, DEFAULT_PARAMS.combinedRateApplicationDeadlineDays);
+  return rateDeadlinePassed(combinedRateEvent(situation, answers), today, params);
+}
+
+export function selectedMotherSituations(value: string): string[] {
+  return value === 'hospitalizedIncapable' ? ['hospitalized', 'incapable'] : value.split(',');
 }
 
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
@@ -619,6 +664,17 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
     return question.options?.some((option) => option.value === value)
       ? null
       : 'Wybierz jedną z odpowiedzi.';
+  }
+  if (question.type === 'multiple') {
+    const selected = selectedMotherSituations(value);
+    const valid = selected.every((entry) =>
+      question.options?.some((option) => option.value === entry),
+    );
+    return valid &&
+      new Set(selected).size === selected.length &&
+      (selected.length === 1 || !selected.some((entry) => entry === 'none' || entry === 'deceased'))
+      ? null
+      : 'Wybierz sytuacje, które mają zastosowanie.';
   }
   if (value === 'unknown') return question.unknownLabel ? null : 'Uzupełnij to pole.';
   if (question.type === 'number') {
@@ -631,18 +687,18 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
       return `Wpisz liczbę nie większą niż ${question.max}.`;
     return null;
   }
-  const date = new Date(`${value}T12:00:00Z`);
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    Number.isNaN(date.valueOf()) ||
-    date.toISOString().slice(0, 10) !== value
-  )
-    return 'Wpisz poprawną datę w formacie DD/MM/YYYY.';
+  if (!isIsoCalendarDate(value)) return 'Wpisz poprawną datę w formacie DD/MM/YYYY.';
   if (typeof question.min === 'string' && value < question.min)
     return 'Data jest wcześniejsza niż dozwolona.';
   if (typeof question.max === 'string' && value > question.max)
     return 'Ta data nie może być w przyszłości.';
   return null;
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }
 
 /** Usuwa odpowiedzi z gałęzi, która przestała obowiązywać. */
@@ -660,7 +716,10 @@ export function changeAnswer(
       if (key.startsWith(prefix) && key !== id && !key.endsWith('.wantsLeave')) delete next[key];
     }
   }
-  const active = new Set(getQuestions(situation, next).map((question) => question.id));
+  const questions = getQuestions(situation, next);
+  const active = new Set(questions.map((question) => question.id));
+  const rate = questions.find((question) => question.id === 'rateVariant');
+  if (rate?.options?.length === 1) next.rateVariant = 'standard';
   return Object.fromEntries(Object.entries(next).filter(([key]) => active.has(key)));
 }
 
@@ -743,7 +802,7 @@ export function buildScenario(
   answers: Record<string, string>,
   params: BenefitParams = DEFAULT_PARAMS,
 ): ScenarioDraft {
-  const active = getQuestions(situation, answers);
+  const active = getQuestions(situation, answers, params);
   const values = Object.fromEntries(
     active
       .filter((question) => validateAnswer(question, answers[question.id]) === null)
@@ -768,7 +827,9 @@ export function buildScenario(
   if (childrenCount !== null) scenario.childrenCount = childrenCount;
   const deferred = knownBoolean(values.schoolObligationDeferred);
   if (deferred !== undefined) scenario.schoolObligationDeferred = deferred;
-  if (values.rateVariant === 'combined' || values.rateVariant === 'standard')
+  if (active.find((question) => question.id === 'rateVariant')?.options?.length === 1)
+    scenario.rateVariant = 'standard';
+  else if (values.rateVariant === 'combined' || values.rateVariant === 'standard')
     scenario.rateVariant = values.rateVariant;
 
   // Zwolnienie w ciąży: koniec przy zwolnieniu do porodu = dzień przed (przewidywanym) porodem.
@@ -791,7 +852,7 @@ export function buildScenario(
   const maternityRightArisesOn =
     birth ?? scenario.childAcceptanceDate ?? scenario.referenceDate ?? todayLocal();
 
-  for (const role of parentRoles(values)) {
+  for (const role of applicableParents(situation, values)) {
     const parent: Partial<ParentData> = { role };
     const title = values[`${role}.insuranceTitle`];
     if (title && title !== 'unknown') parent.insuranceTitle = title as InsuranceTitle;
@@ -854,14 +915,11 @@ export function buildScenario(
   const certificate = knownBoolean(values.zaZyciemCertificate);
   if (certificate !== undefined) special.zaZyciemCertificate = certificate;
   if (values.motherSituation) {
-    special.motherHospitalized =
-      values.motherSituation === 'hospitalized' ||
-      values.motherSituation === 'hospitalizedIncapable';
-    special.motherIncapableOfIndependentLiving =
-      values.motherSituation === 'incapable' || values.motherSituation === 'hospitalizedIncapable';
+    const situations = selectedMotherSituations(values.motherSituation);
+    special.motherHospitalized = situations.includes('hospitalized');
+    special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
-    // Po zgonie mamy nie zakładamy jej urlopu.
-    if (special.motherDeceased && scenario.mother) scenario.mother.wantsLeave = false;
+    if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
   }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
@@ -880,6 +938,13 @@ export function dateInputToIso(value: string): string {
 
 export function formatAnswer(question: WizardQuestion, value: string | undefined): string {
   if (!value || value === 'unknown') return 'Do uzupełnienia później';
+  if (question.type === 'multiple')
+    return (
+      question.options
+        ?.filter((option) => selectedMotherSituations(value).includes(option.value))
+        .map((option) => option.label)
+        .join(', ') || 'Do uzupełnienia później'
+    );
   if (question.type === 'choice')
     return (
       question.options?.find((option) => option.value === value)?.label ?? 'Do uzupełnienia później'
