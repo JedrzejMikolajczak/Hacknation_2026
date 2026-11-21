@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { PlaceholderPage } from '../components/PlaceholderPage';
+import { AdminPage } from '../features/admin/AdminPage';
 import { LandingPage } from '../features/landing/LandingPage';
 
 /** Routing zgodny z CONVENTIONS §7. */
@@ -15,7 +16,7 @@ export function App() {
       <Route path="/guide/:slug" element={<PlaceholderPage />} />
       <Route path="/cases" element={<PlaceholderPage />} />
       <Route path="/cases/:caseId" element={<PlaceholderPage />} />
-      <Route path="/admin" element={<PlaceholderPage />} />
+      <Route path="/admin" element={<AdminPage />} />
       <Route path="*" element={<PlaceholderPage />} />
     </Routes>
   );
