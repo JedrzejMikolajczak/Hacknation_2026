@@ -20,6 +20,7 @@ import './ApplicationsTab.css';
 import './CasePaperwork.css';
 
 const PREGNANCY_SICKNESS_IDS = new Set(['e-ZLA', 'ZAS-53', 'ZAS-12']);
+const PAYER_CERTIFICATE_IDS = new Set(['Z-3', 'Z-3a', 'ZAS-12']);
 const ATTACHMENT_IDS = new Set([
   'BIRTH_CERTIFICATE',
   'USC_COPY',
@@ -28,14 +29,25 @@ const ATTACHMENT_IDS = new Set([
   'ZA_ZYCIEM_CERTIFICATE',
   'STILLBIRTH_CERTIFICATE',
   'DEATH_CERTIFICATE',
+  'EXPECTED_BIRTH_CERTIFICATE',
 ]);
 
 const documentKey = (doc: CaseDocument) =>
   `${doc.parent_role}-${doc.id}-${doc.start_date ?? ''}-${doc.end_date ?? ''}`;
 
-function formatSubmitBadge(doc: CaseDocument): string {
+function isMandateEntitledRole(
+  documents: CaseDocument[],
+  role: CaseDocument['parent_role'],
+): boolean {
+  return documents.some(
+    (doc) =>
+      doc.parent_role === role && doc.submit_to === 'EMPLOYER' && /zleceniodawc/i.test(doc.name_pl),
+  );
+}
+
+function formatSubmitBadge(doc: CaseDocument, mandateEntitled: boolean): string {
   if (doc.id === 'e-ZLA') return 'Automatycznie (e-ZLA)';
-  if (doc.submit_to === 'EMPLOYER') return 'Pracodawca';
+  if (doc.submit_to === 'EMPLOYER') return mandateEntitled ? 'Zleceniodawca' : 'Pracodawca';
   if (doc.submit_to === 'ZUS') return 'ZUS (PUE/eZUS)';
   if (doc.submit_to === 'USC') return 'USC (gov.pl)';
   return 'Do ustalenia';
@@ -47,15 +59,20 @@ function submitBadgeClass(doc: CaseDocument): string {
   return 'plan-badge plan-badge--code';
 }
 
-function formatSubmitMethod(doc: CaseDocument): string {
+function formatSubmitMethod(doc: CaseDocument, mandateEntitled: boolean): string {
   if (doc.id === 'e-ZLA') {
     return 'Lekarz przekazuje elektronicznie do ZUS i na profil płatnika (PUE/eZUS).';
   }
-  if (doc.id === 'Z-3' || doc.id === 'Z-3a' || doc.id === 'ZAS-12') {
-    return 'Przekazuje do ZUS płatnik składek (pracodawca lub zleceniodawca) przez PUE/eZUS.';
+  if (doc.id === 'Z-3' || doc.id === 'ZAS-12') {
+    return 'Przekazuje do ZUS pracodawca przez PUE/eZUS.';
+  }
+  if (doc.id === 'Z-3a') {
+    return 'Przekazuje do ZUS zleceniodawca przez PUE/eZUS.';
   }
   if (doc.submit_to === 'EMPLOYER') {
-    return 'Papierowo lub elektronicznie u pracodawcy / płatnika składek.';
+    return mandateEntitled
+      ? 'Papierowo lub elektronicznie u płatnika składek (zleceniodawcy).'
+      : 'Papierowo lub elektronicznie w kadrach u pracodawcy.';
   }
   if (doc.submit_to === 'ZUS') {
     return 'Elektronicznie przez PUE/eZUS (symulacja) lub papierowo w placówce ZUS.';
@@ -66,8 +83,10 @@ function formatSubmitMethod(doc: CaseDocument): string {
   return 'Zależnie od formy zatrudnienia i wielkości płatnika (uzupełnij dane rodzica).';
 }
 
-function formatTargetPhrase(doc: CaseDocument): string {
-  if (doc.submit_to === 'EMPLOYER') return ' u pracodawcy';
+function formatTargetPhrase(doc: CaseDocument, mandateEntitled: boolean): string {
+  if (doc.submit_to === 'EMPLOYER') {
+    return mandateEntitled ? ' u zleceniodawcy' : ' u pracodawcy';
+  }
   if (doc.submit_to === 'ZUS') return ' w ZUS (PUE/eZUS)';
   if (doc.submit_to === 'USC') return ' w Urzędzie Stanu Cywilnego';
   return ' u właściwego płatnika';
@@ -77,6 +96,7 @@ function describeDocumentDetails(
   doc: CaseDocument,
   effectiveDate: string,
   params: BenefitParams,
+  mandateEntitled: boolean,
 ): string {
   const threshold = params.payerThresholdInsuredCount;
   const deadlines = params.applicationDeadlinesDays;
@@ -85,21 +105,29 @@ function describeDocumentDetails(
 
   switch (doc.id) {
     case 'ZAM':
-      return `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany.`;
+      return mandateEntitled
+        ? `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany. Zleceniodawca zgłaszający powyżej ${threshold} ubezpieczonych sam ustala i wypłaca zasiłek na podstawie ZAM (bez Z-3a do ZUS).`
+        : `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany.`;
     case 'Z-3':
-      return `Zaświadczenie wypełnia i przesyła do ZUS pracodawca zgłaszający do ${threshold} ubezpieczonych – Ty składasz wniosek o urlop i zasiłek w kadrach.`;
+      return `Zaświadczenie wypełnia i przesyła do ZUS pracodawca zgłaszający do ${threshold} ubezpieczonych – Ty składasz dokumenty w kadrach. Na dalszy okres zasiłku chorobowego pracodawca przekazuje ZAS-12.`;
     case 'Z-3a':
-      return `Zaświadczenie wypełnia i przesyła do ZUS zleceniodawca zgłaszający do ${threshold} ubezpieczonych.`;
+      return `Zaświadczenie wypełnia i przesyła do ZUS zleceniodawca zgłaszający do ${threshold} ubezpieczonych – zasiłek wypłaca ZUS.`;
     case 'ZAS-53':
       return 'Wniosek o zasiłek chorobowy składany bezpośrednio do ZUS przez osobę prowadzącą działalność gospodarczą (JDG).';
     case 'ZAS-12':
-      return 'Zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego, gdy świadczenie wypłaca ZUS.';
+      return 'Zaświadczenie płatnika składek składane przez pracodawcę wyłącznie na dalszy okres nieprzerwanego zasiłku chorobowego, gdy świadczenie wypłaca ZUS.';
     case 'e-ZLA':
-      return `Zaświadczenie lekarskie w ciąży z kodem literowym „B” daje zasiłek w wysokości ${formatRate(params.rates.sicknessPregnancy)} podstawy wymiaru. Trafia elektronicznie do ZUS i na profil płatnika – pracownik powinien poinformować pracodawcę o nieobecności.`;
+      return `Zaświadczenie lekarskie w ciąży z kodem literowym „B” daje zasiłek w wysokości ${formatRate(params.rates.sicknessPregnancy)} podstawy wymiaru. Trafia elektronicznie do ZUS i na profil płatnika – pracownik informuje pracodawcę o nieobecności, a zleceniobiorca lub osoba na JDG powstrzymuje się od pracy zawodowej.`;
     case 'BIRTH_CERTIFICATE':
-      return 'Skrócony odpis aktu urodzenia dziecka. W przypadku martwego urodzenia dołącza się odpis skrócony z adnotacją o martwym urodzeniu lub zaświadczenie lekarskie o martwym urodzeniu.';
+      return 'Skrócony odpis aktu urodzenia dziecka dołączany do wniosku o zasiłek macierzyński.';
+    case 'STILLBIRTH_CERTIFICATE':
+      return 'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu (wydawany bezpłatnie przez USC) lub zaświadczenie o martwym urodzeniu. Dokument jest potrzebny do ustalenia prawa do zasiłku macierzyńskiego po stracie dziecka.';
+    case 'DEATH_CERTIFICATE':
+      return 'Skrócony odpis aktu zgonu dziecka wydawany przez Urząd Stanu Cywilnego. Pozwala ustalić właściwy wymiar zasiłku macierzyńskiego.';
+    case 'EXPECTED_BIRTH_CERTIFICATE':
+      return `Zaświadczenie lekarskie o przewidywanej dacie porodu jest wymagane, gdy urlop lub zasiłek macierzyński rozpoczyna się przed porodem (maksymalnie ${params.maternityLeave.maxWeeksBeforeBirth} tygodni przed przewidywaną datą porodu).`;
     case 'USC_COPY':
-      return 'Odpis aktu urodzenia do celów zasiłkowych uzyskasz bez opłaty skarbowej w Urzędzie Stanu Cywilnego lub online przez gov.pl.';
+      return 'Odpis aktu stanu cywilnego do celów zasiłkowych uzyskasz bez opłaty skarbowej w Urzędzie Stanu Cywilnego lub online przez gov.pl.';
     case 'ADOPTION_ORDER':
       return 'Oświadczenie o dacie przyjęcia dziecka na wychowanie oraz zaświadczenie sądu o wystąpieniu o przysposobienie albo orzeczenie o ustanowieniu rodziny zastępczej niezawodowej.';
     case 'HOSPITAL_CERTIFICATE':
@@ -141,12 +169,11 @@ function resolveParentsFiling(
     const roleDocs = documents.filter((doc) => doc.parent_role === role);
     const hasZ3 = roleDocs.some((doc) => doc.id === 'Z-3');
     const hasZ3a = roleDocs.some((doc) => doc.id === 'Z-3a');
-    const hasEmployerDoc = roleDocs.some(
-      (doc) => doc.submit_to === 'EMPLOYER' && doc.id !== 'e-ZLA',
-    );
+    const hasMaternityDocs = roleDocs.some((doc) => doc.id === 'ZAM');
+    const mandateEntitled = isMandateEntitledRole(documents, role);
+    const hasEmployerDoc = roleDocs.some((doc) => doc.submit_to === 'EMPLOYER');
     const hasZusDoc = roleDocs.some(
-      (doc) =>
-        doc.submit_to === 'ZUS' && doc.id !== 'Z-3' && doc.id !== 'Z-3a' && doc.id !== 'ZAS-12',
+      (doc) => doc.submit_to === 'ZUS' && !PAYER_CERTIFICATE_IDS.has(doc.id),
     );
 
     const label =
@@ -159,15 +186,29 @@ function resolveParentsFiling(
         role,
         label,
         summary: `U pracodawcy → pracodawca przekazuje Z-3 do ZUS (wypłaca ZUS)`,
-        method: `Pracodawca zgłasza do ${threshold} ubezpieczonych: złóż wniosek w kadrach, a pracodawca przekaże Z-3 do ZUS.`,
+        method: hasMaternityDocs
+          ? `Pracodawca zgłasza do ${threshold} ubezpieczonych: złóż wniosek w kadrach, a pracodawca przekaże Z-3 do ZUS.`
+          : `Pracodawca zgłasza do ${threshold} ubezpieczonych: e-ZLA trafia automatycznie, a pracodawca przekazuje Z-3 do ZUS (ZAS-12 tylko na dalszy okres).`,
       };
     }
     if (hasZ3a) {
       return {
         role,
         label,
-        summary: `Zleceniodawca przekazuje Z-3a do ZUS (wypłaca ZUS)`,
-        method: `Płatnik zgłasza do ${threshold} ubezpieczonych: złóż ZAM (u zleceniodawcy lub przez PUE/eZUS), a płatnik przekaże Z-3a do ZUS.`,
+        summary: `W ZUS (PUE/eZUS) – zleceniodawca przekazuje Z-3a do ZUS (wypłaca ZUS)`,
+        method: hasMaternityDocs
+          ? `Zleceniodawca zgłasza do ${threshold} ubezpieczonych: złóż ZAM w ZUS (PUE/eZUS), a zleceniodawca przekaże Z-3a do ZUS.`
+          : `Zleceniodawca zgłasza do ${threshold} ubezpieczonych: e-ZLA trafia automatycznie, a zleceniodawca przekazuje Z-3a do ZUS.`,
+      };
+    }
+    if (mandateEntitled) {
+      return {
+        role,
+        label,
+        summary: `U zleceniodawcy (> ${threshold} ubezpieczonych – wypłaca zleceniodawca)`,
+        method: hasMaternityDocs
+          ? 'Uprawniony płatnik składek (zleceniodawca) sam ustala i wypłaca zasiłek – złóż ZAM i załączniki u zleceniodawcy (bez Z-3a do ZUS).'
+          : 'Uprawniony płatnik składek (zleceniodawca) sam ustala i wypłaca zasiłek na podstawie e-ZLA (bez Z-3a do ZUS).',
       };
     }
     if (hasEmployerDoc) {
@@ -175,7 +216,7 @@ function resolveParentsFiling(
         role,
         label,
         summary: `U pracodawcy (> ${threshold} ubezpieczonych – wypłaca pracodawca)`,
-        method: 'Papierowo lub elektronicznie w kadrach / u płatnika składek.',
+        method: 'Papierowo lub elektronicznie w kadrach u pracodawcy.',
       };
     }
     if (hasZusDoc) {
@@ -190,7 +231,7 @@ function resolveParentsFiling(
       role,
       label,
       summary: 'Do ustalenia (brak danych o wielkości płatnika)',
-      method: `Jeśli płatnik zgłasza powyżej ${threshold} ubezpieczonych, zasiłek wypłaca pracodawca; w pozostałych przypadkach – ZUS.`,
+      method: `Jeśli płatnik zgłasza powyżej ${threshold} ubezpieczonych, zasiłek wypłaca pracodawca lub zleceniodawca; w pozostałych przypadkach – ZUS.`,
     };
   });
 }
@@ -208,9 +249,16 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
   const mother: CaseDocument[] = [];
   const father: CaseDocument[] = [];
   const attachments: CaseDocument[] = [];
+  const hasMaternityDocs = documents.some((doc) => doc.id === 'ZAM');
+  const hasLossDocs = documents.some(
+    (doc) => doc.id === 'STILLBIRTH_CERTIFICATE' || doc.id === 'DEATH_CERTIFICATE',
+  );
 
   for (const doc of documents) {
-    if (PREGNANCY_SICKNESS_IDS.has(doc.id)) {
+    if (
+      PREGNANCY_SICKNESS_IDS.has(doc.id) ||
+      (!hasMaternityDocs && PAYER_CERTIFICATE_IDS.has(doc.id))
+    ) {
       pregnancySickness.push(doc);
     } else if (ATTACHMENT_IDS.has(doc.id)) {
       attachments.push(doc);
@@ -225,7 +273,7 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
     {
       id: 'pregnancy-sickness',
       title: 'Zwolnienie lekarskie w ciąży (e-ZLA, kod „B”)',
-      description: `Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika. Pracodawca (do ${threshold} ubezpieczonych) przekazuje Z-3 i ZAS-12, zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.`,
+      description: `Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika (PUE/eZUS). Gdy płatnik nie wypłaca zasiłków (do ${threshold} ubezpieczonych), pracodawca przekazuje Z-3 (a ZAS-12 tylko na dalszy okres zasiłku chorobowego), zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.`,
       documents: pregnancySickness,
     },
     {
@@ -243,8 +291,9 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
     {
       id: 'attachments',
       title: 'Załączniki i dokumenty stanu cywilnego',
-      description:
-        'Dokumenty potwierdzające prawo do świadczenia lub wpływające na jego wymiar (odpis aktu urodzenia, zaświadczenie ze szpitala, „Za życiem”).',
+      description: hasLossDocs
+        ? 'Dokumenty stanu cywilnego i zaświadczenia potwierdzające prawo do zasiłku.'
+        : 'Dokumenty potwierdzające prawo do świadczenia lub wpływające na jego wymiar (odpis aktu urodzenia, zaświadczenie ze szpitala, „Za życiem”).',
       documents: attachments,
     },
   ];
@@ -271,19 +320,52 @@ function selectNextStep(
       return Number(ATTACHMENT_IDS.has(a.id)) - Number(ATTACHMENT_IDS.has(b.id));
     });
 
-  const next = withDeadline[0] ?? unchecked[0] ?? null;
+  const isPassive = (doc: CaseDocument) => doc.id === 'e-ZLA' || PAYER_CERTIFICATE_IDS.has(doc.id);
+  const next = withDeadline[0] ?? unchecked.find((doc) => !isPassive(doc)) ?? unchecked[0] ?? null;
 
   if (next) {
+    const mandateEntitled = isMandateEntitledRole(documents, next.parent_role);
     if (next.id === 'e-ZLA') {
+      const roleDocs = documents.filter((doc) => doc.parent_role === next.parent_role);
+      const hasZ3 = roleDocs.some((doc) => doc.id === 'Z-3');
+      const hasZ3a = roleDocs.some((doc) => doc.id === 'Z-3a');
+      if (hasZ3) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj pracodawcę o nieobecności, a pracodawca przekaże Z-3 do ZUS.',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
+      if (hasZ3a) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – powstrzymaj się od pracy, a zleceniodawca przekaże Z-3a do ZUS.',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
+      if (mandateEntitled) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – powstrzymaj się od pracy i poinformuj zleceniodawcę (wypłaca zasiłek).',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
       return {
-        text: `Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj płatnika o nieobecności.`,
+        text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj pracodawcę o nieobecności.',
+        isOverdue: false,
+        overdueHint: null,
+      };
+    }
+    if (PAYER_CERTIFICATE_IDS.has(next.id)) {
+      return {
+        text: `Następny krok: płatnik składek przekazuje „${next.name_pl}” (${parentLabels[next.parent_role]}) do ZUS (PUE/eZUS).`,
         isOverdue: false,
         overdueHint: null,
       };
     }
     const deadlinePhrase = next.deadline ? ` (do ${formatPolishDate(next.deadline)})` : '';
     return {
-      text: `Następny krok: złóż „${next.name_pl}” (${parentLabels[next.parent_role]})${formatTargetPhrase(next)}${deadlinePhrase}.`,
+      text: `Następny krok: złóż „${next.name_pl}” (${parentLabels[next.parent_role]})${formatTargetPhrase(next, mandateEntitled)}${deadlinePhrase}.`,
       isOverdue: next.is_overdue,
       overdueHint:
         next.is_overdue && next.deadline
@@ -464,6 +546,7 @@ export function CaseDocuments({
                   const key = documentKey(doc);
                   const isChecked = Boolean(checkedMap[key]);
                   const showOverdue = !isChecked && doc.is_overdue;
+                  const mandateEntitled = isMandateEntitledRole(documents, doc.parent_role);
                   return (
                     <li
                       key={key}
@@ -493,7 +576,9 @@ export function CaseDocuments({
                                 </span>
                               )}
                             </span>
-                            <span className={submitBadgeClass(doc)}>{formatSubmitBadge(doc)}</span>
+                            <span className={submitBadgeClass(doc)}>
+                              {formatSubmitBadge(doc, mandateEntitled)}
+                            </span>
                           </span>
 
                           {(doc.start_date || doc.deadline) && (
@@ -527,7 +612,7 @@ export function CaseDocuments({
                           )}
 
                           <span className="docs-compact-item__method">
-                            {formatSubmitMethod(doc)}
+                            {formatSubmitMethod(doc, mandateEntitled)}
                           </span>
                         </span>
                       </label>
@@ -538,7 +623,9 @@ export function CaseDocuments({
                             Szczegóły i podstawa prawna
                           </summary>
                           <div className="docs-details__body">
-                            <p>{describeDocumentDetails(doc, effectiveDate, params)}</p>
+                            <p>
+                              {describeDocumentDetails(doc, effectiveDate, params, mandateEntitled)}
+                            </p>
                             <p className="docs-details__sub">
                               <strong>Podstawa prawna:</strong> {doc.legal_basis}
                             </p>
@@ -581,8 +668,8 @@ export function CaseDocuments({
               jednego wniosku ZUS ZAM, a druk Z-3b został zlikwidowany.
             </p>
             <p className="docs-details__sub">
-              Gdy zasiłek wypłaca ZUS: pracodawca składa Z-3 (oraz ZAS-12 na dalszy okres zasiłku
-              chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
+              Gdy zasiłek wypłaca ZUS: pracodawca składa Z-3 (oraz ZAS-12 wyłącznie na dalszy okres
+              zasiłku chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
               chorobowy) lub ZUS ZAM (zasiłek macierzyński).
             </p>
           </div>
@@ -601,9 +688,9 @@ export function CaseDocuments({
               </p>
               <p className="docs-details__sub">
                 Pracownik informuje pracodawcę o nieobecności. Gdy płatnik nie wypłaca zasiłków (do{' '}
-                {params.payerThresholdInsuredCount} ubezpieczonych), przekazuje do ZUS zaświadczenie
-                Z-3 i ZAS-12 (umowa o pracę) albo Z-3a (umowa zlecenie). Osoba prowadząca JDG składa
-                do ZUS wniosek ZAS-53.
+                {params.payerThresholdInsuredCount} ubezpieczonych), pracodawca przekazuje do ZUS
+                zaświadczenie Z-3 (a ZAS-12 wyłącznie na dalszy okres zasiłku chorobowego),
+                zleceniodawca przekazuje Z-3a, a osoba prowadząca JDG składa do ZUS wniosek ZAS-53.
               </p>
             </div>
           </details>

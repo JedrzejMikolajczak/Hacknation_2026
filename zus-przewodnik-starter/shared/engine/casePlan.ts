@@ -20,6 +20,7 @@ import {
 import {
   applicantDenial,
   eventDate,
+  finalizeWarnings,
   grossBasis,
   grossBasisForParent,
   insuranceRisks,
@@ -137,8 +138,8 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         code: 'COMBINED_RATE_DEADLINE',
         legal_basis: KP.combined,
         message_pl: combinedDeadline
-          ? `Złóż wniosek o ${formatPercentPl(rates.combined)} do ${formatDatePl(combinedDeadline)} (w ciągu ${params.combinedRateApplicationDeadlineDays} dni od ${adoption ? 'przyjęcia dziecka' : 'porodu'}). Założono terminowe złożenie wniosku; w przeciwnym razie będą obowiązywać stawki ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}.`
-          : `Złóż wniosek o ${formatPercentPl(rates.combined)} w ciągu ${params.combinedRateApplicationDeadlineDays} dni od ${adoption ? 'przyjęcia dziecka' : 'porodu'}.`,
+          ? `Złóż wniosek o ${formatPercentPl(rates.combined)} do ${formatDatePl(combinedDeadline)} (w ciągu ${params.combinedRateApplicationDeadlineDays} dni od ${adoption ? 'przyjęcia dziecka' : 'porodu'}). Założono terminowe złożenie wniosku; w przeciwnym razie będą obowiązywać stawki ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}. Co zrobić: złóż jeden wniosek o urlop macierzyński i rodzicielski u płatnika (pracodawcy lub ZUS) przed tym terminem.`
+          : `Złóż wniosek o ${formatPercentPl(rates.combined)} w ciągu ${params.combinedRateApplicationDeadlineDays} dni od ${adoption ? 'przyjęcia dziecka' : 'porodu'}. Co zrobić: złóż jeden wniosek o pełny urlop u płatnika (pracodawcy lub ZUS) w terminie.`,
       });
     } else if (variant === SPLIT && event && !denial) {
       warnings.push({
@@ -148,8 +149,8 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
           elapsed !== null &&
           elapsed > params.combinedRateApplicationDeadlineDays &&
           combinedDeadline
-            ? `Wniosek złożono po terminie ${params.combinedRateApplicationDeadlineDays} dni (termin upłynął ${formatDatePl(combinedDeadline)}). Zastosowano wariant ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}.`
-            : `Dla podanych danych obowiązują stawki odrębne (${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}). Sprawdź termin ${params.combinedRateApplicationDeadlineDays} dni u właściwego płatnika.`,
+            ? `Wniosek złożono po terminie ${params.combinedRateApplicationDeadlineDays} dni (termin upłynął ${formatDatePl(combinedDeadline)}). Zastosowano wariant ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}. Co zrobić: sprawdź datę wpływu wniosku u płatnika (przy umowie o pracę liczy się data złożenia u pracodawcy, a nie przekazania do ZUS).`
+            : `Dla podanych danych obowiązują stawki odrębne (${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}). Co zrobić: sprawdź termin ${params.combinedRateApplicationDeadlineDays} dni na złożenie wniosku u właściwego płatnika.`,
       });
     }
   }
@@ -177,11 +178,17 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         ? rates.combined
         : rates.secondParentNonTransferableInCombined
       : rates.parental;
-  if (denial && event)
+  const hasBlockingWarning = warnings.some(
+    (item) =>
+      item.code === 'NO_INSURANCE_ON_BIRTH_DATE' ||
+      item.code === 'CONTRACT_ENDS_BEFORE_BIRTH' ||
+      item.code === 'SELF_EMPLOYED_DEBT',
+  );
+  if (denial && event && !hasBlockingWarning)
     warnings.push({
-      code: denial.includes('Zadłużenie') ? 'SELF_EMPLOYED_DEBT' : 'QUALIFICATION_CHECK',
-      message_pl: denial,
-      legal_basis: denial.includes('Zadłużenie') ? KP.debt : KP.qualification,
+      code: 'QUALIFICATION_CHECK',
+      message_pl: `${denial} Co zrobić: uzupełnij brakujące dane lub sprawdź warunki ubezpieczenia na PUE/eZUS.`,
+      legal_basis: KP.qualification,
     });
 
   function put(
@@ -314,7 +321,7 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
           warnings.push({
             code: 'SUPPLEMENTARY_TRANSITION',
             message_pl:
-              'Macierzyński skończył się przed wejściem w życie prawa do urlopu uzupełniającego.',
+              'Macierzyński skończył się przed wejściem w życie prawa do urlopu uzupełniającego. Co zrobić: jeśli dziecko ma zaświadczenie „Za życiem”, sprawdź prawo do wydłużonego urlopu rodzicielskiego.',
             legal_basis: KP.transitional,
           });
         else if (
@@ -325,7 +332,7 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
           warnings.push({
             code: 'SUPPLEMENTARY_DATA',
             message_pl:
-              'Do ustalenia wymiaru uzupełniającego podaj tydzień porodu, masę urodzeniową i daty hospitalizacji.',
+              'Brakuje danych do ustalenia wymiaru urlopu uzupełniającego. Co zrobić: podaj tydzień ciąży przy porodzie, masę urodzeniową dziecka oraz daty pobytu w szpitalu.',
             legal_basis: KP.supplementary,
           });
         parentalStart = put(
@@ -488,7 +495,7 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
             warnings.push({
               code: 'NON_TRANSFERABLE_PARENTAL_PART',
               legal_basis: KP.parental,
-              message_pl: `Z łącznej puli ${pool} tyg. urlopu rodzicielskiego jeden rodzic może wykorzystać maks. ${individualLimit} tyg. Pozostałe ${parentalLeave.nonTransferableWeeksPerParent} tyg. to wyłączna, nieprzenoszalna część drugiego rodzica – nie przechodzi na pierwszego rodzica (również w planie samodzielnego rodzica).`,
+              message_pl: `Z łącznej puli ${pool} tyg. urlopu rodzicielskiego jeden rodzic może wykorzystać maks. ${individualLimit} tyg. Pozostałe ${parentalLeave.nonTransferableWeeksPerParent} tyg. to wyłączna, nieprzenoszalna część drugiego rodzica – nie przechodzi na pierwszego rodzica (również w planie samodzielnego rodzica). Co zrobić: zaplanuj maks. ${individualLimit} tyg. urlopu rodzicielskiego.`,
             });
           }
         }
@@ -517,7 +524,7 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
             warnings.push({
               code: 'FATHER_PARENTAL_MOTHER_UNINSURED',
               legal_basis: KP.parental,
-              message_pl: `Mimo braku ubezpieczenia chorobowego matki, ubezpieczonemu ojcu przysługuje urlop rodzicielski (maks. ${individualLimit} tyg., ${formatPercentPl(rates.parental)}) oraz urlop ojcowski (${paternityLeave.weeks} tyg., ${formatPercentPl(rates.paternity)}). Pozostałe ${parentalLeave.nonTransferableWeeksPerParent} tyg. jest nieprzenoszalne.`,
+              message_pl: `Mimo braku ubezpieczenia chorobowego matki, ubezpieczonemu ojcu przysługuje urlop rodzicielski (maks. ${individualLimit} tyg., ${formatPercentPl(rates.parental)}) oraz urlop ojcowski (${paternityLeave.weeks} tyg., ${formatPercentPl(rates.paternity)}). Pozostałe ${parentalLeave.nonTransferableWeeksPerParent} tyg. jest nieprzenoszalne. Co zrobić: złóż wniosek o urlop rodzicielski i ojcowski u pracodawcy ojca lub w ZUS (ZAM).`,
             });
           }
         }
@@ -643,7 +650,7 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
     ],
     benefit_base_pln: rawBase === null ? null : roundPln(rawBase),
     periods,
-    warnings,
+    warnings: finalizeWarnings(warnings),
     employer_sick_pay: sickness.employer,
     parental_pool_weeks: pool,
     parental_applicant_limit_weeks: individualLimit,
