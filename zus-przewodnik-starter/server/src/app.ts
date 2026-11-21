@@ -1,12 +1,13 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { MockMObywatelProvider } from './adapters/MockMObywatelProvider';
+import { MockZusDataProvider } from './adapters/MockZusDataProvider';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { calculatorRouter } from './routes/calculator';
 import { casesRouter } from './routes/cases';
 import { assistantRouter } from './routes/assistant';
 import { healthRouter } from './routes/health';
-import { createMockAuthRouter } from './routes/mockAuth';
+import { createMockRouter } from './routes/mock';
 import { paramsRouter } from './routes/params';
 
 export const API_PREFIX = '/api/v1';
@@ -26,7 +27,7 @@ export function createApp(): Express {
   app.use(API_PREFIX, calculatorRouter);
   app.use(API_PREFIX, casesRouter);
   app.use(API_PREFIX, assistantRouter);
-  app.use(API_PREFIX, createMockAuthRouter(new MockMObywatelProvider()));
+  app.use(API_PREFIX, createMockRouter(new MockMObywatelProvider(), new MockZusDataProvider()));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

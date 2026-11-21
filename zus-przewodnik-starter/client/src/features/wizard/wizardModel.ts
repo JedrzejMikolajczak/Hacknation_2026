@@ -847,12 +847,21 @@ function buildBenefitBaseInput(
   params: BenefitParams,
   rightArisesOn: IsoDate,
   previousBenefitEndDate: IsoDate | null,
+  zusIncomes?: MonthlyIncome[],
 ): BenefitBaseInput | null {
   if (parent.benefitBase !== null || !parent.insuranceTitle) return null;
   const averageGross = numberOrNull(values[`${role}.averageGross`]);
   const declaredBase = numberOrNull(values[`${role}.declaredContributionBase`]);
   const contractSalary = numberOrNull(values[`${role}.contractSalary`]);
-  if (averageGross === null && declaredBase === null && contractSalary === null) return null;
+  const hasZusIncomes = Boolean(role === 'mother' && zusIncomes && zusIncomes.length > 0);
+  if (
+    averageGross === null &&
+    declaredBase === null &&
+    contractSalary === null &&
+    !hasZusIncomes
+  ) {
+    return null;
+  }
 
   const insuredSince = parent.insuredSince ?? null;
   const firstFullMonth = insuredSince
@@ -860,7 +869,17 @@ function buildBenefitBaseInput(
     : null;
 
   const incomes: MonthlyIncome[] = [];
-  if (averageGross !== null) {
+  if (hasZusIncomes && zusIncomes) {
+    const windowStart = shiftMonth(rightArisesOn, -params.benefitBase.lookbackMonths);
+    const windowEnd = shiftMonth(rightArisesOn, -1);
+    const inWindow = zusIncomes
+      .filter((item) => {
+        if (firstFullMonth && item.month < firstFullMonth) return false;
+        return item.month >= windowStart && item.month <= windowEnd;
+      })
+      .sort((a, b) => a.month.localeCompare(b.month));
+    incomes.push(...(inWindow.length > 0 ? inWindow : zusIncomes));
+  } else if (averageGross !== null) {
     for (let offset = params.benefitBase.lookbackMonths; offset >= 1; offset -= 1) {
       const month = shiftMonth(rightArisesOn, -offset);
       if (firstFullMonth && month < firstFullMonth) continue;
@@ -884,10 +903,15 @@ function buildBenefitBaseInput(
   };
 }
 
+export interface BuildScenarioOptions {
+  zusIncomes?: MonthlyIncome[];
+}
+
 export function buildScenario(
   situation: SituationType,
   answers: Record<string, string>,
   params: BenefitParams = DEFAULT_PARAMS,
+  options?: BuildScenarioOptions,
 ): ScenarioDraft {
   const active = getQuestions(situation, answers, params);
   const values = Object.fromEntries(
@@ -972,6 +996,7 @@ export function buildScenario(
 
     // Zasiłek macierzyński: przy ciągłości ze zwolnieniem silnik może przejąć podstawę chorobowego.
     const previousEnd = role === 'mother' ? (scenario.pregnancySickLeave?.endDate ?? null) : null;
+    const motherZusIncomes = role === 'mother' ? options?.zusIncomes : undefined;
     const baseInput = buildBenefitBaseInput(
       parent,
       values,
@@ -979,6 +1004,7 @@ export function buildScenario(
       params,
       maternityRightArisesOn,
       previousEnd,
+      motherZusIncomes,
     );
     if (baseInput)
       scenario.benefitBaseInputs = { ...scenario.benefitBaseInputs, [role]: baseInput };
@@ -993,6 +1019,7 @@ export function buildScenario(
         params,
         sickLeaveStart,
         null,
+        motherZusIncomes,
       );
       if (sicknessInput) scenario.sicknessBenefitBaseInput = sicknessInput;
     }

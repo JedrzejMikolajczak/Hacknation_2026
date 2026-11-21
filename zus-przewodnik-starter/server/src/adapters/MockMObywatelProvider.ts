@@ -1,60 +1,52 @@
 import { randomUUID } from 'node:crypto';
 import type { AuthSession, MockProfileSummary, UserProfile } from '@shared/types';
-import anna from '../../../data/profiles/anna.json';
-import jan from '../../../data/profiles/jan.json';
-import { UnknownProfileError, type AuthProvider } from './AuthProvider';
+import type { AuthProvider } from './AuthProvider';
+import { defaultProfileStore, type ProfileStore } from './profileStore';
 
-const profiles = [anna, jan];
-const emptyInsurance: UserProfile['mother'] = {
-  role: 'mother',
-  insuranceTitle: 'none',
-  sicknessInsurance: 'none',
-  insuredSince: null,
-  insuranceEndDate: null,
-  benefitBase: null,
-  employerInsuredCount: null,
-  age: null,
-  contributionDebt: null,
-  wantsLeave: false,
-};
-const sessionDurationMs = 30 * 60 * 1000;
-const sessionLimit = 1_000;
+const SESSION_DURATION_MS = 30 * 60 * 1000;
+const SESSION_LIMIT = 1_000;
 
+/**
+ * Symulacja logowania mObywatel (wersja demonstracyjna).
+ * Przechowuje sesje wyłącznie w pamięci procesu.
+ */
 export class MockMObywatelProvider implements AuthProvider {
+  private readonly store: ProfileStore;
   private readonly sessions = new Map<string, { profile: UserProfile; expiresAt: number }>();
 
+  constructor(store: ProfileStore = defaultProfileStore) {
+    this.store = store;
+  }
+
   async listProfiles(): Promise<MockProfileSummary[]> {
-    return profiles.map(({ profileId, label }) => ({ profileId, label }));
+    return this.store.listSummaries();
   }
 
   async login(profileId: string): Promise<AuthSession> {
-    const entry = profiles.find((profile) => profile.profileId === profileId);
-    if (!entry) throw new UnknownProfileError('Nie znaleziono profilu testowego.');
-    const { profileId: id, firstName, lastName, pesel, birthDate } = entry;
-    const profile: UserProfile = {
-      profileId: id,
-      firstName,
-      lastName,
-      pesel,
-      birthDate,
-      mother: { ...emptyInsurance },
-    };
-    if (this.sessions.size >= sessionLimit) {
+    const record = this.store.getById(profileId);
+    const profile = structuredClone(record.profile);
+
+    if (this.sessions.size >= SESSION_LIMIT) {
       const oldest = this.sessions.keys().next();
       if (!oldest.done) this.sessions.delete(oldest.value);
     }
     const sessionToken = randomUUID();
-    this.sessions.set(sessionToken, { profile, expiresAt: Date.now() + sessionDurationMs });
+    this.sessions.set(sessionToken, {
+      profile,
+      expiresAt: Date.now() + SESSION_DURATION_MS,
+    });
+
     return { sessionToken, profile };
   }
 
   async getProfileBySession(sessionToken: string): Promise<UserProfile | null> {
+    if (!sessionToken) return null;
     const session = this.sessions.get(sessionToken);
     if (!session) return null;
     if (session.expiresAt <= Date.now()) {
       this.sessions.delete(sessionToken);
       return null;
     }
-    return session.profile;
+    return structuredClone(session.profile);
   }
 }

@@ -43,8 +43,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body.data as T;
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path, { method: 'GET' });
+export function apiGet<T>(path: string, headers?: HeadersInit): Promise<T> {
+  return request<T>(path, headers ? { method: 'GET', headers } : { method: 'GET' });
 }
 
 export function apiPost<T>(path: string, body: unknown): Promise<T> {

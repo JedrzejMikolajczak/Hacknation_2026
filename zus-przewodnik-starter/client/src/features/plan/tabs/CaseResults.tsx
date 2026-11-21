@@ -11,8 +11,10 @@ import type {
   PaymentVariant,
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
+import { useScenario } from '../../../app/ScenarioContext';
+import { ContributionDebtCertificate, SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { benefitLabels, parentLabels, payerLabel, percent, roles } from '../caseLabels';
-import { combinedRateUnavailable, formatPln, formatPolishDate } from '../planScenario';
+import { combinedRateUnavailable, formatPln, formatPolishDate, todayIsoDate } from '../planScenario';
 import './CaseResults.css';
 
 const PARENT_GROUP_LABELS: Record<ApplicantRole, string> = {
@@ -258,6 +260,7 @@ export function CaseRights({
   params?: BenefitParams;
 }) {
   const { search } = useLocation();
+  const { authSession } = useScenario();
   const visibleRoles: ApplicantRole[] = roles.filter((role) => {
     if (input && !input.co_parenting && role !== input.applicant_role) return false;
     return plan.entitlements.some((item) => item.parent_role === role);
@@ -358,6 +361,31 @@ export function CaseRights({
           })}
         </div>
       </section>
+
+      {authSession &&
+        (input?.employment_type === 'B2B' ||
+          authSession.profile.mother.insuranceTitle === 'selfEmployed') && (
+          <section className="results-section" aria-label="Zaświadczenie o zadłużeniu ZUS">
+            <ContributionDebtCertificate
+              payerName={`${authSession.profile.firstName} ${authSession.profile.lastName}`}
+              asOfDate={
+                input?.sickness_leave_start_date ??
+                input?.due_or_birth_date ??
+                input?.adopted_or_foster_child_acceptance_date ??
+                input?.reference_date ??
+                todayIsoDate()
+              }
+              contributionDebt={input?.debt_amount_pln ?? authSession.zusData.contributionDebt}
+              params={params}
+            />
+          </section>
+        )}
+
+      {authSession && authSession.zusData.sickLeaveCertificates.length > 0 && (
+        <section className="results-section" aria-label="Podgląd e-ZLA z danych ZUS">
+          <SickLeavePreview certificates={authSession.zusData.sickLeaveCertificates} />
+        </section>
+      )}
 
       <nav className="results-next" aria-label="Następny krok">
         <Link to={`/plan/calculator${search}`} className="results-next__link">
