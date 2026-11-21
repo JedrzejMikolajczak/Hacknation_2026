@@ -14,6 +14,7 @@
   display: grid;
   gap: var(--space-3);
   list-style: none;
+  margin-top: var(--space-3);
 }
 
 .cases-panel {
@@ -52,4 +53,68 @@
 
 .cases-panel thead {
   background: var(--color-surface-muted);
+}
+
+.cases-upload__fieldset {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  border: 0;
+}
+
+.cases-upload__fieldset legend {
+  margin-bottom: var(--space-3);
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-upload__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+}
+
+.cases-upload__fields label,
+.cases-upload__file {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.cases-upload input:not([type='checkbox']),
+.cases-upload select {
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.cases-upload .cases-upload__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+}
+
+.cases-upload button:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.cases-upload [role='alert'] {
+  color: var(--color-error);
+}
+
+.cases-upload__filename {
+  overflow-wrap: anywhere;
+}
+
+.cases-upload__result {
+  padding: var(--space-4);
+  background: var(--color-info-soft);
+}
+
+.cases-upload__result ul {
+  padding-inline-start: var(--space-5);
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { CaseEvaluation, CaseRecord, CaseSummary } from '@shared/types';
 import { apiGet, apiPost } from '../../api/client';
+import { CasePdfUpload } from './CasePdfUpload';
 import './CasesPage.css';
 
 export function CasesPage() {
@@ -51,17 +52,23 @@ export function CasesPage() {
       {error && <p role="alert">Nie udało się pobrać sprawy. Sprawdź adres lub odśwież stronę.</p>}
       {!error && (caseId ? !current : !list) && <p role="status">Pobieranie danych z API…</p>}
       {!caseId && list && (
-        <ul className="cases-page__list">
-          {list.map((item) => (
-            <li key={item.case_id}>
-              <h2>{item.short_title}</h2>
-              <Link to={`/cases/${item.case_id}`}>Zobacz porównanie</Link>
-              {' · '}
-              <Link to={`/plan/entitlements?case=${item.case_id}`}>Otwórz Twój plan</Link>
-            </li>
-          ))}
-        </ul>
+        <section aria-labelledby="case-list-title">
+          <h2 id="case-list-title">Wybierz sprawę z listy</h2>
+          <ul className="cases-list">
+            {list.map((item) => (
+              <li className="cases-panel" key={item.case_id}>
+                <h3>{item.short_title}</h3>
+                <div>
+                  <Link to={`/cases/${item.case_id}`}>Zobacz porównanie</Link>
+                  {' · '}
+                  <Link to={`/plan/entitlements?case=${item.case_id}`}>Otwórz Twój plan</Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
+      {!caseId && <CasePdfUpload />}
       {current && (
         <>
           <p>
