@@ -56,13 +56,13 @@ export interface SpecialCircumstances {
   hospitalizationDays: number | null;
   stillbirth: boolean;
   childDeathDate: IsoDate | null;
-  deceasedChildrenCount?: number | null; // przy porodzie mnogim
+  deceasedChildrenCount?: number | null;
   motherHospitalized: boolean;
   motherIncapableOfIndependentLiving: boolean; // orzeczenie o niezdolności do samodzielnej egzystencji
   motherDeceased: boolean;
-  motherAbandonedChild?: boolean;              // KP art. 180 § 13 – przejęcie urlopu przez ojca
+  motherAbandonedChild?: boolean;
+  unlawfulTerminationConfirmedByCourt?: boolean;
   employerBankruptcyOrLiquidation: boolean;    // zasiłek w wysokości macierzyńskiego
-  unlawfulTerminationConfirmedByCourt?: boolean; // art. 30 ust. 3 ustawy zasiłkowej
 }
 
 /** Wewnętrzny format szkicu kreatora oraz testów wcześniejszych reguł. */
@@ -389,8 +389,14 @@ export interface CaseParentInsurance {
   monthly_bases?: MonthlyBase[];
   title_start_date?: IsoDate | null;
   debt_amount_pln?: Pln | null;
-  secondary_employment_type?: EmploymentType | null;
-  secondary_voluntary_sickness_insured?: boolean | null;
+}
+
+/** Odrębny tytuł wnioskodawcy z niezależnie potwierdzanym ubezpieczeniem chorobowym. */
+export interface CaseAdditionalInsuranceTitle extends CaseParentInsurance {
+  employment_type: Exclude<EmploymentType, 'NONE'>;
+  sickness_insured: boolean | null;
+  contract_type?: ContractType | null;
+  insurance_duration_days?: number | null;
 }
 
 export interface CaseCircumstances {
@@ -401,8 +407,8 @@ export interface CaseCircumstances {
   mother_hospitalized_or_incapable: boolean;
   mother_deceased?: boolean;
   mother_abandoned_child?: boolean;
-  employer_bankruptcy_or_liquidation: boolean;
   unlawful_termination_confirmed_by_court?: boolean;
+  employer_bankruptcy_or_liquidation: boolean;
   adopted_or_foster_child_age_years: number | null;
   is_professional_foster_family: boolean;
 }
@@ -431,8 +437,6 @@ export interface CaseInputs {
   special_circumstances: CaseCircumstances;
   living_children_count?: number;
   deceased_children_count?: number;
-  secondary_employment_type?: EmploymentType | null;
-  secondary_voluntary_sickness_insured?: boolean | null;
   pregnancy_week_at_birth?: string;
   birth_weight_grams?: number | number[];
   newborn_hospitalization_start?: IsoDate;
@@ -457,6 +461,13 @@ export interface CaseInputs {
   parental_only?: boolean;
   paternity_leave_start_date?: IsoDate;
   father_takeover_date?: IsoDate;
+  mother_abandonment_date?: IsoDate;
+  mother_maternity_days_used?: number;
+  mother_was_insured_at_abandonment?: boolean;
+  father_stops_gainful_activity?: boolean;
+  additional_insurance_titles?: CaseAdditionalInsuranceTitle[];
+  secondary_employment_type?: EmploymentType | null;
+  secondary_voluntary_sickness_insured?: boolean | null;
   reference_date?: IsoDate;
   debt_amount_pln?: Pln;
   sick_pay_days_already_used?: number;
@@ -544,8 +555,16 @@ export interface CaseDocument {
   legal_basis: string;
 }
 
+export interface CaseAdditionalTitleOutcome {
+  employment_type: CaseAdditionalInsuranceTitle['employment_type'];
+  outcome: CaseOutcome;
+  documents: CaseDocument[];
+  entitlements: CaseEntitlement[];
+}
+
 export interface CasePlan {
   outcome: CaseOutcome;
+  additional_title_outcomes?: CaseAdditionalTitleOutcome[];
   entitlements: CaseEntitlement[];
   documents: CaseDocument[];
   validation_errors: CaseWarning[];

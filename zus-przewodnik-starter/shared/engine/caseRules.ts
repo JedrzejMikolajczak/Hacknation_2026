@@ -5,10 +5,12 @@ import type {
   CaseParentInsurance,
   CaseWarning,
 } from '../types';
-import { addDays, addMonths, daysBetween, formatPercentPl, roundPln } from './core';
+import { addDays, addMonths, daysBetween, formatPercentPl, requireValue, roundPln } from './core';
 
 export const KP = {
   maternity: 'Kodeks pracy, art. 180 i 180¹',
+  abandonment: 'Kodeks pracy, art. 180 § 13 i 15 oraz art. 182. Ustawa zasiłkowa, art. 29 ust. 7 i 9 oraz art. 29a ust. 2',
+  unlawfulTermination: 'Ustawa zasiłkowa, art. 30 ust. 1 pkt 2 i art. 61 ust. 1 pkt 2',
   supplementary: 'Kodeks pracy, art. 180²',
   transitional: 'Ustawa z 6 grudnia 2024 r. o zmianie ustawy – Kodeks pracy, art. 17',
   parental: 'Kodeks pracy, art. 182¹ᵃ–182¹ᵈ',
@@ -30,7 +32,6 @@ export const KP = {
   baseIncrease: 'Ustawa o systemie ubezpieczeń społecznych, art. 41 ust. 12–13 i art. 83',
   multipleTitles: 'Ustawa o systemie ubezpieczeń społecznych, art. 9; ustawa zasiłkowa, art. 29 i 36',
   maternityEquivalent: 'Ustawa zasiłkowa, art. 30 ust. 1 i 3',
-  abandonment: 'Kodeks pracy, art. 180 § 13; ustawa zasiłkowa, art. 29 ust. 5',
 } as const;
 
 function formatDatePl(iso: string): string {
@@ -92,6 +93,94 @@ export function eventDate(input: CaseInputs): string | null {
     : input.due_or_birth_date;
 }
 
+export function livingChildrenCount(input: CaseInputs): number {
+  if (input.deceased_children_count !== undefined) {
+    const deceased = input.deceased_children_count;
+    requireValue(
+      Number.isInteger(deceased) && deceased >= 0 && deceased <= input.children_count,
+      'deceased_children_count',
+      'Liczba zmarłych dzieci musi mieścić się w liczbie dzieci z porodu.',
+    );
+    const living = input.children_count - deceased;
+    requireValue(
+      input.living_children_count === undefined || input.living_children_count === living,
+      'deceased_children_count',
+      'Liczba żyjących i zmarłych dzieci musi odpowiadać liczbie dzieci z porodu.',
+    );
+    return living;
+  }
+  return (
+    input.living_children_count ??
+    (input.special_circumstances.stillbirth_or_child_death === 'NONE'
+      ? input.children_count
+      : Math.max(0, input.children_count - 1))
+  );
+}
+
+export function hasChildLoss(input: CaseInputs): boolean {
+  return (
+    input.special_circumstances.stillbirth_or_child_death !== 'NONE' ||
+    livingChildrenCount(input) < input.children_count
+  );
+}
+
+export function qualifiesAfterUnlawfulTermination(
+  input: CaseInputs,
+  on: string,
+  params: BenefitParams,
+): boolean {
+  const birth = input.due_or_birth_date;
+  const end = input.contract_end_date;
+  return Boolean(
+    input.special_circumstances.unlawful_termination_confirmed_by_court &&
+      input.applicant_role === 'MOTHER' &&
+      input.employment_type === 'UOP' &&
+      (input.stage === 'POST_BIRTH' || input.stage === 'PREGNANCY') &&
+      birth &&
+      end &&
+      end >= addDays(birth, -params.insuranceRisk.estimatedPregnancyDays) &&
+      end < birth &&
+      on >= birth,
+  );
+}
+
+export function abandonmentTakeover(input: CaseInputs, birth: string, params: BenefitParams) {
+  const abandonment = input.mother_abandonment_date;
+  if (!abandonment || input.stage !== 'POST_BIRTH' || abandonment < birth) {
+    return { start: null, reason: 'Podaj datę porzucenia dziecka przypadającą od dnia porodu.' };
+  }
+  const father = input.applicant_role === 'FATHER' ? input : input.other_parent;
+  if (!father) {
+    return { start: null, reason: 'Podaj tytuł ubezpieczenia ojca, który przejmuje opiekę.' };
+  }
+  if (father.employment_type !== 'UOP' && !input.father_stops_gainful_activity) {
+    return {
+      start: null,
+      reason: 'Potwierdź, że ojciec przerwie działalność zarobkową, aby osobiście opiekować się dzieckiem.',
+    };
+  }
+  const motherInsured = input.mother_was_insured_at_abandonment;
+  if (motherInsured === undefined) {
+    return { start: null, reason: 'Ustal, czy matka była objęta ubezpieczeniem chorobowym.' };
+  }
+  const minimum =
+    params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate * params.calendar.daysPerWeek;
+  const usedDays = input.mother_maternity_days_used ?? 0;
+  if (motherInsured && usedDays < minimum) {
+    return {
+      start: null,
+      reason: `Ubezpieczona matka musi wykorzystać co najmniej ${minimum} dni zasiłku po porodzie. Jeśli porzuciła dziecko wcześniej, ojciec może sprawdzić prawo do dodatkowego zasiłku opiekuńczego za ten okres.`,
+    };
+  }
+  const nextDay = addDays(abandonment, 1);
+  const afterMother = motherInsured ? addDays(birth, usedDays) : nextDay;
+  const earliest = nextDay > afterMother ? nextDay : afterMother;
+  if (input.father_takeover_date && input.father_takeover_date < earliest) {
+    return { start: null, reason: `Najwcześniejsza data przejęcia to ${formatDatePl(earliest)}.` };
+  }
+  return { start: input.father_takeover_date ?? earliest, reason: null };
+}
+
 export function otherRole(role: ApplicantRole): ApplicantRole {
   return role === 'MOTHER' ? 'FATHER' : 'MOTHER';
 }
@@ -121,6 +210,7 @@ export function applicantDenial(
   if (input.title_start_date && on < input.title_start_date)
     return 'Tytuł ubezpieczenia powstał po zdarzeniu.';
   if (input.contract_end_date && input.contract_end_date < on) {
+    if (qualifiesAfterUnlawfulTermination(input, on, params)) return null;
     if (isFixedTermExtendedToBirth(input, on, params)) return null;
     if (
       input.employment_type === 'UOP' &&
@@ -236,9 +326,13 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
   const firstParentalPart = [...(input.parental_leave_parts ?? [])].sort((a, b) =>
     a.start_date.localeCompare(b.start_date),
   )[0];
+  const fatherTakeover =
+    event && input.applicant_role === 'FATHER' && input.mother_abandonment_date
+      ? abandonmentTakeover(input, event, params).start
+      : null;
   const rightOn = input.parental_only
     ? (firstParentalPart?.start_date ?? input.application_date)
-    : event;
+    : (fatherTakeover ?? event);
   const isInsured = insured(input);
 
   // 1. Brak ubezpieczenia chorobowego na dzień zdarzenia (sekcja H pkt 3)
@@ -284,7 +378,14 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
     rightOn &&
     input.contract_end_date < rightOn
   ) {
-    if (isFixedTermExtendedToBirth(input, rightOn, params)) {
+    if (qualifiesAfterUnlawfulTermination(input, rightOn, params)) {
+      warnings.push({
+        code: 'MATERNITY_AFTER_UNLAWFUL_TERMINATION',
+        legal_basis: KP.unlawfulTermination,
+        message_pl:
+          'Prawomocny wyrok potwierdza ustanie ubezpieczenia z naruszeniem prawa w okresie ciąży. ZUS może wypłacić zasiłek macierzyński od dnia porodu. Przygotuj wyrok i zaświadczenie o ciąży w okresie zatrudnienia.',
+      });
+    } else if (isFixedTermExtendedToBirth(input, rightOn, params)) {
       warnings.push({
         code: 'CONTRACT_EXTENDED_TO_BIRTH',
         legal_basis: KP.contractProtection,
@@ -295,8 +396,7 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
         input.employment_type === 'UOP' &&
         input.applicant_role === 'MOTHER' &&
         input.due_or_birth_date &&
-        (input.special_circumstances.employer_bankruptcy_or_liquidation ||
-          input.special_circumstances.unlawful_termination_confirmed_by_court)
+        input.special_circumstances.employer_bankruptcy_or_liquidation
       )
     ) {
       if (input.employment_type === 'UOP') {
@@ -466,10 +566,12 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
   }
 
   // 8. Zbieg dwóch tytułów ubezpieczenia naraz
-  if (input.secondary_employment_type && input.secondary_employment_type !== 'NONE') {
-    const secondaryInsured =
-      input.secondary_employment_type === 'UOP' ||
-      input.secondary_voluntary_sickness_insured === true;
+  if (input.additional_insurance_titles?.length ||
+      (input.secondary_employment_type && input.secondary_employment_type !== 'NONE')) {
+    const secondaryInsured = input.additional_insurance_titles?.length
+      ? input.additional_insurance_titles.some((title) => title.sickness_insured === true)
+      : input.secondary_employment_type !== 'UOP' &&
+        input.secondary_voluntary_sickness_insured === true;
     warnings.push({
       code: 'MULTIPLE_INSURANCE_TITLES',
       legal_basis: KP.multipleTitles,

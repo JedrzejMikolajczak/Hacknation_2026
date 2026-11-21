@@ -6,14 +6,14 @@ import type {
   WizardScenario,
 } from '../types';
 import { addDays, addMonths, daysBetween, formatPercentPl, validateParams } from './core';
-import { resolveParentPayer } from './eligibility';
+import { resolveParentPayer, type EligibilityInput } from './eligibility';
 import { getMaternityWeeksForChildren, resolveSupplementaryMaternityLeave } from './maternity';
 
 function effectivePayerOrZus(payer: Payer | null): Payer {
   return payer ?? 'zus';
 }
 
-export type DocumentInput = WizardScenario & {
+export type DocumentInput = WizardScenario & Pick<EligibilityInput, 'unlawfulTerminationConfirmedByCourt'> & {
   maternityLeaveStartDate?: string;
   sicknessLeaveContinues?: boolean;
 };
@@ -38,29 +38,27 @@ export function getRequiredDocuments(
   const motherPayerResolved = mother ? resolveParentPayer(mother, params) : null;
   const fatherPayerResolved = father ? resolveParentPayer(father, params) : null;
 
-  const motherUnavailable = Boolean(
-    input.special.motherDeceased || input.special.motherAbandonedChild,
-  );
-  // Główny płatnik: przy upadłości/bezprawnym zwolnieniu zawsze ZUS; jeśli matka nieubezpieczona/zmarła/porzuciła, płatnik ojca
-  const motherPayer: Payer =
-    input.special.employerBankruptcyOrLiquidation ||
-    input.special.unlawfulTerminationConfirmedByCourt
-      ? 'zus'
-      : effectivePayerOrZus(motherPayerResolved);
+  const hasCourtRuling =
+    input.situation !== 'adoption' &&
+    (input.unlawfulTerminationConfirmedByCourt || input.special.unlawfulTerminationConfirmedByCourt) &&
+    mother?.insuranceTitle === 'employment' &&
+    mother.insuranceEndDate !== null &&
+    mother.insuranceEndDate < eventDate;
+
+  const motherPayer: Payer = input.special.employerBankruptcyOrLiquidation || hasCourtRuling
+    ? 'zus'
+    : effectivePayerOrZus(motherPayerResolved);
   const fatherPayer: Payer = effectivePayerOrZus(fatherPayerResolved);
   const primaryPayer: Payer =
-    motherInsured && !motherUnavailable ? motherPayer : fatherInsured ? fatherPayer : 'zus';
+    motherInsured && !input.special.motherDeceased
+      ? motherPayer
+      : fatherInsured
+        ? fatherPayer
+        : 'zus';
 
-  const hasChildLoss = input.special.stillbirth || input.special.childDeathDate !== null;
-  const aliveChildren = hasChildLoss
-    ? input.special.deceasedChildrenCount !== undefined &&
-      input.special.deceasedChildrenCount !== null
-      ? Math.max(0, input.childrenCount - input.special.deceasedChildrenCount)
-      : input.special.stillbirth
-        ? 0
-        : Math.max(0, input.childrenCount - 1)
-    : input.childrenCount;
-  const childLostAll = hasChildLoss && aliveChildren === 0;
+  const childLostAll =
+    (input.special.stillbirth || input.special.childDeathDate !== null) &&
+    (input.special.deceasedChildrenCount ?? 1) >= input.childrenCount;
 
   const maternityWeeks = getMaternityWeeksForChildren(input.childrenCount, params);
   const suppWeeks =
@@ -88,7 +86,7 @@ export function getRequiredDocuments(
   const deadlines: { label: string; date: string; legalBasis: string | null }[] = [];
 
   // 1. Dokumenty w ciąży (zasiłek chorobowy, kod „B”)
-  if (input.situation === 'pregnant' && mother && motherInsured) {
+  if (input.situation === 'pregnant' && motherInsured) {
     documents.push({
       id: 'eZlaCodeB',
       name: `Zaświadczenie lekarskie e-ZLA z kodem literowym „B” (ciąża – ${formatPercentPl(params.rates.sicknessPregnancy)})`,
@@ -181,7 +179,7 @@ export function getRequiredDocuments(
   }
 
   // 3. Wniosek matki o zasiłek / urlop macierzyński
-  if (mother && motherInsured && !motherUnavailable) {
+  if (motherInsured && !input.special.motherDeceased) {
     if (
       input.situation !== 'adoption' &&
       (input.birthDate || input.expectedBirthDate) &&
@@ -201,6 +199,7 @@ export function getRequiredDocuments(
         });
       }
     }
+
     if (motherPayer === 'employer' && mother.insuranceTitle === 'employment') {
       documents.push({
         id: 'applicationToEmployer',
@@ -262,7 +261,7 @@ export function getRequiredDocuments(
     }
   }
 
-  // 4. Upadłość / likwidacja pracodawcy lub bezprawne zwolnienie potwierdzone wyrokiem
+  // 4. Upadłość / likwidacja pracodawcy
   if (input.special.employerBankruptcyOrLiquidation) {
     documents.push({
       id: 'bankruptcyProof',
@@ -272,13 +271,14 @@ export function getRequiredDocuments(
       note: 'Wymagane do wypłaty zasiłku w wysokości zasiłku macierzyńskiego do dnia porodu przez ZUS (art. 30 ust. 3).',
     });
   }
-  if (input.special.unlawfulTerminationConfirmedByCourt) {
+
+  if (hasCourtRuling) {
     documents.push({
-      id: 'unlawfulTerminationCourtJudgment',
-      name: 'Prawomocny wyrok sądu potwierdzający niezgodne z prawem rozwiązanie umowy o pracę oraz świadectwo pracy',
+      id: 'unlawfulTerminationJudgment',
+      name: 'Prawomocne orzeczenie sądu stwierdzające rozwiązanie stosunku pracy z naruszeniem prawa',
       submitTo: 'zus',
       deadline: null,
-      note: 'Wymagane do wypłaty zasiłku w wysokości zasiłku macierzyńskiego do dnia porodu przez ZUS (art. 30 ust. 3).',
+      note: 'Udokumentuj też ustanie zatrudnienia w okresie ciąży (art. 30 ust. 1 pkt 2 ustawy zasiłkowej).',
     });
   }
 
@@ -319,16 +319,13 @@ export function getRequiredDocuments(
     fatherInsured &&
     (input.special.motherHospitalized ||
       input.special.motherIncapableOfIndependentLiving ||
-      input.special.motherDeceased ||
-      input.special.motherAbandonedChild)
+      input.special.motherDeceased)
   ) {
     const proofName = input.special.motherDeceased
       ? 'Odpis skrócony aktu zgonu matki (przejęcie urlopu przez ojca)'
-      : input.special.motherAbandonedChild
-        ? 'Oświadczenie ojca o porzuceniu dziecka przez matkę (przejęcie urlopu – KP art. 180 § 13)'
-        : input.special.motherIncapableOfIndependentLiving
-          ? 'Orzeczenie o niezdolności matki do samodzielnej egzystencji'
-          : 'Zaświadczenie ze szpitala o pobycie matki uniemożliwiającym opiekę nad dzieckiem';
+      : input.special.motherIncapableOfIndependentLiving
+        ? 'Orzeczenie o niezdolności matki do samodzielnej egzystencji'
+        : 'Zaświadczenie ze szpitala o pobycie matki uniemożliwiającym opiekę nad dzieckiem';
     documents.push({
       id: 'motherSpecialProof',
       name: proofName,
@@ -341,7 +338,7 @@ export function getRequiredDocuments(
       eventDate,
       params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate * 7,
     );
-    if (!motherUnavailable) {
+    if (!input.special.motherDeceased) {
       deadlines.push({
         label: `Wniosek ojca o przejęcie części urlopu macierzyńskiego (${params.applicationDeadlinesDays.fatherTakeoverPart} dni przed przejęciem)`,
         date: addDays(takeoverDate, -params.applicationDeadlinesDays.fatherTakeoverPart),
@@ -422,11 +419,13 @@ export function getRequiredDocuments(
 
   // 9. Główne terminy urlopów i wniosków (tylko gdy dziecko żyje)
   if (!childLostAll) {
-    deadlines.push({
-      label: `Termin na wniosek o zasiłek w wariancie ${formatPercentPl(params.rates.combined)} (${params.combinedRateApplicationDeadlineDays} dni po dniu zdarzenia)`,
-      date: combinedDeadline,
-      legalBasis: 'Ustawa zasiłkowa art. 30a ust. 1',
-    });
+    if (mother !== null || input.situation === 'adoption') {
+      deadlines.push({
+        label: `Termin na wniosek o zasiłek w wariancie ${formatPercentPl(params.rates.combined)} (${params.combinedRateApplicationDeadlineDays} dni po dniu zdarzenia)`,
+        date: combinedDeadline,
+        legalBasis: 'Ustawa zasiłkowa art. 30a ust. 1',
+      });
+    }
 
     deadlines.push({
       label: `Termin na wniosek o urlop rodzicielski w trybie standardowym (${params.applicationDeadlinesDays.parentalLeave} dni przed rozpoczęciem urlopu rodzicielskiego)`,
@@ -434,7 +433,7 @@ export function getRequiredDocuments(
       legalBasis: 'KP art. 182¹d § 1',
     });
 
-    if (mother && mother.insuranceTitle === 'selfEmployed' && motherInsured) {
+    if (motherInsured && mother.insuranceTitle === 'selfEmployed') {
       const motherParentalWeeks =
         (input.special.zaZyciemCertificate
           ? input.childrenCount === 1

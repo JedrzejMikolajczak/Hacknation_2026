@@ -424,17 +424,15 @@ describe('conditional family paths', () => {
     };
     expect(ids('pregnant', dualAnswers)).toEqual(
       expect.arrayContaining([
-        'unlawfulTerminationConfirmedByCourt',
-        'mother.hasSecondaryTitle',
-        'mother.secondaryInsuranceTitle',
-        'mother.secondarySicknessInsurance',
+        'employerBankruptcyOrLiquidation',
+        'additionalInsurance.insuranceTitle',
       ]),
     );
     const dualDraft = buildScenario('pregnant', dualAnswers);
     expect(dualDraft.special?.unlawfulTerminationConfirmedByCourt).toBe(true);
-    expect(dualDraft.mother).toMatchObject({
-      secondaryInsuranceTitle: 'selfEmployed',
-      secondarySicknessInsurance: 'voluntary',
+    expect(dualDraft.additionalInsurance).toMatchObject({
+      parent: { insuranceTitle: 'selfEmployed', sicknessInsurance: 'voluntary' },
+      sicknessInsured: true,
     });
 
     // 3. Poród mnogi z liczbą zmarłych dzieci (trojaczki, 1 zmarłe -> 2 żywe -> pytania o szpital i wariant zostają)

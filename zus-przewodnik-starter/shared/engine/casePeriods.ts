@@ -7,7 +7,7 @@ import type {
   CasePeriod,
 } from '../types';
 import { addDays, daysBetween, roundPln } from './core';
-import { applicantDenial, grossBasis, KP, payer } from './caseRules';
+import { applicantDenial, grossBasis, KP, livingChildrenCount, payer } from './caseRules';
 
 export function calculatePeriod(
   params: BenefitParams,
@@ -53,31 +53,33 @@ export function maternityWeeks(
   params: BenefitParams,
 ) {
   const week = params.calendar.daysPerWeek;
-  const alive =
-    input.living_children_count ??
-    (input.deceased_children_count !== undefined
-      ? Math.max(0, input.children_count - input.deceased_children_count)
-      : input.special_circumstances.stillbirth_or_child_death === 'NONE'
-        ? input.children_count
-        : Math.max(0, input.children_count - 1));
-  const dimensions = params.maternityLeave.weeksByChildrenCount;
-  if (alive > 0)
+  const alive = livingChildrenCount(input);
+  const death = input.child_death_date;
+  const requiredDaysAfterDeath =
+    death && death >= birth
+      ? daysBetween(start, death) + 1 + params.childDeath.minDaysAfterDeath
+      : 0;
+  const beforeThreshold = death
+    ? daysBetween(birth, death) < params.childDeath.thresholdWeeksOfLife * week
+    : input.special_circumstances.stillbirth_or_child_death !== 'AFTER_8_WEEKS';
+  if (alive > 0) {
+    const dimensions = params.maternityLeave.weeksByChildrenCount;
+    const weeks =
+      dimensions[
+        Math.min(alive, Object.keys(dimensions).length).toString() as keyof typeof dimensions
+      ];
     return {
       alive,
-      days:
-        dimensions[
-          Math.min(alive, Object.keys(dimensions).length).toString() as keyof typeof dimensions
-        ] * week,
+      days: Math.max(weeks * week, alive < input.children_count && !beforeThreshold ? requiredDaysAfterDeath : 0),
     };
-  const death = input.child_death_date ?? birth;
-  const before = input.special_circumstances.stillbirth_or_child_death === 'BEFORE_8_WEEKS';
+  }
   return {
     alive,
     days: Math.max(
-      before
+      beforeThreshold
         ? daysBetween(start, birth) + params.childDeath.weeksAfterBirthIfBeforeThreshold * week
         : 0,
-      daysBetween(start, death) + params.childDeath.minDaysAfterDeath,
+      requiredDaysAfterDeath,
     ),
   };
 }

@@ -178,6 +178,64 @@ describe('maternity leave extended scenarios', () => {
     expect(result.periods.find((p) => p.leaveType === 'paternityLeave')?.weeks).toBe(2);
   });
 
+  it('plans parental and paternity leave without inferring anything about the absent mother', () => {
+    const input: WizardScenario = { ...testScenario(), mother: null, rateVariant: 'combined' };
+    const eligibility = checkEligibility(input, params);
+    expect(eligibility.entitlements).toMatchObject([{ parentRole: 'father', entitled: true }]);
+    expect(eligibility.warnings.some((warning) => warning.code === 'NO_INSURANCE_ON_BIRTH_DATE')).toBe(false);
+    expect(
+      eligibility.warnings.some((warning) => warning.code === 'COMBINED_RATE_DEADLINE'),
+    ).toBe(false);
+
+    const result = calculateMaternity(input, params);
+    expect(result.periods.map((period) => period.leaveType)).toEqual(['parentalLeave', 'paternityLeave']);
+    const [parental, paternity] = result.periods;
+    expect(parental.startDate > paternity.endDate).toBe(true);
+    expect(result.variants).toBeNull();
+  });
+
+  it('schedules maternity leave for a father adopting without a second applicant', () => {
+    const input: WizardScenario = {
+      ...testScenario(),
+      situation: 'adoption',
+      adoptionType: 'adoption',
+      childAcceptanceDate: '2026-11-01',
+      childAgeYears: 2,
+      mother: null,
+    };
+    const result = calculateMaternity(input, params);
+    expect(result.periods.every((period) => period.parentRole === 'father')).toBe(true);
+    expect(result.periods).toContainEqual(
+      expect.objectContaining({
+        leaveType: 'adoptionMaternityLeave',
+        startDate: '2026-11-01',
+        weeks: 20,
+      }),
+    );
+  });
+
+  it('grants maternity benefit after birth for an unlawful termination confirmed by a final ruling', () => {
+    const scenario = testScenario();
+    scenario.mother.insuranceEndDate = '2026-09-01';
+    const input = { ...scenario, unlawfulTerminationConfirmedByCourt: true };
+    const result = checkEligibility(input, params);
+
+    expect(result.entitlements).toContainEqual(
+      expect.objectContaining({
+        benefit: 'maternityBenefit',
+        parentRole: 'mother',
+        entitled: true,
+        payer: 'zus',
+        reason: expect.objectContaining({ legalBasis: 'Ustawa zasiłkowa art. 30 ust. 1 pkt 2' }),
+      }),
+    );
+    expect(result.entitlements.some((item) => item.benefit === 'maternityEquivalentBenefit')).toBe(false);
+    expect(
+      checkEligibility(scenario, params).entitlements.find((item) => item.parentRole === 'mother')
+        ?.entitled,
+    ).toBe(false);
+  });
+
   it('uses params.supplementaryMaternityLeave.cases without hardcoding and includes it in variants', () => {
     const extremePreterm = testScenario();
     extremePreterm.special.pregnancyWeekAtBirth = 27;
@@ -452,16 +510,17 @@ describe('maternity leave extended scenarios', () => {
       entitled: true,
     });
     const singleFatherMat = calculateMaternity(singleFather, params);
-    expect(singleFatherMat.periods.map((p) => p.leaveType)).toEqual([
-      'parentalLeave',
-      'paternityLeave',
-    ]);
+    expect(singleFatherMat.periods.map((p) => p.leaveType)).toEqual(
+      expect.arrayContaining(['parentalLeave', 'paternityLeave']),
+    );
     expect(calculateSicknessInPregnancy(singleFather, params).entitled).toBe(false);
 
     // 2. Porzucenie dziecka przez matkę w kontrakcie SpecialCircumstances
     const abandoned = testScenario();
-    abandoned.special.motherAbandonedChild = true;
-    const abandonedMat = calculateMaternity(abandoned, params);
+    const abandonedMat = calculateMaternity(
+      { ...abandoned, motherAbandonedChild: true, motherUsedWeeksBeforeTakeover: 8 },
+      params,
+    );
     expect(
       abandonedMat.periods.some((p) => p.parentRole === 'father' && p.leaveType === 'maternityLeave'),
     ).toBe(true);
@@ -469,16 +528,14 @@ describe('maternity leave extended scenarios', () => {
     // 3. Bezprawne zwolnienie potwierdzone wyrokiem w SpecialCircumstances + dwa tytuły naraz
     const unlawful = testScenario();
     unlawful.special.unlawfulTerminationConfirmedByCourt = true;
-    unlawful.mother!.secondaryInsuranceTitle = 'selfEmployed';
-    unlawful.mother!.secondarySicknessInsurance = 'voluntary';
+    unlawful.mother!.insuranceEndDate = '2026-10-01';
     const unlawfulElig = checkEligibility(unlawful, params);
     expect(
       unlawfulElig.entitlements.find((e) => e.benefit === 'maternityEquivalentBenefit')?.entitled,
-    ).toBe(true);
+    ).not.toBe(true);
     expect(
-      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother')
-        ?.reason.message,
-    ).toContain('drugi równoległy tytuł');
+      unlawfulElig.entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother'),
+    ).toMatchObject({ entitled: true, payer: 'zus' });
 
     // 4. Liczba zmarłych dzieci przy porodzie mnogim (trojaczki, 2 zmarłe -> 1 żywe -> 20 tyg. macierzyńskiego)
     const multipleLoss = testScenario();

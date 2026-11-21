@@ -65,15 +65,10 @@ function QuestionField({
       if (!multiple) return onChange(option);
       if (selected.includes(option))
         return onChange(selected.filter((item) => item !== option).join(','));
-      if (option === 'none' || option === 'deceased' || option === 'abandoned')
-        return onChange(option);
+      const exclusiveOptions = ['none', 'deceased', 'abandoned'];
+      if (exclusiveOptions.includes(option)) return onChange(option);
       onChange(
-        [
-          ...selected.filter(
-            (item) => item !== 'none' && item !== 'deceased' && item !== 'abandoned',
-          ),
-          option,
-        ].join(','),
+        [...selected.filter((item) => !exclusiveOptions.includes(item)), option].join(','),
       );
     }
     return (

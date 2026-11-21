@@ -1,6 +1,6 @@
 import type { ApplicantRole, BenefitParams, CaseDocument, CaseInputs, CasePeriod } from '../types';
 import { addDays } from './core';
-import { insured, KP, payer } from './caseRules';
+import { hasChildLoss, insured, KP, livingChildrenCount, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
 
 export function documentsForPlan(
   input: CaseInputs,
@@ -32,18 +32,10 @@ export function documentsForPlan(
     });
   }
   const notice = params.applicationDeadlinesDays;
-  const hasChildLoss = input.special_circumstances.stillbirth_or_child_death !== 'NONE';
-  const living =
-    input.living_children_count ??
-    (input.deceased_children_count !== undefined
-      ? Math.max(0, input.children_count - input.deceased_children_count)
-      : hasChildLoss
-        ? Math.max(0, input.children_count - 1)
-        : input.children_count);
-  const isChildDeathAfterBirth = Boolean(
-    hasChildLoss && input.child_death_date && (!event || input.child_death_date !== event),
-  );
-  const isStillbirth = hasChildLoss && !isChildDeathAfterBirth;
+  const childLoss = hasChildLoss(input);
+  const living = livingChildrenCount(input);
+  const isChildDeathAfterBirth = childLoss && Boolean(input.child_death_date);
+  const isStillbirth = childLoss && !isChildDeathAfterBirth;
 
   for (const role of ['MOTHER', 'FATHER'] as const) {
     const rolePeriods = periods.filter((period) => !period.denied && period.parent_role === role);
@@ -58,12 +50,15 @@ export function documentsForPlan(
 
     const employee = person?.employment_type === 'UOP';
     const mandate = person?.employment_type === 'ZLECENIE';
-    const personPayer = person ? payer(person) : null;
+    const courtMaternity =
+      role === input.applicant_role && event !== null &&
+      qualifiesAfterUnlawfulTermination(input, event, params);
+    const personPayer = courtMaternity ? 'ZUS' : person ? payer(person) : null;
     // Pracownik (UoP) składa wnioski u pracodawcy (który wypłaca przy > 20 albo przekazuje Z-3 do ZUS).
     // Zleceniobiorca składa ZAM u uprawnionego płatnika (> 20) albo w ZUS (≤ 20 + Z-3a od zleceniodawcy).
     // JDG zawsze składa dokumenty bezpośrednio do ZUS. Gdy brak danych o wielkości płatnika → null.
     const destination: CaseDocument['submit_to'] =
-      personPayer === null ? null : employee ? 'EMPLOYER' : personPayer;
+      employee && !courtMaternity && personPayer !== null ? 'EMPLOYER' : personPayer;
     const mandateEntitledPayer = mandate && personPayer === 'EMPLOYER';
 
     const maternity = rolePeriods.find(
@@ -90,8 +85,26 @@ export function documentsForPlan(
           : 'ZAM – wniosek o zasiłek macierzyński',
         role,
         destination,
-        KP.qualification,
+        courtMaternity ? KP.unlawfulTermination : KP.qualification,
       );
+      if (courtMaternity) {
+        add(
+          'COURT_RULING_UNLAWFUL_TERMINATION',
+          'Prawomocne orzeczenie sądu potwierdzające rozwiązanie stosunku pracy z naruszeniem prawa',
+          role,
+          'ZUS',
+          KP.unlawfulTermination,
+          maternity,
+        );
+        add(
+          'PREGNANCY_DURING_EMPLOYMENT_CERTIFICATE',
+          'Zaświadczenie lekarskie potwierdzające ciążę w okresie zatrudnienia',
+          role,
+          'ZUS',
+          KP.unlawfulTermination,
+          maternity,
+        );
+      }
       if (input.stage === 'ADOPTION') {
         add(
           'ADOPTION_ORDER',
@@ -134,7 +147,7 @@ export function documentsForPlan(
           'USC_COPY',
           isStillbirth && living === 0
             ? 'Wniosek do USC o wydanie skróconego odpisu aktu urodzenia z adnotacją o martwym urodzeniu'
-            : hasChildLoss
+             : childLoss
               ? 'Wniosek do USC o wydanie odpisów aktów stanu cywilnego'
               : 'Wniosek do USC o wydanie odpisu aktu urodzenia',
           role,
@@ -206,7 +219,6 @@ export function documentsForPlan(
       role === input.applicant_role &&
       event &&
       !input.special_circumstances.mother_deceased &&
-      !input.special_circumstances.mother_abandoned_child &&
       input.requested_payment_variant === 'COMBINED_81_5'
     ) {
       add(
@@ -245,53 +257,45 @@ export function documentsForPlan(
         KP.maternity,
         { ...maternity, end_date: addDays(event, -1) },
       );
+    const abandonment = Boolean(input.mother_abandonment_date);
     if (
       maternity &&
       role === 'FATHER' &&
-      (input.father_takeover_date ||
-        input.special_circumstances.mother_deceased ||
-        input.special_circumstances.mother_abandoned_child)
-    )
+      (input.father_takeover_date || input.special_circumstances.mother_deceased || abandonment)
+    ) {
       add(
         'TAKEOVER',
         'Wniosek ojca o przejęcie macierzyńskiego',
         role,
         destination,
-        input.special_circumstances.mother_abandoned_child ? KP.abandonment : KP.maternity,
+        abandonment ? KP.abandonment : KP.maternity,
         maternity,
-        input.special_circumstances.mother_deceased ||
-          input.special_circumstances.mother_abandoned_child ||
+        abandonment ||
+          input.special_circumstances.mother_deceased ||
           input.special_circumstances.mother_hospitalized_or_incapable
           ? null
           : addDays(maternity.start_date, -notice.fatherTakeoverPart),
       );
-    if (
-      role === 'MOTHER' &&
-      input.special_circumstances.unlawful_termination_confirmed_by_court &&
-      person?.employment_type === 'UOP'
-    ) {
-      add(
-        'COURT_JUDGMENT',
-        'Prawomocny wyrok sądu potwierdzający niezgodne z prawem rozwiązanie umowy o pracę oraz świadectwo pracy',
-        role,
-        'ZUS',
-        KP.maternityEquivalent,
-      );
-    }
-    if (
-      role === input.applicant_role &&
-      input.secondary_employment_type &&
-      input.secondary_employment_type !== 'NONE' &&
-      (input.secondary_employment_type === 'UOP' ||
-        input.secondary_voluntary_sickness_insured === true)
-    ) {
-      add(
-        'SECONDARY_TITLE_ZAM',
-        'Odrębny wniosek o zasiłek z drugiego tytułu ubezpieczenia (ZUS ZAM / płatnik drugiego tytułu)',
-        role,
-        input.secondary_employment_type === 'UOP' ? 'EMPLOYER' : 'ZUS',
-        KP.multipleTitles,
-      );
+      if (abandonment) {
+        add(
+          'ABANDONMENT_STATEMENT',
+          'Oświadczenie ojca o dacie porzucenia dziecka przez matkę',
+          role,
+          destination,
+          KP.abandonment,
+          maternity,
+        );
+        if (input.mother_was_insured_at_abandonment) {
+          add(
+            'MOTHER_MATERNITY_PERIOD_CERTIFICATE',
+            'Zaświadczenie płatnika o okresie pobierania zasiłku macierzyńskiego przez matkę',
+            role,
+            destination,
+            KP.abandonment,
+            maternity,
+          );
+        }
+      }
     }
     for (const part of parental) {
       add(

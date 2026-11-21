@@ -14,7 +14,7 @@ import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
 import { SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { parentLabels, roles } from '../caseLabels';
-import { addDaysIso, diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
+import { addDaysIso, diffDaysIso, formatPolishDate, livingChildren, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
 import { leaveApplication } from './leaveApplication';
 import './DocumentsTab.css';
@@ -1024,9 +1024,7 @@ function inferMaternityDatesForZam(
   }
 
   const childLoss = input.special_circumstances.stillbirth_or_child_death;
-  const living =
-    input.living_children_count ??
-    (childLoss !== 'NONE' && input.children_count <= 1 ? 0 : input.children_count);
+  const living = livingChildren(input);
   const daysPerWeek = params.calendar.daysPerWeek;
   if (childLoss === 'BEFORE_8_WEEKS' && living <= 0) {
     const days = params.childDeath.weeksAfterBirthIfBeforeThreshold * daysPerWeek;
@@ -1070,10 +1068,7 @@ function buildApplications(
   parentalSorted.forEach((doc, idx) => parentalIndexMap.set(doc, idx + 1));
 
   const childLoss = input?.special_circumstances.stillbirth_or_child_death ?? 'NONE';
-  const living = input
-    ? (input.living_children_count ??
-      (childLoss !== 'NONE' && input.children_count <= 1 ? 0 : input.children_count))
-    : null;
+  const living = input ? livingChildren(input) : null;
   const stillbirthAllLost = Boolean(
     input &&
     childLoss !== 'NONE' &&
