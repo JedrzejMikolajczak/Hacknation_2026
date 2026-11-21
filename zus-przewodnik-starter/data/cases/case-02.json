@@ -1,0 +1,96 @@
+{
+  "case_id": "case-02",
+  "short_title": "Zasiłek macierzyński 81,5% za urlop macierzyński (31 tyg.) i rodzicielski przy porodzie trojaczków (1 dziecko martwourodzone, 1 z zaświadczeniem 'Za życiem') łączony w całości z pracą na 1/2 etatu.",
+  "scenario_category": "SYTUACJA_SZCZEGOLNA",
+  "inputs": {
+    "applicant_role": "MOTHER",
+    "stage": "POST_BIRTH",
+    "co_parenting": true,
+    "other_parent_insured": null,
+    "employment_type": "UOP",
+    "contract_type": "INDEFINITE",
+    "contract_end_date": null,
+    "payer_insured_count_nov_30": "<= 20",
+    "voluntary_sickness_insured": false,
+    "insurance_duration_days": null,
+    "has_b2b_arrears": false,
+    "applicant_age_50_plus": false,
+    "benefit_base_amount_pln": null,
+    "due_or_birth_date": "2024-05-13",
+    "application_date": "2024-05-28",
+    "days_from_birth_to_application": 15,
+    "children_count": 3,
+    "requested_payment_variant": "COMBINED_81_5",
+    "father_parental_weeks": 0,
+    "part_time_work_fraction": 0.5,
+    "special_circumstances": {
+      "has_code_b_on_ezla": null,
+      "premature_or_hospitalized_newborn": false,
+      "za_zyciem_certificate": true,
+      "stillbirth_or_child_death": "BEFORE_8_WEEKS",
+      "mother_hospitalized_or_incapable": false,
+      "employer_bankruptcy_or_liquidation": false,
+      "adopted_or_foster_child_age_years": null,
+      "is_professional_foster_family": false
+    },
+    "living_children_count": 2
+  },
+  "ground_truth_outcome": {
+    "is_qualified": true,
+    "decision_summary_pl": "Przyznano zasiłek macierzyński w stawce 81,5% za okres urlopu macierzyńskiego od 13.05.2024 do 15.12.2024 (31 tygodni / 217 dni) oraz za okres urlopu rodzicielskiego wydłużonego na podstawie ustawy 'Za życiem' (56 tygodni / 392 dni: 16.12.2024–11.01.2026) i proporcjonalnie wydłużonego o kolejne 56 tygodni (392 dni: 12.01.2026–07.02.2027) w związku z łączeniem całego urlopu oraz jego części wydłużonej z pracą na 1/2 etatu.",
+    "denial_or_reduction_reason_pl": "Wymiar urlopu macierzyńskiego ustalono na 31 tygodni (zamiast 33 tygodni dla trojaczków) z powodu martwego urodzenia jednego z trojga dzieci (art. 180(1) § 1-2 k.p.). Wysokość zasiłku w okresie urlopu rodzicielskiego (16.12.2024–07.02.2027) jest proporcjonalnie pomniejszona o połowę z uwagi na wykonywanie pracy na 1/2 etatu.",
+    "who_pays": "ZUS",
+    "granted_rate_percent": 81.5,
+    "granted_duration_days": 1001,
+    "granted_duration_weeks": 143,
+    "calculated_amount_pln": null,
+    "mapped_forms_2026": [
+      "ZAM",
+      "Z-3"
+    ],
+    "legal_basis_cited": [
+      "art. 180 § 1 pkt 2 Kodeksu pracy",
+      "art. 180(1) § 1-2 Kodeksu pracy",
+      "art. 182(1a) Kodeksu pracy",
+      "art. 182(1f) Kodeksu pracy",
+      "art. 4 ust. 3 ustawy z dnia 4 listopada 2016 r. o wsparciu kobiet w ciąży i rodzin 'Za życiem'",
+      "art. 63 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa"
+    ],
+    "periods": [
+      {
+        "leave_type": "MATERNITY",
+        "parent_role": "MOTHER",
+        "start_date": "2024-05-13",
+        "end_date": "2024-12-15",
+        "days": 217,
+        "weeks": 31.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2024-12-16",
+        "end_date": "2026-01-11",
+        "days": 392,
+        "weeks": 56.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0.5
+      },
+      {
+        "leave_type": "PARENTAL_WORK_EXTENSION",
+        "parent_role": "MOTHER",
+        "start_date": "2026-01-12",
+        "end_date": "2027-02-07",
+        "days": 392,
+        "weeks": 56.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0.5
+      }
+    ]
+  },
+  "edge_case_notes": "Potrójny zbieg reguł szczególnych: (1) Poród trojaczy z jednym dzieckiem martwourodzonym – urlop macierzyński wynosi 31 tygodni (jak dla dwojga żywych dzieci, a nie 33 tygodnie). (2) Zaświadczenie 'Za życiem' wydane dla jednego z żywych dzieci wydłuża urlop rodzicielski matki o 24 tygodnie do 56 tygodni (392 dni). (3) Łączenie całego urlopu rodzicielskiego z pracą w wymiarze 1/2 etatu wraz z deklaracją wykonywania pracy na 1/2 etatu również w części powstałej z proporcjonalnego wydłużenia podwaja okres urlopu rodzicielskiego z 56 tygodni (392 dni) do 112 tygodni (784 dni: 16.12.2024–07.02.2027), przy proporcjonalnym obniżeniu zasiłku o połowę. Wniosek ZAM złożony 15 dni po porodzie (28.05.2024) zagwarantował stawkę 81,5%. Stary druk ZUR (z 19.11.2024) po 24.10.2026 r. zastąpiony przez ZAM."
+}

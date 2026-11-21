@@ -9,11 +9,13 @@
     "parental": 0.7,
     "combined": 0.815,
     "sicknessPregnancy": 1.0,
+    "sicknessStandard": 0.8,
     "secondParentNonTransferableInCombined": 0.7
   },
   "maternityLeave": {
     "weeksByChildrenCount": { "1": 20, "2": 31, "3": 33, "4": 35, "5": 37 },
     "maxWeeksBeforeBirth": 6,
+    "contractProtectionWeeksFrom": 12,
     "motherMandatoryWeeksAfterBirth": 14,
     "motherMandatoryWeeksWithIncapacityCertificate": 8
   },
@@ -44,6 +46,7 @@
   },
   "supplementaryMaternityLeave": {
     "transitionalEffectiveDate": "2025-03-19",
+    "termQualificationLastDay": 28,
     "cases": [
       { "id": 1, "description": "Urodzenie przed 28. tygodniem ciąży", "maxPregnancyWeekExclusive": 28, "minPregnancyWeek": null, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
       { "id": 2, "description": "Masa urodzeniowa do 1000 g", "maxPregnancyWeekExclusive": null, "minPregnancyWeek": null, "maxBirthWeightGrams": 1000, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },

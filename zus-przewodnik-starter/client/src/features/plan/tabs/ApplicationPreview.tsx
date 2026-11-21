@@ -29,7 +29,7 @@ export function ApplicationPreview({ title, recipient, fields, onClose }: Applic
     >
       <header>
         <p className="application-preview__notice">
-          Podgląd demonstracyjny · wzór do celów informacyjnych
+          DANE PRZYKŁADOWE · Podgląd demonstracyjny
         </p>
         <h2 id={headingId}>{title}</h2>
         <p>Adresat: {recipient}</p>

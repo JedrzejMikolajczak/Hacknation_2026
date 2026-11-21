@@ -952,7 +952,7 @@ export function AdminPage() {
                                 );
                                 setDraft({
                                   ...draft,
-                                  supplementaryMaternityLeave: { cases: nextCases },
+                                  supplementaryMaternityLeave: { ...draft.supplementaryMaternityLeave, cases: nextCases },
                                 });
                               }}
                             />

@@ -1,656 +1,76 @@
-import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
-import { App } from '../../../app/App';
-import { ScenarioProvider, type ScenarioDraft } from '../../../app/ScenarioContext';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { calculateCasePlan } from '@shared/engine/casePlan';
+import params from '@shared/params.json';
+import type { CaseInputs, CaseRecord } from '@shared/types';
+import data from '../../../../../data/cases/case-04.json';
+import { ScenarioProvider } from '../../../app/ScenarioContext';
+import { PlanPage } from '../PlanPage';
 
-function LocationSpy() {
-  const loc = useLocation();
-  return <div data-testid="loc">{`${loc.pathname}${loc.search}`}</div>;
+const fixture = data as CaseRecord;
+const api = vi.fn(async (url: string, request?: RequestInit) => {
+  const result = url.endsWith('/params') ? params : url.endsWith('/case-04') ? fixture :
+    calculateCasePlan(JSON.parse(String(request?.body)) as CaseInputs, params);
+  return new Response(JSON.stringify({ data: result, error: null }), { status: 200 });
+});
+const tabs = ['Uprawnienia', 'Kalkulator', 'Plan urlopów', 'Dokumenty i terminy', 'Wnioski', 'Wsparcie'];
+
+function openPlan(tab = 'entitlements') {
+  render(<MemoryRouter initialEntries={[`/plan/${tab}?case=case-04`]}><ScenarioProvider>
+    <Routes><Route path="/plan/:tab" element={<PlanPage />} /></Routes>
+  </ScenarioProvider></MemoryRouter>);
 }
 
-function renderPlan(initialEntry = '/plan', initialScenario?: ScenarioDraft) {
-  const user = userEvent.setup();
-  render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <ScenarioProvider initialScenario={initialScenario}>
-        <App />
-        <LocationSpy />
-      </ScenarioProvider>
-    </MemoryRouter>,
-  );
-  return { user };
+function tabLink(title: string) {
+  return within(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).getByRole('link', { name: title });
 }
 
-describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreatora i stany braków', () => {
-  it('na /plan pokazuje wskazówkę kolejności, wyróżniony pierwszy kafelek i 6 sekcji z zachowaniem scenariusza', () => {
-    renderPlan('/plan?zatrudnienie=uop&dzieci=2&porod=2026-11-10');
-
-    expect(screen.getByTestId('loc')).toHaveTextContent(
-      '/plan?zatrudnienie=uop&dzieci=2&porod=2026-11-10',
-    );
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'Czym chcesz się teraz zająć?' }),
-    ).toBeInTheDocument();
-    const hub = within(screen.getByRole('region', { name: 'Czym chcesz się teraz zająć?' }));
-    expect(hub.getByText(/Od czego zacząć\?/i)).toBeInTheDocument();
-    const tiles = hub.getAllByRole('link');
-    expect(tiles).toHaveLength(6);
-    expect(tiles[0]).toHaveClass('plan-hub__tile--recommended');
-    expect(within(tiles[0]).getByText('Zacznij tutaj')).toBeInTheDocument();
-    const expected: [string, string][] = [
-      ['Uprawnienia', 'entitlements'],
-      ['Kalkulator', 'calculator'],
-      ['Plan urlopów', 'leave-plan'],
-      ['Dokumenty i terminy', 'documents'],
-      ['Wnioski', 'applications'],
-      ['Wsparcie', 'support'],
-    ];
-    expected.forEach(([label, id], index) => {
-      expect(tiles[index]).toHaveTextContent(label);
-      expect(tiles[index]).toHaveAttribute(
-        'href',
-        `/plan/${id}?zatrudnienie=uop&dzieci=2&porod=2026-11-10`,
-      );
-    });
-    expect(
-      screen.queryByRole('navigation', { name: 'Zakładki Twojego planu' }),
-    ).not.toBeInTheDocument();
+describe('Twój plan', () => {
+  beforeEach(() => {
+    api.mockClear();
+    vi.stubGlobal('fetch', api);
   });
 
-  it('nieznana sekcja wraca do kafelków, a okruszki pozwalają wrócić do listy sekcji i do kreatora', async () => {
-    const { user } = renderPlan('/plan/nie-ma-takiej?dzieci=1&porod=2026-11-10&zatrudnienie=uop');
-    expect(screen.getByTestId('loc')).toHaveTextContent(
-      '/plan?dzieci=1&porod=2026-11-10&zatrudnienie=uop',
-    );
-
-    await user.click(screen.getByRole('link', { name: /^Kalkulator/ }));
-    expect(screen.getByTestId('loc')).toHaveTextContent('/plan/calculator');
-    expect(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).toBeInTheDocument();
-
-    const breadcrumb = within(screen.getByRole('navigation', { name: 'Ścieżka nawigacji' }));
-    expect(breadcrumb.getByText('Kalkulator')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Zmień odpowiedzi' })).toHaveAttribute(
-      'href',
-      '/wizard?situation=afterBirth',
-    );
-
-    await user.click(breadcrumb.getByRole('link', { name: '← Twój plan' }));
-    expect(screen.getByTestId('loc')).toHaveTextContent(/^\/plan\?/);
-  });
-
-  it('na stronie sekcji pokazuje zwinięte podsumowanie danych, a po rozwinięciu przelicza, aktualizuje URL i kopiuje link', async () => {
-    const { user } = renderPlan(
-      '/plan/calculator?zatrudnienie=uop&dzieci=1&porod=2026-11-10&podstawa=6000&wariant=combined',
-    );
-
-    const summaryRegion = within(screen.getByRole('region', { name: 'Twoje dane planu' }));
-    expect(
-      summaryRegion.getByText(/Urodziło się dziecko · umowa o pracę · 1 dziecko · 81,5%/i),
-    ).toBeInTheDocument();
-
-    const toggle = summaryRegion.getByRole('button', { name: 'Zmień dane' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(
-      summaryRegion.queryByRole('button', { name: /Kopiuj link do planu/i }),
-    ).not.toBeInTheDocument();
-
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-
-    await user.selectOptions(summaryRegion.getByLabelText('Liczba dzieci'), '2');
-    expect(screen.getByTestId('loc')).toHaveTextContent('dzieci=2');
-    expect(
-      summaryRegion.getByText(/Urodziło się dziecko · umowa o pracę · 2 dzieci · 81,5%/i),
-    ).toBeInTheDocument();
-
-    await user.click(summaryRegion.getByRole('button', { name: 'Kopiuj link do planu' }));
-    expect(
-      summaryRegion.getByRole('button', { name: /Skopiowano link do planu/i }),
-    ).toBeInTheDocument();
-  });
-
-  it('w pustym stanie nie zmyśla formy zatrudnienia w pasku podsumowania danych', () => {
-    renderPlan('/plan/calculator');
-    const summaryRegion = within(screen.getByRole('region', { name: 'Twoje dane planu' }));
-    expect(
-      summaryRegion.getByText(
-        /Urodziło się dziecko · brak danych o ubezpieczeniu · 1 dziecko · 81,5%/i,
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('pokazuje wyraźny stan "Uzupełnij dane" z linkiem do kreatora zamiast zmyślonych domyślnych', () => {
-    renderPlan('/plan/calculator');
-
-    const heading = screen.getByRole('heading', {
-      level: 2,
-      name: /Uzupełnij dane, aby wyliczyć zasiłek/i,
-    });
-    expect(heading).toBeInTheDocument();
-    const missingBox = heading.closest('.plan-missing-data') as HTMLElement;
-    expect(within(missingBox).getByText(/Data porodu/i)).toBeInTheDocument();
-    expect(
-      within(missingBox).getByText(/Forma zatrudnienia \/ tytuł ubezpieczenia matki/i),
-    ).toBeInTheDocument();
-    const wizardLink = within(missingBox).getByRole('link', { name: /Uzupełnij dane/i });
-    expect(wizardLink).toHaveAttribute('href', '/wizard?situation=afterBirth');
-    expect(
-      screen.getByText(/tryb demonstracyjny – obliczenia w przeglądarce/i),
-    ).toBeInTheDocument();
-  });
-
-  it('kafelek Uprawnienia otwiera odpowiedź najpierw, ostrzeżenia dla JDG z zadłużeniem i link Dalej: Kalkulator', async () => {
-    const { user } = renderPlan('/plan?zatrudnienie=jdg&zadluzenie=500&dzieci=1&porod=2026-11-10');
-
-    await user.click(screen.getByRole('link', { name: /^Uprawnienia/ }));
-    expect(screen.getByTestId('loc')).toHaveTextContent('/plan/entitlements');
-    expect(
-      screen.getByRole('heading', { level: 1, name: /Twój plan zasiłkowy i urlopowy/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Twoje uprawnienia/i }),
-    ).toBeInTheDocument();
-
-    expect(screen.getByText(/Zadłużenie składkowe \(JDG\)/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Nie przysługuje/i).length).toBeGreaterThanOrEqual(1);
-    const nextLink = screen.getByRole('link', { name: /Dalej: Kalkulator/i });
-    expect(nextLink).toHaveAttribute('href', expect.stringContaining('/plan/calculator'));
-  });
-
-  it('Uprawnienia pokazują w bloku odpowiedzi status i płatnika dla obojga rodziców', () => {
-    const bothDraft: ScenarioDraft = {
-      situation: 'afterBirth',
-      referenceDate: '2026-11-21',
-      birthDate: '2026-11-10',
-      childrenCount: 1,
-      rateVariant: 'combined',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2020-01-01',
-        benefitBase: 6903.2,
-        employerInsuredCount: 150,
-        wantsLeave: true,
-      },
-      father: {
-        role: 'father',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2019-01-01',
-        benefitBase: 5000,
-        employerInsuredCount: 10,
-        wantsLeave: true,
-      },
-      special: {},
-    };
-
-    renderPlan('/plan/entitlements', bothDraft);
-
-    const answerRegion = screen.getByRole('heading', {
-      level: 2,
-      name: /Twoje uprawnienia/i,
-    }).parentElement as HTMLElement;
-    expect(
-      within(answerRegion).getByText(/Przysługuje zasiłek macierzyński – wypłaca pracodawca\./i),
-    ).toBeInTheDocument();
-    expect(
-      within(answerRegion).getByText(/Przysługuje zasiłek macierzyński – wypłaca ZUS\./i),
-    ).toBeInTheDocument();
-  });
-
-  it('przelicza kalkulator na żywo po zmianie wariantu (81,5% vs 100%+70%) i liczby dzieci oraz aktualizuje URL', async () => {
-    const { user } = renderPlan(
-      '/plan/calculator?zatrudnienie=uop&dzieci=1&porod=2026-11-10&podstawa=6000&wariant=combined',
-    );
-
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Twój szacowany zasiłek/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Otrzymasz ok\..+miesięcznie przez 52 tygodnie/i)).toBeInTheDocument();
-    expect(screen.getByText(/Wariant 100% \+ 70%: łącznie/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Dalej: Plan urlopów/i })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/plan/leave-plan'),
-    );
-
-    await user.click(screen.getByRole('button', { name: /100% \+ 70%/i }));
-    expect(screen.getByTestId('loc')).toHaveTextContent('wariant=standard');
-    expect(screen.getByText(/Wariant 81,5%: łącznie/i)).toBeInTheDocument();
-
-    await user.selectOptions(screen.getByLabelText(/Liczba dzieci w kalkulatorze/i), '2');
-    expect(screen.getByTestId('loc')).toHaveTextContent('dzieci=2');
-    await user.click(screen.getByText(/Zobacz okresy i kwoty/i));
-    expect(await screen.findByText(/31 tyg\./i)).toBeInTheDocument();
-  });
-
-  it('automatycznie liczy podstawę z benefitBaseInputs i ciągłość ze zwolnieniem w ciąży (art. 43)', async () => {
-    const draft: ScenarioDraft = {
-      situation: 'pregnant',
-      referenceDate: '2026-11-21',
-      expectedBirthDate: '2027-03-10',
-      birthDate: null,
-      childrenCount: 1,
-      rateVariant: 'combined',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2026-09-01',
-        insuranceEndDate: null,
-        benefitBase: null,
-        employerInsuredCount: 30,
-        age: 31,
-        contributionDebt: null,
-        wantsLeave: true,
-      },
-      father: null,
-      special: { zaZyciemCertificate: false },
-      pregnancySickLeave: {
-        startDate: '2026-11-01',
-        endDate: '2027-03-09',
-        untilBirth: true,
-      },
-      sicknessBenefitBaseInput: {
-        insuranceTitle: 'employment',
-        rightArisesOn: '2026-11-01',
-        incomes: [
-          { month: '2026-09', grossAmount: 6000, workedDays: null, requiredWorkingDays: null },
-          { month: '2026-10', grossAmount: 6000, workedDays: null, requiredWorkingDays: null },
-        ],
-        contractMonthlySalary: 6000,
-        declaredContributionBase: null,
-        previousBenefitEndDate: null,
-        previousBenefitBase: null,
-      },
-      benefitBaseInputs: {
-        mother: {
-          insuranceTitle: 'employment',
-          rightArisesOn: '2027-03-10',
-          incomes: [],
-          contractMonthlySalary: 6000,
-          declaredContributionBase: null,
-          previousBenefitEndDate: '2027-03-09',
-          previousBenefitBase: null,
-        },
-      },
-    };
-
-    const { user } = renderPlan('/plan/calculator', draft);
-
-    // Podstawa 6000 * (1 - 0.1371) = 5177,40 zł przeniesiona przez ciągłość art. 43
-    expect(await screen.findByText(/Podstawę wyliczono z podanych zarobków/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/5\s?177,40\s?zł/i).length).toBeGreaterThanOrEqual(1);
-    await user.click(screen.getByText(/Zobacz szczegóły podstawy/i));
-    expect(screen.getByText(/Ustawa zasiłkowa art\. 43/i)).toBeInTheDocument();
-  });
-
-  it('obsługuje scenariusze szczególne z kreatora: hospitalizacja matki z ojcem, strata dziecka i rodzina zastępcza', async () => {
-    // 1. Hospitalizacja matki + ojciec w planie (bez błędu 422)
-    const hospDraft: ScenarioDraft = {
-      situation: 'afterBirth',
-      referenceDate: '2026-11-21',
-      birthDate: '2026-11-01',
-      childrenCount: 1,
-      rateVariant: 'standard',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2024-05-01',
-        benefitBase: 6000,
-        employerInsuredCount: 25,
-        wantsLeave: true,
-      },
-      father: {
-        role: 'father',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2024-05-01',
-        benefitBase: 7000,
-        employerInsuredCount: 15,
-        wantsLeave: true,
-      },
-      special: { motherHospitalized: true },
-    };
-
-    const { unmount } = render(
-      <MemoryRouter initialEntries={['/plan/calculator']}>
-        <ScenarioProvider initialScenario={hospDraft}>
-          <App />
-        </ScenarioProvider>
-      </MemoryRouter>,
-    );
-    expect(await screen.findByText(/pobyt matki w szpitalu/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Ojciec \/ drugi rodzic/i).length).toBeGreaterThanOrEqual(1);
-    unmount();
-
-    // 2. Rodzina zastępcza z odroczeniem obowiązku szkolnego (dziecko 8 lat < 10)
-    const fosterDraft: ScenarioDraft = {
-      situation: 'adoption',
-      referenceDate: '2026-11-21',
-      adoptionType: 'fosterFamily',
-      childAcceptanceDate: '2026-11-10',
-      childAgeYears: 8,
-      schoolObligationDeferred: true,
-      childrenCount: 1,
-      rateVariant: 'standard',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2024-01-01',
-        benefitBase: 5500,
-        employerInsuredCount: 30,
-        wantsLeave: true,
-      },
-      father: null,
-      special: {},
-    };
-
-    render(
-      <MemoryRouter initialEntries={['/plan/calculator']}>
-        <ScenarioProvider initialScenario={fosterDraft}>
-          <App />
-        </ScenarioProvider>
-      </MemoryRouter>,
-    );
-    expect(await screen.findByText(/Urlop na warunkach macierzyńskiego/i)).toBeInTheDocument();
-    expect(screen.getByText(/nieprzenoszalną część drugiego rodzica/i)).toBeInTheDocument();
-  });
-
-  it('wyświetla kluczową odpowiedź, oś czasu, zwinięty kalendarz i liczy łączenie urlopu z pracą', async () => {
-    const { user } = renderPlan(
-      '/plan/leave-plan?zatrudnienie=uop&dzieci=1&porod=2026-11-10&podstawa=6000&ojciec=1&podstawaOjca=7500',
-    );
-
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Plan urlopów w skrócie/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText(/Oś czasu urlopów matki/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Oś czasu urlopów drugiego rodzica/i)).toBeInTheDocument();
-
-    expect(await screen.findByText(/Podział zgodny z Kodeksem pracy/i)).toBeInTheDocument();
-    expect(
-      screen.getByText('Pokaż kalendarz dzień po dniu').closest('details'),
-    ).not.toHaveAttribute('open');
-
-    // Rozwiń ręczne układanie i włącz łączenie z pracą na 1/4 etatu dla pierwszej części urlopu rodzicielskiego (32 tyg. → +8 tyg.)
-    await user.click(screen.getByText('Ułóż ręcznie / połącz z pracą'));
-    const workSelects = screen.getAllByLabelText(/Praca w trakcie urlopu:/i);
-    await user.selectOptions(workSelects[0], '0.25');
-    expect(await screen.findByText(/Wydłużenie urlopu rodzicielskiego:/i)).toBeInTheDocument();
-    expect((await screen.findAllByText(/\+8 tyg\./i)).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Powrót do pracy po tej części:/i)).toBeInTheDocument();
-  });
-
-  it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy, pokazuje płatnika dla rodziców, pasek postępu, założenia planu i link dalej', async () => {
-    window.localStorage.clear();
-    const bothParentsDraft: ScenarioDraft = {
-      situation: 'afterBirth',
-      referenceDate: '2026-11-21',
-      birthDate: '2026-11-10',
-      childrenCount: 1,
-      rateVariant: 'combined',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2020-01-01',
-        benefitBase: 6903.2,
-        employerInsuredCount: 150,
-        wantsLeave: true,
-      },
-      father: {
-        role: 'father',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2019-01-01',
-        benefitBase: 5000,
-        employerInsuredCount: 10,
-        wantsLeave: true,
-      },
-      special: {},
-    };
-
-    const { user } = renderPlan('/plan/documents?situation=afterBirth', bothParentsDraft);
-
-    expect(screen.getByRole('heading', { level: 2, name: /Co zrobić teraz/i })).toBeInTheDocument();
-    expect(screen.getByText(/Następny krok:/i)).toBeInTheDocument();
-    expect(screen.getByText(/U pracodawcy \(wypłaca zasiłek\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/W ZUS \(najwygodniej przez PUE\/eZUS\)/i)).toBeInTheDocument();
-
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Lista dokumentów/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Skompletowano: 0 z/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
-
-    const checkboxes = screen.getAllByRole('checkbox');
-    await user.click(checkboxes[0]);
-    expect(screen.getByText(/Skompletowano: 1 z/i)).toBeInTheDocument();
-
-    // Najbliższy termin wyróżniony (2026-11-10 + 21 dni = 01.12.2026), pozostałe na liście (09.03.2027)
-    expect(screen.getByText(/Najbliższy termin/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/01\.12\.2026/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/09\.03\.2027/i).length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getByRole('link', { name: /Zmień podział w sekcji Plan urlopów/i }),
-    ).toHaveAttribute('href', '/plan/leave-plan?situation=afterBirth');
-
-    // Uwagi i podstawy prawne zwinięte w <details>
-    const detailSummaries = screen.getAllByText(/Szczegóły i wskazówki/i);
-    expect(detailSummaries[0].closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText(/Podstawa prawna terminów/i).closest('details')).not.toHaveAttribute(
-      'open',
-    );
-
-    const nextLink = screen.getByRole('link', { name: /Dalej: Wnioski/i });
-    expect(nextLink).toHaveAttribute('href', '/plan/applications?situation=afterBirth');
-  });
-
-  it('w zakładce Dokumenty i terminy oznacza przekroczony termin i pokazuje stan brakujących danych bez zmyślonych wpisów', () => {
-    window.localStorage.clear();
-    const overdueDraft: ScenarioDraft = {
-      situation: 'afterBirth',
-      referenceDate: '2026-12-10',
-      birthDate: '2026-11-10',
-      childrenCount: 1,
-      rateVariant: 'combined',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        insuredSince: '2020-01-01',
-        benefitBase: 6903.2,
-        employerInsuredCount: 150,
-        wantsLeave: true,
-      },
-      father: null,
-      special: {},
-    };
-
-    const { unmount } = render(
-      <MemoryRouter initialEntries={['/plan/documents?situation=afterBirth']}>
-        <ScenarioProvider initialScenario={overdueDraft}>
-          <App />
-        </ScenarioProvider>
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText(/Jeden z terminów już minął/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/\(po terminie\)/i).length).toBeGreaterThanOrEqual(1);
-    unmount();
-
-    // Pusty stan bez danych w localStorage / URL
-    renderPlan('/plan/documents');
-    expect(
-      screen.getByRole('heading', { level: 2, name: /Uzupełnij dane do listy dokumentów/i }),
-    ).toBeInTheDocument();
-  });
-
-  it('w zakładce Wnioski nie ma zmyślonych danych osobowych, waliduje puste pola, zwija podgląd i symuluje wysyłkę z UPO', async () => {
-    const { user } = renderPlan(
-      '/plan/applications?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
-    );
-
-    expect(
-      screen.getByText(/Wniosek o skrócony odpis aktu urodzenia dziecka/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Wniosek o zasiłek macierzyński \(ZUS ZAM\)/i)).toBeInTheDocument();
-
-    // Brak zmyślonych danych osobowych i obecność informacji o mObywatelu / ręcznym wpisie
-    expect(screen.queryByDisplayValue(/Anna Kowalska/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Anna Kowalska/i)).not.toBeInTheDocument();
-    expect(screen.queryByDisplayValue(/940512/i)).not.toBeInTheDocument();
-    expect(screen.queryByDisplayValue(/PL 61/i)).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Dane osobowe uzupełnisz po zalogowaniu przez mObywatela \(symulacja\) albo wpiszesz ręcznie – nie wysyłamy ich na serwer\./i,
-      ),
-    ).toBeInTheDocument();
-
-    const nameInput = screen.getByLabelText(/Imię i nazwisko wnioskodawcy/i);
-    const peselInput = screen.getByLabelText(/PESEL \(symulacja\)/i);
-    const bankInput = screen.getByLabelText(/Numer rachunku do wypłaty zasiłku/i);
-    expect(nameInput).toHaveValue('');
-    expect(peselInput).toHaveValue('');
-    expect(bankInput).toHaveValue('');
-
-    // Podgląd wniosku zwinięty w <details>
-    const previews = screen.getAllByText(/Podgląd wniosku/i);
-    expect(previews.length).toBeGreaterThanOrEqual(2);
-    expect(previews[0].closest('details')).not.toHaveAttribute('open');
-
-    // Próba wysłania z pustymi danymi prosi o uzupełnienie i nie kończy się błędem
-    await user.click(screen.getByRole('button', { name: /Wyślij ZUS ZAM/i }));
-    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/i);
-    expect(screen.queryByRole('region', { name: /Potwierdzenie wysłania ZUS ZAM/i })).toBeNull();
-
-    // Po uzupełnieniu danych osobowych wysyłka pojedyncza i zbiorcza działają
-    await user.type(nameInput, 'Janina Nowak');
-    await user.type(peselInput, '90010112345');
-    await user.type(bankInput, '12345678901234567890123456');
-
-    await user.click(screen.getByRole('button', { name: /Wyślij ZUS ZAM/i }));
-    const receipt = screen.getByRole('region', { name: /Potwierdzenie wysłania ZUS ZAM/i });
-    expect(within(receipt).getByText(/UPO – Potwierdzenie złożenia/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Wyślij wszystkie/i }));
-    expect(screen.getByRole('button', { name: /Wszystkie wnioski wysłane/i })).toBeDisabled();
-
-    const nextLink = screen.getByRole('link', { name: /Dalej: Wsparcie/i });
-    expect(nextLink).toHaveAttribute(
-      'href',
-      '/plan/support?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
-    );
-  });
-
-  it('w zakładce Wsparcie pokazuje Najważniejsze dla Ciebie (ryzyka z silnika i sytuacje szczególne), zwinięte narzędzia, organizacje charytatywne i brak etykiety AI', async () => {
-    const jdgDraft: ScenarioDraft = {
-      situation: 'afterBirth',
-      referenceDate: '2026-11-21',
-      birthDate: '2026-11-10',
-      childrenCount: 1,
-      rateVariant: 'combined',
-      mother: {
-        role: 'mother',
-        insuranceTitle: 'selfEmployed',
-        sicknessInsurance: 'voluntary',
-        insuredSince: '2020-01-01',
-        benefitBase: 5000,
-        contributionDebt: 400,
-        wantsLeave: true,
-      },
-      father: null,
-      special: { zaZyciemCertificate: true },
-    };
-
-    const { user } = renderPlan('/plan/support?situation=afterBirth', jdgDraft);
-
-    // Brak nieprawdziwego oznaczenia AI
-    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asystent.*AI/i)).not.toBeInTheDocument();
-
-    // Najważniejsze dla Ciebie na górze z ryzykiem z silnika oraz pasującą sytuacją szczególną
-    const keyHeading = screen.getByRole('heading', {
-      level: 2,
-      name: /Najważniejsze dla Ciebie/i,
-    });
-    const keySection = keyHeading.closest('section') as HTMLElement;
-    expect(within(keySection).getByText(/Zadłużenie składkowe \(JDG\)/i)).toBeInTheDocument();
-    expect(
-      within(keySection).getByRole('heading', {
-        level: 3,
-        name: /Zaświadczenie „Za życiem”/i,
-      }),
-    ).toBeInTheDocument();
-
-    // Ogólne ryzyka, inne sytuacje, PUE/eZUS i Najczęstsze pytania są zwinięte domyślnie
-    expect(
-      screen.getByText(/Ogólne ryzyka utraty lub obniżenia zasiłku/i).closest('details'),
-    ).not.toHaveAttribute('open');
-    expect(screen.getByText('Inne sytuacje szczególne').closest('details')).not.toHaveAttribute(
-      'open',
-    );
-    expect(screen.getByText('Najczęstsze pytania').closest('details')).not.toHaveAttribute('open');
-
-    // Organizacje charytatywne (przy „Za życiem” otwarte i z Fundacją Gajusz na początku)
-    expect(screen.getByText(/Fundacja Gajusz/i)).toBeInTheDocument();
-    expect(screen.getByText(/Fundacja Rodzić po Ludzku/i)).toBeInTheDocument();
-
-    // Gotowe odpowiedzi w Najczęstszych pytaniach działają po rozwinięciu
-    await user.click(screen.getByText('Najczęstsze pytania'));
-    await user.click(screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }));
-    expect(await screen.findByText(/ujednoliconą stawkę 81,5%/i)).toBeInTheDocument();
-
-    // Symulacja PUE / eZUS działa po rozwinięciu
-    await user.click(screen.getByText(/Kontakt z ZUS i podgląd konta/i));
-    await user.type(
-      screen.getByLabelText(/Treść pytania do doradcy ZUS/i),
-      'Proszę o potwierdzenie terminu złożenia ZAM.',
-    );
-    await user.click(screen.getByRole('button', { name: /Wyślij pytanie do PUE \/ eZUS/i }));
-    expect(screen.getByText(/Zapytanie zostało wysłane/i)).toBeInTheDocument();
-
-    const backLink = screen.getByRole('link', { name: /Wróć do planu/i });
-    expect(backLink).toHaveAttribute('href', '/plan?situation=afterBirth');
-  });
-  it('otwiera z checklisty podgląd ZAM z danymi planu i pozwala go wydrukować', async () => {
-    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
-    try {
-      const { user } = renderPlan(
-        '/plan/documents?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
-      );
-      await user.click(await screen.findByRole('link', { name: 'Otwórz podgląd ZUS ZAM' }));
-      const dialog = screen.getByRole('dialog', { name: /Wniosek o zasiłek macierzyński/ });
-      expect(within(dialog).getByText(/Podgląd demonstracyjny/)).toBeInTheDocument();
-      await user.click(within(dialog).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
-      expect(print).toHaveBeenCalledOnce();
-      await user.click(within(dialog).getByRole('button', { name: 'Zamknij podgląd' }));
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByTestId('loc')).toHaveTextContent('podstawa=6000');
-    } finally {
-      print.mockRestore();
+  it('udostępnia wszystkie zakładki i pobiera kontrakt sprawy z API', async () => {
+    openPlan();
+    for (const title of tabs) {
+      fireEvent.click(tabLink(title));
+      expect(await screen.findByRole('heading', { name: title, level: 2 })).toBeInTheDocument();
     }
+    expect(api.mock.calls.some(([url]) => url === '/api/v1/cases/case-04')).toBe(true);
+    const input = api.mock.calls.find(([url]) => url === '/api/v1/plan')?.[1];
+    expect(JSON.parse(String(input?.body))).toMatchObject({ applicant_role: 'MOTHER', stage: 'POST_BIRTH', pregnancy_week_at_birth: '28+5' });
   });
 
-  it('w zakładce Wsparcie przy braku danych pokazuje stan Uzupełnij dane z linkiem do kreatora', () => {
-    window.localStorage.clear();
-    renderPlan('/plan/support?situation=afterBirth');
+  it('synchronizuje zmianę daty ojca z dokumentami i wnioskiem', async () => {
+    openPlan('leave-plan');
+    fireEvent.change(await screen.findByLabelText('Koniec części 2'), { target: { value: '2028-01-10' } });
+    fireEvent.change(await screen.findByLabelText('Początek części 2'), { target: { value: '2027-11-09' } });
+    fireEvent.click(tabLink('Dokumenty i terminy'));
+    expect(await screen.findByText('19.10.2027')).toBeInTheDocument();
+    const link = tabLink('Wnioski');
+    expect(new URL((link as HTMLAnchorElement).href).searchParams.get('inputs')).toContain('2027-11-09');
+    fireEvent.click(link);
+    expect(await screen.findByText(/DANE PRZYKŁADOWE/)).toBeInTheDocument();
+    expect(screen.getByLabelText('PESEL')).toHaveValue('00000000000');
+    const selected = screen.getByLabelText('Wzór wniosku');
+    const father = within(selected).getByRole('option', { name: /Ojciec.*rodzicielskiego.*09.11.2027/ });
+    fireEvent.change(selected, { target: { value: (father as HTMLOptionElement).value } });
+    expect(screen.getByText(/09.11.2027–10.01.2028/)).toBeInTheDocument();
+  });
 
-    const keySection = screen
-      .getByRole('heading', { level: 2, name: /Najważniejsze dla Ciebie/i })
-      .closest('section') as HTMLElement;
-    expect(within(keySection).getByText(/Data porodu/i)).toBeInTheDocument();
-    expect(within(keySection).getByRole('link', { name: /Uzupełnij dane/i })).toHaveAttribute(
-      'href',
-      '/wizard?situation=afterBirth',
-    );
+  it('edytuje wzór w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
+    openPlan('applications');
+    const pesel = await screen.findByLabelText('PESEL');
+    fireEvent.change(pesel, { target: { value: '11111111111' } });
+    const count = api.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Symuluj złożenie wniosku' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
+    expect(api.mock.calls).toHaveLength(count);
+    expect(window.location.search).not.toContain('11111111111');
+    fireEvent.click(tabLink('Plan urlopów'));
+    fireEvent.click(tabLink('Wnioski'));
+    expect(await screen.findByLabelText('PESEL')).toHaveValue('00000000000');
   });
 });

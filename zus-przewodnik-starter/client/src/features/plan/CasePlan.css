@@ -1,0 +1,78 @@
+.case-plan-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.case-plan-grid,
+.case-plan-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+
+.case-plan-panel {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.case-plan-card,
+.case-plan-part {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-block: var(--space-3);
+}
+
+.case-plan-part legend {
+  font-weight: 700;
+}
+
+.case-plan-fields label,
+.case-plan-card > label {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.case-plan-fields input,
+.case-plan-fields select,
+.case-plan-card select {
+  width: 100%;
+  min-width: 0;
+}
+
+.case-plan-timeline {
+  list-style: none;
+  padding: 0;
+}
+
+.case-plan-timeline > li {
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  background: var(--color-surface-muted);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-2);
+}
+
+.case-document-list {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.case-document-list > li {
+  border-bottom: 1px solid var(--color-border);
+  padding-block: var(--space-3);
+}
+
+.case-overdue {
+  color: var(--color-error);
+}
+
+@media (max-width: 640px) {
+  .case-plan-nav .plan-tabs__list {
+    flex-wrap: wrap;
+  }
+}

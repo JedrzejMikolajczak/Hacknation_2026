@@ -300,10 +300,11 @@ export interface SupplementaryCase {
 export interface BenefitParams {
   version: string;
   effectiveFrom: IsoDate;
-  rates: Record<'maternity' | 'adoptionMaternity' | 'supplementaryMaternity' | 'paternity' | 'parental' | 'combined' | 'sicknessPregnancy' | 'secondParentNonTransferableInCombined', Rate>;
+  rates: Record<'maternity' | 'adoptionMaternity' | 'supplementaryMaternity' | 'paternity' | 'parental' | 'combined' | 'sicknessPregnancy' | 'secondParentNonTransferableInCombined' | 'sicknessStandard', Rate>;
   maternityLeave: {
     weeksByChildrenCount: Record<'1' | '2' | '3' | '4' | '5', number>;
     maxWeeksBeforeBirth: number;
+    contractProtectionWeeksFrom: number;
     motherMandatoryWeeksAfterBirth: number;
     motherMandatoryWeeksWithIncapacityCertificate: number;
   };
@@ -332,7 +333,7 @@ export interface BenefitParams {
     adoptionDeadlineMonthsFromAdoption: number;
     adoptionMaxChildAgeYears: number;
   };
-  supplementaryMaternityLeave: { cases: SupplementaryCase[]; transitionalEffectiveDate: IsoDate };
+  supplementaryMaternityLeave: { cases: SupplementaryCase[]; transitionalEffectiveDate: IsoDate; termQualificationLastDay: number };
   calendar: { daysPerWeek: number; dailyBenefitDivisor: number };
   forms2026EffectiveDate: IsoDate;
   insuranceRisk: {
@@ -442,6 +443,8 @@ export interface CaseInputs {
   maternity_leave_start_date?: IsoDate;
   sickness_leave_start_date?: IsoDate;
   sickness_leave_end_date?: IsoDate;
+  sickness_benefit_start_date?: IsoDate;
+  sickness_waiting_period_confirmed?: boolean;
   monthly_bases?: MonthlyBase[];
   parental_leave_parts?: PlannedParentalPart[];
   title_start_date?: IsoDate;

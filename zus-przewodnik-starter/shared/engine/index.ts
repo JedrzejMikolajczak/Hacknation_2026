@@ -37,3 +37,4 @@ export type {
   ScenarioInput,
   SicknessResult,
 };
+export { calculateCasePlan } from './casePlan';
