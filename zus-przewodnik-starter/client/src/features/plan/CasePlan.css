@@ -70,9 +70,3 @@
 .case-overdue {
   color: var(--color-error);
 }
-
-@media (max-width: 640px) {
-  .case-plan-nav .plan-tabs__list {
-    flex-wrap: wrap;
-  }
-}

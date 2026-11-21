@@ -5,7 +5,7 @@ import { calculateCasePlan } from '@shared/engine/casePlan';
 import params from '@shared/params.json';
 import type { CaseInputs, CaseRecord } from '@shared/types';
 import data from '../../../../../data/cases/case-04.json';
-import { ScenarioProvider } from '../../../app/ScenarioContext';
+import { ScenarioProvider, type ScenarioDraft } from '../../../app/ScenarioContext';
 import { PlanPage } from '../PlanPage';
 
 const fixture = data as CaseRecord;
@@ -103,5 +103,153 @@ describe('Twój plan', () => {
     fireEvent.click(tabLink('Plan urlopów'));
     fireEvent.click(tabLink('Wnioski'));
     expect(await screen.findByLabelText('PESEL')).toHaveValue('00000000000');
+  });
+
+  it('wyświetla hub planu z kolejnością kroków, bez zduplikowanych linków w nagłówku', () => {
+    render(
+      <MemoryRouter initialEntries={['/plan']}>
+        <ScenarioProvider initialScenario={{ situation: null }}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Od czego zacząć\?/)).toBeInTheDocument();
+    expect(screen.getByText('Zacznij tutaj')).toBeInTheDocument();
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('link', { name: 'Zmień odpowiedzi' })).toBeInTheDocument();
+    expect(within(header).queryByRole('link', { name: 'Przewodnik' })).not.toBeInTheDocument();
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByRole('link', { name: 'Przewodnik' })).toBeInTheDocument();
+    expect(within(footer).getByRole('link', { name: 'Przykładowe sprawy' })).toBeInTheDocument();
+  });
+
+  it('pokazuje jednoliniowe podsumowanie danych formularza, zwinięte kontrolki i breadcrumb', async () => {
+    const formScenario: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      expectedBirthDate: null,
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        insuranceEndDate: null,
+        benefitBase: 6903.2,
+        contributionDebt: null,
+        employerInsuredCount: 150,
+        age: 31,
+        wantsLeave: true,
+      },
+      father: {
+        role: 'father',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2019-01-01',
+        insuranceEndDate: null,
+        benefitBase: 5000,
+        contributionDebt: null,
+        employerInsuredCount: 10,
+        wantsLeave: true,
+      },
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/calculator?situation=afterBirth']}>
+        <ScenarioProvider initialScenario={formScenario}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Kalkulator', level: 2 }),
+    ).toBeInTheDocument();
+    const breadcrumb = screen.getByRole('navigation', { name: 'Ścieżka nawigacji' });
+    expect(within(breadcrumb).getByRole('link', { name: '← Twój plan' })).toBeInTheDocument();
+    expect(within(breadcrumb).getByText('Kalkulator')).toBeInTheDocument();
+
+    const controls = screen.getByRole('region', { name: 'Twoje dane planu' });
+    expect(controls).toHaveTextContent(
+      /Twoje dane:\s*Urodziło się dziecko · umowa o pracę · 1 dziecko · 81,5%/,
+    );
+    expect(within(controls).queryByLabelText('Sytuacja')).not.toBeInTheDocument();
+
+    expect(
+      await screen.findByText(/Otrzymasz ok\..*miesięcznie przez.*52 tygodnie/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(controls).getByRole('button', { name: 'Zmień dane' }));
+    const childrenSelect = within(controls).getByLabelText('Liczba dzieci');
+    fireEvent.change(childrenSelect, { target: { value: '2' } });
+    expect(controls).toHaveTextContent(/2 dzieci/);
+
+    expect(
+      await screen.findByText(/Otrzymasz ok\..*miesięcznie przez.*65 tygodni/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dalej: Plan urlopów ›' })).toBeInTheDocument();
+  });
+
+  it('pokazuje stan braku danych bez zmyślonych kwot, gdy formularz jest pusty', () => {
+    render(
+      <MemoryRouter initialEntries={['/plan/calculator']}>
+        <ScenarioProvider initialScenario={{ situation: null }}>
+          <Routes>
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Nie przyjmujemy zmyślonych założeń/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Uzupełnij dane ›' })).toHaveAttribute(
+      'href',
+      '/wizard',
+    );
+  });
+
+  it('pokazuje odpowiedź najpierw w Uprawnieniach oraz grupuje okresy według rodzica w Kalkulatorze', async () => {
+    openPlan('entitlements');
+    expect(
+      await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
+    ).toBeInTheDocument();
+
+    const controls = screen.getByRole('region', { name: 'Twoje dane planu' });
+    expect(controls).toHaveTextContent(fixture.short_title);
+    expect(screen.getByText(/Przysługuje zasiłek macierzyński/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dalej: Kalkulator ›' })).toBeInTheDocument();
+
+    fireEvent.click(tabLink('Kalkulator'));
+    expect(
+      await screen.findByRole('heading', { name: 'Kalkulator', level: 2 }),
+    ).toBeInTheDocument();
+
+    const periodsSummary = screen.getByText('Zobacz okresy i kwoty');
+    const periodsDetails = periodsSummary.closest('details');
+    expect(periodsDetails).not.toBeNull();
+    expect(periodsDetails).not.toHaveAttribute('open');
+    fireEvent.click(periodsSummary);
+
+    expect(screen.getByRole('region', { name: 'Okresy: Mama' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Okresy: Tata' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dalej: Plan urlopów ›' })).toBeInTheDocument();
   });
 });

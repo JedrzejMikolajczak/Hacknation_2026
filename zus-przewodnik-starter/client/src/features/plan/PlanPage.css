@@ -43,7 +43,8 @@
 }
 
 .plan-page__header--section {
-  padding: var(--space-2) 0 var(--space-3);
+  padding: var(--space-1) 0 var(--space-2);
+  border-bottom-width: var(--space-1);
 }
 
 .plan-page__nav-row {
@@ -59,7 +60,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   font-size: var(--font-size-sm);
 }
 
@@ -109,6 +110,7 @@
 
 .plan-page__header--section .plan-page__title {
   margin-bottom: 0;
+  font-size: var(--font-size-md);
 }
 
 .plan-page__subtitle {
@@ -118,12 +120,12 @@
 
 .plan-page__main {
   flex: 1;
-  padding: var(--space-3) 0 var(--space-7);
+  padding: var(--space-2) 0 var(--space-7);
 }
 
 /* Podsumowanie danych + zwijany panel edycji na żywo */
 .plan-controls {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
   border: var(--border-width) solid var(--color-border);
   border-left: var(--accent-bar-width) solid var(--color-primary);
   border-radius: var(--radius-sm);
@@ -136,7 +138,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
 }
 
 .plan-controls__summary {
@@ -147,8 +149,30 @@
   line-height: var(--line-height-tight);
 }
 
+.plan-controls__summary--case {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .plan-controls__summary-label {
   color: var(--color-text);
+}
+
+.plan-controls__case-full {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--border-width-control) solid var(--color-navy);
+  background: var(--color-info-soft);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.plan-controls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .plan-controls__toggle {
@@ -903,12 +927,13 @@
 
 /* Breakpoint sm: 640px */
 @media (min-width: 640px) {
+  .plan-page__header--section .plan-page__title,
   .plan-page__title {
     font-size: var(--font-size-2xl);
   }
 
   .plan-page__main {
-    padding: var(--space-5) 0 var(--space-7);
+    padding: var(--space-4) 0 var(--space-7);
   }
 
   .plan-tabs__list {
