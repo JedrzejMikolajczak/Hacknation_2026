@@ -20,11 +20,16 @@ function isJsonParseError(err: unknown): boolean {
 /** Błędy zod, CalculationError i niepoprawny JSON → 422 VALIDATION_ERROR, pozostałe → 500 INTERNAL_ERROR. */
 export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof CalculationError) {
-    res.status(422).json(fail('VALIDATION_ERROR', err.message, [{ field: err.field, message: err.message }]));
+    res
+      .status(422)
+      .json(fail('VALIDATION_ERROR', err.message, [{ field: err.field, message: err.message }]));
     return;
   }
   if (err instanceof ZodError) {
-    res.status(422).json(fail('VALIDATION_ERROR', 'Request validation failed', err.issues));
+    const first = err.issues[0];
+    const path = first?.path?.length ? `${first.path.join('.')}: ` : '';
+    const message = first ? `${path}${first.message}` : 'Nieprawidłowe dane wejściowe.';
+    res.status(422).json(fail('VALIDATION_ERROR', message, err.issues));
     return;
   }
   if (isJsonParseError(err)) {
