@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ApplicantRole, CaseInputs, SituationType } from '@shared/types';
+import type { ApplicantRole, AuthSession, CaseInputs, SituationType } from '@shared/types';
 import { readPlanAddress } from './planAddress';
 import { wizardCase } from '../features/plan/caseScenario';
 import { buildScenario } from '../features/wizard/wizardModel';
@@ -19,13 +19,8 @@ interface ScenarioContextValue {
   updateScenario: (changes: Partial<ScenarioDraft>) => void;
   saveManualForm: (form: ManualFormState, scenario: ScenarioDraft) => void;
   clearScenario: () => void;
-  simulatedIdentities: Partial<Record<ApplicantRole, SimulatedIdentity>>;
-  setSimulatedIdentity: (role: ApplicantRole, identity: SimulatedIdentity) => void;
-}
-
-interface SimulatedIdentity {
-  name: string;
-  pesel: string;
+  simulatedIdentities: Partial<Record<ApplicantRole, AuthSession>>;
+  setSimulatedIdentity: (role: ApplicantRole, identity: AuthSession) => void;
 }
 
 interface ScenarioState {

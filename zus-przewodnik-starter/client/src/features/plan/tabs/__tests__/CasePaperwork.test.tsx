@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculateCasePlan } from '@shared/engine/casePlan';
 import params from '@shared/params.json';
 import type { BenefitParams, CaseDocument, CaseInputs, CaseRecord } from '@shared/types';
@@ -10,11 +10,14 @@ import case03 from '../../../../../../data/cases/case-03.json';
 import case04 from '../../../../../../data/cases/case-04.json';
 import case05 from '../../../../../../data/cases/case-05.json';
 import case06 from '../../../../../../data/cases/case-06.json';
+import jan from '../../../../../../data/profiles/jan.json';
 import { ScenarioProvider, type ScenarioDraft } from '../../../../app/ScenarioContext';
 import { wizardCase } from '../../caseScenario';
 import { formatPolishDate } from '../../planScenario';
 import { LoginPage } from '../../../login/LoginPage';
 import { CaseApplications, CaseDocuments } from '../CasePaperwork';
+
+afterEach(() => vi.restoreAllMocks());
 
 function renderWithRouter(ui: React.ReactElement, initialEntry = '/plan/documents?case=case-04') {
   return render(
@@ -408,23 +411,41 @@ describe('CaseApplications', () => {
     expect(nextLink).toHaveAttribute('href', '/plan/support?case=case-04');
   });
 
-  it('przenosi dane testowe mObywatela tylko do wybranego wnioskodawcy i drukuje załączniki', () => {
+  it('przenosi dane testowe mObywatela tylko do wybranego wnioskodawcy i drukuje załączniki', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (url === '/api/v1/mock/profiles') {
+        return Response.json({ data: [{ profileId: jan.profileId, label: jan.label }], error: null });
+      }
+      if (url === '/api/v1/mock/login') {
+        return Response.json({ data: { profile: jan, sessionToken: 'test-token' }, error: null });
+      }
+      throw new Error(`Unexpected request: ${String(url)}`);
+    });
     render(
       <MemoryRouter initialEntries={['/plan/applications?case=case-04']}>
         <ScenarioProvider>
           <Routes>
-            <Route path="/plan/applications" element={<CaseApplications documents={sampleDocuments} />} />
+            <Route
+              path="/plan/applications"
+              element={<CaseApplications documents={sampleDocuments} input={case04.inputs as CaseInputs} />}
+            />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
         </ScenarioProvider>
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('link', { name: 'Pobierz dane z mObywatela (symulacja)' }));
+    await screen.findByRole('option', { name: jan.label });
     fireEvent.change(screen.getByLabelText('Wnioskodawca'), { target: { value: 'FATHER' } });
-    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Testowy' } });
     fireEvent.click(screen.getByRole('button', { name: 'Przekaż dane testowe' }));
-    expect(within(screen.getByRole('group', { name: 'Ojciec' })).getByLabelText('Imię i nazwisko'))
-      .toHaveValue('Jan Testowy');
+    const fatherFields = within(await screen.findByRole('group', { name: 'Ojciec' }));
+    expect(fatherFields.getByLabelText('Imię i nazwisko')).toHaveValue(jan.label);
+    expect(fatherFields.getByLabelText('PESEL')).toHaveValue(jan.pesel);
+    expect(fatherFields.getByLabelText('Data urodzenia')).toHaveValue(jan.birthDate);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/mock/login',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ profile_id: jan.profileId }) }),
+    );
     expect(within(screen.getByRole('group', { name: 'Matka' })).getByLabelText('Imię i nazwisko'))
       .toHaveValue('');
     const card = screen.getByRole('heading', { name: /Wniosek o urlop rodzicielski/ }).closest('article')!;
@@ -432,6 +453,7 @@ describe('CaseApplications', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
     const preview = within(screen.getByRole('dialog'));
     expect(preview.getByText('Jan Testowy')).toBeInTheDocument();
+    expect(preview.getByText(formatPolishDate(jan.birthDate))).toBeInTheDocument();
     expect(preview.getByText(/Skrócony odpis aktu urodzenia/)).toBeInTheDocument();
     expect(preview.getByText(/§ 15 rozporządzenia/)).toBeInTheDocument();
   });

@@ -60,6 +60,8 @@ Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error:
 | GET | `/params` | — | `BenefitParams` |
 | PUT | `/admin/params` | `BenefitParams`, nagłówek `Authorization: Bearer …` | Parametry aktywne do restartu |
 | POST | `/assistant/ask` | `{ question }` | `{ answer, sources, is_demo_fallback }` |
+| GET | `/mock/profiles` | — | `MockProfileSummary[]` |
+| POST | `/mock/login` | `{ profile_id }` | `AuthSession` z `sessionToken` i `profile: UserProfile` |
 
 `matches` porównuje kwalifikację, płatnika, stawkę, wymiary, formularze, okresy oraz znane kwoty. Streszczenie i cytaty źródłowe są zwracane obok wyniku jako treść decyzji.
 
@@ -93,3 +95,4 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | Opcjonalne pola w `CaseParentInsurance` (`monthly_bases`, `title_start_date`, `debt_amount_pln`) i `CaseCircumstances` (`mother_deceased`) dla obliczeń drugiego rodzica |
 | 2026-11-21 | Rozszerzenie kontraktu o przypadki z PDF: `mother_abandoned_child`, `unlawful_termination_confirmed_by_court`, `WizardScenario.mother: ParentData \| null` (samotny ojciec), `secondary_employment_type` / `secondary_voluntary_sickness_insured` (dwa tytuły naraz) oraz `deceased_children_count` (poród mnogi) |
 | 2026-11-21 | Dane przejęcia po porzuceniu wymagają daty i informacji o ubezpieczeniu matki. `CaseInputs.additional_insurance_titles` przechowuje odrębne dane każdego tytułu, a `CasePlan.additional_title_outcomes` jego wyliczenie. Pola `secondary_*` pozostają obsługiwane jako starszy format. |
+| 2026-11-21 | Dodano katalog i logowanie profili testowych oraz pola `pesel` i `birthDate` w `UserProfile` |
