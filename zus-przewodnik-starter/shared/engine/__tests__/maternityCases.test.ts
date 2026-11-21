@@ -294,6 +294,55 @@ describe('maternity leave extended scenarios', () => {
     },
   );
 
+  it('detects a configured increase during pregnancy from monthly amounts in any order', () => {
+    const input = testScenario();
+    const monthlyBases = [
+      { month: '2026-03', amount_pln: 6500 },
+      { month: '2025-12', amount_pln: 5000 },
+      { month: '2026-02', amount_pln: 5000 },
+    ];
+
+    const { entitlements, warnings } = checkEligibility({ ...input, monthlyBases }, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('BASE_INCREASE_IN_PREGNANCY');
+    expect(entitlements).toEqual(checkEligibility(input, params).entitlements);
+  });
+
+  it.each([
+    { label: 'only a high amount from the form', monthlyBases: undefined },
+    { label: 'no comparison month', monthlyBases: [{ month: '2026-03', amount_pln: 9000 }] },
+    {
+      label: 'steady monthly amounts',
+      monthlyBases: [
+        { month: '2025-12', amount_pln: 18000 },
+        { month: '2026-03', amount_pln: 18000 },
+      ],
+    },
+    {
+      label: 'an excluded bonus',
+      monthlyBases: [
+        { month: '2025-12', amount_pln: 5000 },
+        { month: '2026-03', amount_pln: 8000, excluded_bonus_pln: 3000 },
+      ],
+    },
+    {
+      label: 'an increase outside pregnancy',
+      monthlyBases: [
+        { month: '2025-11', amount_pln: 5000 },
+        { month: '2025-12', amount_pln: 8000 },
+        { month: '2026-12', amount_pln: 16000 },
+      ],
+    },
+  ])('does not warn with $label', ({ monthlyBases }) => {
+    const input = testScenario();
+    input.mother.insuredSince = '2026-10-01';
+    input.mother.benefitBase = 18000;
+
+    const { warnings } = checkEligibility({ ...input, monthlyBases }, params);
+
+    expect(warnings.map((warning) => warning.code)).not.toContain('BASE_INCREASE_IN_PREGNANCY');
+  });
+
   it('handles pregnancy sickness, rehabilitation, maternity-equivalent benefit, and all risk warnings', () => {
     const pregnant = testScenario();
     pregnant.situation = 'pregnant';
@@ -305,7 +354,14 @@ describe('maternity leave extended scenarios', () => {
     pregnant.special.employerBankruptcyOrLiquidation = true;
 
     const elig = checkEligibility(
-      { ...pregnant, shamContractRiskHint: true, baseIncreasedInPregnancy: true },
+      {
+        ...pregnant,
+        shamContractRiskHint: true,
+        monthlyBases: [
+          { month: '2026-05', amount_pln: 5000 },
+          { month: '2026-10', amount_pln: 8000 },
+        ],
+      },
       params,
     );
     const codes = elig.warnings.map((w) => w.code);

@@ -1,4 +1,4 @@
-import type { BenefitBaseInput, BenefitBaseResult, BenefitParams, Explanation } from '../types';
+import type { BenefitBaseInput, BenefitBaseResult, BenefitParams, Explanation, MonthlyBase } from '../types';
 import {
   amount,
   date,
@@ -18,6 +18,45 @@ export type BaseInput = BenefitBaseInput & {
   minimumContributionBases?: Record<string, number>;
   creditedPreviousMonths?: number;
 };
+
+export function hasPregnancyBaseIncrease(
+  monthlyBases: readonly MonthlyBase[],
+  pregnancyStart: string,
+  pregnancyEnd: string,
+  params: BenefitParams,
+): boolean {
+  if (monthlyBases.length < 2) return false;
+
+  const { baseIncreasePercent, beforePregnancyMonths } = params.insuranceRisk;
+  const firstPregnancyMonth = monthIndex(pregnancyStart.slice(0, 7));
+  const lastPregnancyMonth = monthIndex(pregnancyEnd.slice(0, 7));
+  const firstComparisonMonth = firstPregnancyMonth - beforePregnancyMonths;
+  const amountsByMonth = new Map<number, number>();
+
+  for (const { month, amount_pln, excluded_bonus_pln = 0 } of monthlyBases) {
+    const index = monthIndex(month, 'monthlyBases.month');
+    if (index < firstComparisonMonth || index > lastPregnancyMonth) continue;
+
+    amount(amount_pln, 'monthlyBases.amount_pln');
+    amount(excluded_bonus_pln, 'monthlyBases.excluded_bonus_pln');
+    requireValue(!amountsByMonth.has(index), 'monthlyBases', `Powtórzony miesiąc podstawy: ${month}.`);
+    amountsByMonth.set(index, Math.max(0, amount_pln - excluded_bonus_pln));
+  }
+
+  let earlierTotal = 0;
+  let earlierCount = 0;
+  for (const [index, monthlyAmount] of [...amountsByMonth].sort(([a], [b]) => a - b)) {
+    if (monthlyAmount === 0) continue;
+    if (index >= firstPregnancyMonth && earlierCount > 0) {
+      const earlierAverage = earlierTotal / earlierCount;
+      if (monthlyAmount * 100 >= earlierAverage * (100 + baseIncreasePercent)) return true;
+    }
+    earlierTotal += monthlyAmount;
+    earlierCount++;
+  }
+
+  return false;
+}
 
 export function calculateBenefitBase(input: BaseInput, params: BenefitParams): BenefitBaseResult {
   validateParams(params, input.rightArisesOn);

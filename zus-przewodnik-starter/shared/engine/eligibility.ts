@@ -3,12 +3,14 @@ import type {
   EligibilityResult,
   Entitlement,
   Explanation,
+  MonthlyBase,
   ParentData,
   Payer,
   WizardScenario,
   SicknessResult,
   Warning,
 } from '../types';
+import { hasPregnancyBaseIncrease } from './benefitBase';
 import {
   addDays,
   addMonths,
@@ -28,7 +30,7 @@ export type EligibilityInput = WizardScenario & {
   waitingPeriodExempt?: boolean;
   unlawfulTerminationConfirmedByCourt?: boolean;
   shamContractRiskHint?: boolean;
-  baseIncreasedInPregnancy?: boolean;
+  monthlyBases?: readonly MonthlyBase[];
 };
 
 export type SicknessInput = EligibilityInput & {
@@ -192,13 +194,13 @@ export function checkEligibility(
       parent.insuranceTitle !== 'none' && parent.sicknessInsurance !== 'none';
     if (isMother && hasSicknessTitle) {
       const insuredSince = parent.insuredSince;
-      const tenureDays = insuredSince === null ? null : daysBetween(insuredSince, on);
       const risk = params.insuranceRisk;
+      const pregnancyStart = isAdoption ? null : addDays(on, -risk.estimatedPregnancyDays);
       const riskEvent = isAdoption ? on : (input.sicknessStartDate ?? on);
       const startedDuringPregnancy =
-        !isAdoption &&
+        pregnancyStart !== null &&
         insuredSince !== null &&
-        insuredSince >= addDays(on, -risk.estimatedPregnancyDays) &&
+        insuredSince >= pregnancyStart &&
         insuredSince <= on;
       const startedShortlyBeforeEvent =
         insuredSince !== null &&
@@ -213,12 +215,13 @@ export function checkEligibility(
           legalBasis: 'Ustawa o systemie ubezpieczeń społecznych art. 68, art. 83; KC art. 83',
         });
       }
+      const pregnancyEnd =
+        input.situation === 'pregnant' && input.referenceDate < on ? input.referenceDate : on;
       if (
-        input.baseIncreasedInPregnancy ||
-        (tenureDays !== null &&
-          tenureDays < params.sickness.maxBenefitPeriodDays &&
-          parent.benefitBase !== null &&
-          parent.benefitBase > params.benefitBase.minimumWage * 2)
+        pregnancyStart !== null &&
+        input.situation !== 'planning' &&
+        input.monthlyBases &&
+        hasPregnancyBaseIncrease(input.monthlyBases, pregnancyStart, pregnancyEnd, params)
       ) {
         warnings.push({
           code: 'BASE_INCREASE_IN_PREGNANCY',
