@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { calculateCasePlan } from '@shared/engine/casePlan';
@@ -7,6 +7,13 @@ import type { CaseInputs, CaseRecord } from '@shared/types';
 import data from '../../../../../data/cases/case-04.json';
 import { ScenarioProvider, type ScenarioDraft } from '../../../app/ScenarioContext';
 import { PlanPage } from '../PlanPage';
+import { downloadPdf, generateApplicationPdf } from '../tabs/pdf/generate';
+
+vi.mock('../tabs/pdf/generate', () => ({
+  generateApplicationPdf: vi.fn(async () => new Uint8Array([37, 80, 68, 70])),
+  downloadPdf: vi.fn(),
+  pdfFileName: () => 'wniosek.pdf',
+}));
 
 const fixture = data as CaseRecord;
 const api = vi.fn(async (url: string, request?: RequestInit) => {
@@ -177,12 +184,11 @@ describe('Twój plan', () => {
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
-    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
     fireEvent.click(screen.getByRole('button', { name: /^Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
     const preview = within(screen.getByRole('dialog'));
-    fireEvent.click(preview.getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
-    expect(print).toHaveBeenCalledOnce();
-    print.mockRestore();
+    fireEvent.click(preview.getByRole('button', { name: 'Pobierz wniosek do uzupełnienia (PDF)' }));
+    await waitFor(() => expect(downloadPdf).toHaveBeenCalledWith(expect.any(Uint8Array), 'wniosek.pdf'));
+    expect(generateApplicationPdf).toHaveBeenCalledWith(expect.objectContaining({ kind: 'letter' }));
     fireEvent.click(preview.getByRole('button', { name: 'Zamknij podgląd' }));
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
@@ -261,7 +267,7 @@ describe('Twój plan', () => {
     );
   });
 
-  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
+  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i asystenta AI', async () => {
     openPlan('support');
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
     expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
@@ -269,9 +275,8 @@ describe('Twój plan', () => {
       screen.getByText('Wcześniak lub hospitalizacja dziecka po porodzie'),
     ).toBeInTheDocument();
     expect(screen.getByText('Fundacja Wcześniak Rodzice-Rodzicom')).toBeInTheDocument();
-    expect(screen.getByText('Najczęstsze pytania')).toBeInTheDocument();
-    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asystent AI/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Wspierane przez AI')).toBeInTheDocument();
+    expect(screen.getByText(/Asystent AI – zapytaj o swoją sytuację/)).toBeInTheDocument();
   });
 
   it('wyświetla hub planu z kolejnością kroków, bez zduplikowanych linków w nagłówku', () => {

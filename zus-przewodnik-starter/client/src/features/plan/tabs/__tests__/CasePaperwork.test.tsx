@@ -373,7 +373,7 @@ describe('FilingMap (mapa składania)', () => {
     expect(steps.length).toBe(sampleDocuments.length);
 
     // Wniosek do pracodawcy: link „Wypełnij i pobierz” z kluczem dokumentu + e-mail do kadr
-    fireEvent.click(screen.getByRole('button', { name: /Wniosek o okres rodzicielskiego/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Wniosek o urlop rodzicielski/ }));
     const fill = screen.getByRole('link', { name: 'Wypełnij i pobierz wniosek ›' });
     expect(fill.getAttribute('href')).toMatch(
       /^\/plan\/applications\?case=case-04&open=FATHER-PARENTAL_REQUEST/,
@@ -441,6 +441,59 @@ describe('CaseApplications – wejście z mapy (?open=)', () => {
     expect(dialog.getByRole('heading', { name: /Gdzie to wysłać/ })).toBeInTheDocument();
     expect(dialog.getByRole('link', { name: /Złóż wniosek na gov\.pl/ })).toBeInTheDocument();
   });
+
+  it('nie chowa pól podczas wpisywania i przyjmuje numer rachunku zapisany ze spacjami', () => {
+    const zusDocs: CaseDocument[] = [
+      {
+        id: 'ZAM',
+        name_pl: 'ZAM – wniosek o zasiłek macierzyński',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+      {
+        id: 'Z-3a',
+        name_pl: 'Z-3a – zaświadczenie płatnika składek',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+    ];
+    renderWithRouter(
+      <CaseApplications documents={zusDocs} />,
+      '/plan/applications?case=case-04&open=MOTHER-ZAM--',
+    );
+    const panel = within(document.getElementById('apps-open') as HTMLElement);
+
+    // Wpisanie pierwszej litery nie usuwa pola z formularza
+    fireEvent.change(panel.getByLabelText('Imię i nazwisko'), { target: { value: 'J' } });
+    expect(panel.getByLabelText('Imię i nazwisko')).toHaveValue('J');
+    fireEvent.change(panel.getByLabelText('Imię i nazwisko'), {
+      target: { value: 'Janina Nowak' },
+    });
+    fireEvent.change(panel.getByLabelText('PESEL'), { target: { value: '90010112345' } });
+    expect(panel.getByLabelText('PESEL')).toHaveValue('90010112345');
+    const birth = panel.queryByLabelText('Data urodzenia');
+    if (birth) fireEvent.change(birth, { target: { value: '1990-01-01' } });
+
+    // Numer rachunku ze spacjami (26 cyfr) jest poprawny
+    fireEvent.change(panel.getByLabelText('Numer rachunku'), {
+      target: { value: '12 3456 7890 1234 5678 9012 3456' },
+    });
+    fireEvent.click(panel.getByRole('button', { name: /Podgląd i pobierz PDF/ }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
 });
 
 describe('CaseApplications', () => {
@@ -483,7 +536,7 @@ describe('CaseApplications', () => {
     fireEvent.click(download);
     const preview = within(screen.getByRole('dialog'));
     expect(preview.getByText('Jan Nowak')).toBeInTheDocument();
-    expect(preview.getByRole('button', { name: 'Drukuj lub zapisz PDF' })).toBeEnabled();
+    expect(preview.getByRole('button', { name: 'Pobierz wniosek do uzupełnienia (PDF)' })).toBeEnabled();
     expect(screen.queryByText(/UPO – Potwierdzenie/)).not.toBeInTheDocument();
 
     // Podstawa z Rozporządzenia 2025 poz. 322 i link dalej
@@ -499,7 +552,10 @@ describe('CaseApplications', () => {
   it('przenosi dane testowe mObywatela tylko do wybranego wnioskodawcy i drukuje załączniki', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (url === '/api/v1/mock/profiles') {
-        return Response.json({ data: [{ profileId: jan.profileId, label: jan.label }], error: null });
+        return Response.json({
+          data: [{ profileId: jan.profileId, label: jan.label }],
+          error: null,
+        });
       }
       if (url === '/api/v1/mock/login') {
         return Response.json({ data: { profile: jan, sessionToken: 'test-token' }, error: null });
@@ -512,7 +568,9 @@ describe('CaseApplications', () => {
           <Routes>
             <Route
               path="/plan/applications"
-              element={<CaseApplications documents={sampleDocuments} input={case04.inputs as CaseInputs} />}
+              element={
+                <CaseApplications documents={sampleDocuments} input={case04.inputs as CaseInputs} />
+              }
             />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
@@ -529,11 +587,17 @@ describe('CaseApplications', () => {
     expect(fatherFields.getByLabelText('Data urodzenia')).toHaveValue(jan.birthDate);
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/mock/login',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ profile_id: jan.profileId }) }),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ profile_id: jan.profileId }),
+      }),
     );
-    expect(within(screen.getByRole('group', { name: 'Matka' })).getByLabelText('Imię i nazwisko'))
-      .toHaveValue('');
-    const card = screen.getByRole('heading', { name: /Wniosek o urlop rodzicielski/ }).closest('article')!;
+    expect(
+      within(screen.getByRole('group', { name: 'Matka' })).getByLabelText('Imię i nazwisko'),
+    ).toHaveValue('');
+    const card = screen
+      .getByRole('heading', { name: /Wniosek o urlop rodzicielski/ })
+      .closest('article')!;
     fireEvent.click(within(card).getByText('Podgląd wniosku'));
     fireEvent.click(within(card).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
     const preview = within(screen.getByRole('dialog'));
@@ -802,7 +866,7 @@ describe('CaseApplications', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: 'ZAM – zasiłek za okres odpowiadający urlopowi rodzicielskiemu (część 1)',
+        name: 'ZAM – wniosek o zasiłek macierzyński za okres urlopu rodzicielskiego (część 1)',
         level: 4,
       }),
     ).toBeInTheDocument();

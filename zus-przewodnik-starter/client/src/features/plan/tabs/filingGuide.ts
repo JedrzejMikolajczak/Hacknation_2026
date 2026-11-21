@@ -5,6 +5,8 @@ export const PUE_URL = 'https://www.zus.pl/portal/';
 /** E-usługa gov.pl „Uzyskaj odpis aktu stanu cywilnego” (profil zaufany lub e-dowód). */
 export const USC_URL =
   'https://www.gov.pl/web/gov/uzyskaj-odpis-aktu-stanu-cywilnego-urodzenia-malzenstwa-zgonu';
+/** Rejestr stanu cywilnego – informacje o odpisach aktów (gov.pl, cyfryzacja). */
+export const USC_REGISTRY_URL = 'https://www.gov.pl/web/cyfryzacja/rejestr-stanu-cywilnego';
 /** Opis ZUS: jak uzyskać zasiłek macierzyński (m.in. złożenie ZAM przez PUE). */
 export const ZAM_GUIDE_URL =
   'https://www.zus.pl/en/-/jak-uzyskac-zasilek-macierzynski-z-tytulu-urodzenia-dziecka';
@@ -135,7 +137,10 @@ export function deliveryGuide(doc: CaseDocument, mandateEntitled: boolean): Deli
       channel: 'usc',
       where: 'Urząd Stanu Cywilnego (gov.pl)',
       how: 'Złóż wniosek o odpis skrócony aktu urodzenia online (profil zaufany lub e-dowód). Wybierz cel „do celów zasiłkowych” – wtedy opłata skarbowa nie obowiązuje.',
-      links: [{ href: USC_URL, label: 'Złóż wniosek na gov.pl' }],
+      links: [
+        { href: USC_URL, label: 'Złóż wniosek na gov.pl' },
+        { href: USC_REGISTRY_URL, label: 'Rejestr stanu cywilnego – informacje' },
+      ],
       mail: false,
       alternative: 'Możesz też pójść do dowolnego urzędu stanu cywilnego.',
     };

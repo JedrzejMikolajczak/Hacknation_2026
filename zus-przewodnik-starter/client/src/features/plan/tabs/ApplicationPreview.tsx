@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DeliveryGuide } from './filingGuide';
+import type { ApplicationPdfData } from './pdf/types';
 import './ApplicationPreview.css';
 
 interface ApplicationPreviewProps {
@@ -13,6 +14,7 @@ interface ApplicationPreviewProps {
   verificationNote?: string;
   delivery?: DeliveryGuide;
   mailto?: string;
+  pdf?: ApplicationPdfData;
   onClose: () => void;
 }
 
@@ -26,10 +28,31 @@ export function ApplicationPreview({
   verificationNote,
   delivery,
   mailto,
+  pdf,
   onClose,
 }: ApplicationPreviewProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
+  const [busy, setBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  async function download() {
+    if (!pdf) {
+      window.print();
+      return;
+    }
+    setBusy(true);
+    setDownloadError(null);
+    try {
+      // Generator ładujemy dopiero przy pobieraniu – pdf-lib i czcionki nie obciążają reszty aplikacji.
+      const { generateApplicationPdf, downloadPdf, pdfFileName } = await import('./pdf/generate');
+      downloadPdf(await generateApplicationPdf(pdf), pdfFileName(pdf.title));
+    } catch {
+      setDownloadError('Nie udało się wygenerować pliku PDF. Spróbuj ponownie.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     const element = dialog.current;
@@ -115,9 +138,27 @@ export function ApplicationPreview({
         </section>
       )}
       <footer>
-        <button type="button" className="plan-btn plan-btn--primary" onClick={() => window.print()}>
-          Drukuj lub zapisz PDF
+        <button
+          type="button"
+          className="plan-btn plan-btn--primary"
+          onClick={() => void download()}
+          disabled={busy}
+        >
+          {busy
+            ? 'Generowanie…'
+            : pdf
+              ? 'Pobierz wniosek do uzupełnienia (PDF)'
+              : 'Drukuj lub zapisz PDF'}
         </button>
+        {pdf && (
+          <div className="application-preview__pdfnote" role="note">
+            <strong>To nie jest wniosek gotowy do wysłania.</strong>{' '}
+            {pdf.kind === 'letter'
+              ? 'Pobierzesz pismo wypełnione tym, co podałeś(-aś). Przed wysłaniem dopisz odręcznie miejscowość i adres do korespondencji, sprawdź dane i podpisz.'
+              : 'Pobierzesz oficjalny formularz ZUS wypełniony tylko częścią danych. Przed wysłaniem trzeba jeszcze dopisać: adres, numer telefonu i dane dokumentu tożsamości (jeśli wymagane), dane dziecka (imię, miejsce urodzenia) oraz pozostałe pola specyficzne dla Twojej sytuacji – a na końcu podpisać.'}
+            {downloadError && <strong> {downloadError}</strong>}
+          </div>
+        )}
         <button
           type="button"
           className="plan-btn plan-btn--secondary"

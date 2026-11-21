@@ -126,7 +126,8 @@ function StepDetail({
         <ol className="fmap__todo">
           <li>
             <strong>Przygotuj wniosek.</strong> Wypełnimy go danymi z Twojego formularza – dopytamy
-            tylko o to, czego brakuje, i pobierzesz gotowy PDF.
+            tylko o to, czego brakuje. Pobierzesz wniosek wstępnie wypełniony – przed wysłaniem
+            trzeba go jeszcze uzupełnić i podpisać.
             {step.applicationHref && (
               <Link to={step.applicationHref} className="plan-btn plan-btn--primary fmap__cta">
                 Wypełnij i pobierz wniosek ›

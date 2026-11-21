@@ -172,7 +172,7 @@ npm run build
 
 Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez AI” i wpisujemy do listy poniżej.
 
-- [x] Asystent odpowiadający na podstawie poradnika ZUS (opcjonalny) — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`. Odpowiedzi pochodzą z bazy demonstracyjnej)
+- [x] Asystent AI (Google Gemini) odpowiadający na podstawie poradnika ZUS 2026, parametrów systemu i zanonimizowanego kontekstu planu — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`, z automatycznym trybem awaryjnym z bazy lokalnej bez AI, gdy brak klucza `GEMINI_API_KEY`)
 - [ ] Odczyt danych z PDF przykładowej sprawy (opcjonalny)
 
 ## Test wersji konkursowej
@@ -186,7 +186,7 @@ Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez
 1. Po porodzie ustaw datę sprzed 21 dni, a następnie sprzed 22 dni. Sprawdź, czy kreator nadal pozwala wybrać 81,5% w pierwszym przypadku i wybiera stawki rozdzielone w drugim.
 2. W planie obojga rodziców zaznacz pobyt mamy w szpitalu i orzeczenie jednocześnie. Następnie wybierz zgon mamy. Podaj datę zgonu i sprawdź, czy formularz przechodzi do danych taty.
 3. W zakładce **Wnioski** wybierz **Pobierz dane z mObywatela (symulacja)**. Wybierz gotowy profil, wskaż wnioskodawcę, jeśli plan obejmuje oboje rodziców, i kliknij **Przekaż dane testowe**. Po automatycznym powrocie sprawdź imię i nazwisko, PESEL oraz datę urodzenia wybranego wnioskodawcy.
-4. Uzupełnij wymagane pola wniosku i kliknij **Pobierz PDF**. Sprawdź podgląd oraz listę załączników. Wybierz **Drukuj lub zapisz PDF**, a w oknie drukowania wybierz zapis do PDF. Wniosek złóż u adresata wskazanego w podglądzie.
+4. Uzupełnij wymagane pola wniosku i kliknij **Pobierz PDF**. Sprawdź podgląd oraz listę załączników i wybierz **Pobierz wniosek do uzupełnienia (PDF)**. Uzupełnij ewentualne braki i złóż wniosek u adresata wskazanego w podglądzie.
 5. W kreatorze wybierz datę 31 stycznia, po czym zmień miesiąc na luty. Pole dnia powinno się wyczyścić. W pytaniu o liczbę dzieci sprawdź wartości 1, 2 i 3 oraz **4 lub więcej**.
 6. W planie z odwróconymi datami zwolnienia sprawdź komunikat w zakładce **Uprawnienia** i popraw zakres bezpośrednio pod komunikatem.
 
