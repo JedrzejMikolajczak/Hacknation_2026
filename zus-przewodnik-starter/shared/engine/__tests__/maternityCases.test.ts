@@ -253,6 +253,47 @@ describe('maternity leave extended scenarios', () => {
     expect(resFoster.periods.some((p) => p.leaveType === 'paternityLeave')).toBe(false);
   });
 
+  it('warns about insurance that started during pregnancy despite a longer tenure before birth', () => {
+    const input = testScenario();
+    input.situation = 'pregnant';
+    input.birthDate = null;
+    input.expectedBirthDate = '2027-03-10';
+    input.mother.insuredSince = '2026-06-12';
+
+    const { entitlements, warnings } = checkEligibility(input, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('SHAM_CONTRACT_RISK');
+    expect(
+      entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother'),
+    ).toMatchObject({ entitled: true, payer: 'employer' });
+  });
+
+  it('warns about recent self-employment insurance before sickness even when it started before pregnancy', () => {
+    const input = {
+      ...testScenario(),
+      sicknessStartDate: '2026-03-01',
+    };
+    input.mother.insuranceTitle = 'selfEmployed';
+    input.mother.sicknessInsurance = 'voluntary';
+    input.mother.insuredSince = '2026-01-15';
+
+    const { warnings } = checkEligibility(input, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('SHAM_CONTRACT_RISK');
+  });
+
+  it.each([null, '2025-01-01', '2026-11-02'])(
+    'does not infer sham-contract risk from an unknown or unrelated start date (%s)',
+    (insuredSince) => {
+      const input = testScenario();
+      input.mother.insuredSince = insuredSince;
+
+      const { warnings } = checkEligibility(input, params);
+
+      expect(warnings.some((warning) => warning.code === 'SHAM_CONTRACT_RISK')).toBe(false);
+    },
+  );
+
   it('handles pregnancy sickness, rehabilitation, maternity-equivalent benefit, and all risk warnings', () => {
     const pregnant = testScenario();
     pregnant.situation = 'pregnant';
