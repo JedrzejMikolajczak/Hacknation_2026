@@ -14,11 +14,28 @@
   background: var(--color-accent-soft);
 }
 
+.docs-answer--overdue {
+  border-color: var(--color-error);
+  border-left-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.docs-answer__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .docs-answer__eyebrow {
   color: var(--color-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
+}
+
+.docs-answer--overdue .docs-answer__eyebrow {
+  color: var(--color-error);
 }
 
 .docs-answer__step {
@@ -29,10 +46,17 @@
   overflow-wrap: anywhere;
 }
 
+.docs-answer__overdue-hint {
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
 .docs-answer__payers {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding-top: var(--space-3);
   border-top: var(--border-width) solid var(--color-border);
 }
@@ -51,8 +75,16 @@
 .docs-answer__payer-row dd {
   color: var(--color-text);
   font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
 }
 
+.docs-answer__payer-row dd.docs-answer__payer-method {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+/* Zwijane szczegóły (native <details>) */
 .docs-details {
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -100,13 +132,68 @@
   overflow-wrap: anywhere;
 }
 
-/* Kompaktowa checklista */
+.docs-details__sub {
+  margin-top: var(--space-2);
+}
+
+/* Kompaktowa checklista z paskiem postępu i grupowaniem */
 .docs-checklist-header {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.docs-progress {
   margin-bottom: var(--space-4);
+}
+
+.docs-progress__track {
+  width: 100%;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  border: var(--border-width) solid var(--color-border);
+  overflow: hidden;
+}
+
+.docs-progress__fill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.2s ease;
+}
+
+.docs-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.docs-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.docs-group__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.docs-group__title {
+  color: var(--color-navy);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.docs-group__desc {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
 }
 
 .docs-compact-list {
@@ -125,6 +212,11 @@
 .docs-compact-item--checked {
   border-color: var(--color-primary);
   background: var(--color-accent-soft);
+}
+
+.docs-compact-item--overdue {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
 }
 
 .docs-compact-item__main {
@@ -153,10 +245,23 @@
   min-width: 0;
 }
 
+.docs-compact-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .docs-compact-item__name {
   color: var(--color-text);
   font-weight: var(--font-weight-bold);
   overflow-wrap: anywhere;
+}
+
+.docs-compact-item--checked .docs-compact-item__name {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
 }
 
 .docs-compact-item__meta {
@@ -171,6 +276,12 @@
   color: var(--color-text);
 }
 
+.docs-compact-item__method {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
 .docs-compact-item__overdue {
   color: var(--color-error);
   font-weight: var(--font-weight-bold);
@@ -180,11 +291,31 @@
   padding: 0 var(--space-4) var(--space-3);
 }
 
+.docs-checklist-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
 .docs-reform-details {
   margin-top: var(--space-4);
 }
 
 /* Kluczowe terminy */
+.docs-overdue-alert {
+  margin-bottom: var(--space-4);
+}
+
+.docs-overdue-alert__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
 .docs-next-deadline {
   display: flex;
   flex-direction: column;
@@ -238,6 +369,11 @@
   background: var(--color-surface-muted);
 }
 
+.docs-deadlines-list__item--overdue {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
 .docs-deadlines-list__date {
   color: var(--color-text);
   font-weight: var(--font-weight-bold);
@@ -247,6 +383,38 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
+}
+
+.docs-plan-assumption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: var(--accent-bar-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+}
+
+.docs-plan-assumption__text {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.docs-plan-assumption__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-link);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.docs-plan-assumption__link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
 }
 
 .docs-legal-list {
@@ -287,6 +455,10 @@
   color: var(--color-on-primary);
 }
 
+.docs-next-cta {
+  width: 100%;
+}
+
 @media (min-width: 640px) {
   .docs-answer__payers {
     grid-template-columns: repeat(2, 1fr);
@@ -297,6 +469,11 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .docs-checklist-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .docs-deadlines-list__item {
@@ -310,14 +487,23 @@
     white-space: nowrap;
   }
 
-  .docs-next-link {
+  .docs-next-link,
+  .docs-next-cta {
     width: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .docs-next-link,
-  .docs-details__summary {
+  .docs-details__summary,
+  .docs-progress__fill {
     transition: none;
+  }
+}
+
+@media print {
+  .docs-checklist-actions,
+  .docs-next-nav {
+    display: none;
   }
 }
