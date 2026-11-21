@@ -183,16 +183,16 @@ export function documentsForPlan(
       add('e-ZLA', ezlaName, role, personPayer, KP.sickness, sickness);
       if (person.employment_type === 'B2B')
         add('ZAS-53', 'ZAS-53 – wniosek o zasiłek chorobowy', role, 'ZUS', KP.sickness, sickness);
-      const hasFurtherSicknessPeriod = Boolean(
+      const hasFurtherSicknessPeriod =
         sickness &&
         ((input.sickness_benefit_days_already_used ?? 0) > 0 ||
-          roleSickness.length > 1 ||
-          (sickness.amount_segments?.length ?? 0) > 1),
-      );
-      if (employee && personPayer === 'ZUS' && hasFurtherSicknessPeriod)
+          (employee && (roleSickness.length > 1 || (sickness.amount_segments?.length ?? 0) > 1)));
+      if ((employee || mandate) && personPayer === 'ZUS' && hasFurtherSicknessPeriod)
         add(
           'ZAS-12',
-          'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
+          mandate
+            ? 'ZAS-12 – zaświadczenie zleceniodawcy na dalszy okres zasiłku chorobowego (alternatywa dla Z-3a)'
+            : 'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
           role,
           'ZUS',
           KP.sickness,

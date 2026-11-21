@@ -253,6 +253,96 @@ describe('maternity leave extended scenarios', () => {
     expect(resFoster.periods.some((p) => p.leaveType === 'paternityLeave')).toBe(false);
   });
 
+  it('warns about insurance that started during pregnancy despite a longer tenure before birth', () => {
+    const input = testScenario();
+    input.situation = 'pregnant';
+    input.birthDate = null;
+    input.expectedBirthDate = '2027-03-10';
+    input.mother.insuredSince = '2026-06-12';
+
+    const { entitlements, warnings } = checkEligibility(input, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('SHAM_CONTRACT_RISK');
+    expect(
+      entitlements.find((e) => e.benefit === 'maternityBenefit' && e.parentRole === 'mother'),
+    ).toMatchObject({ entitled: true, payer: 'employer' });
+  });
+
+  it('warns about recent self-employment insurance before sickness even when it started before pregnancy', () => {
+    const input = {
+      ...testScenario(),
+      sicknessStartDate: '2026-03-01',
+    };
+    input.mother.insuranceTitle = 'selfEmployed';
+    input.mother.sicknessInsurance = 'voluntary';
+    input.mother.insuredSince = '2026-01-15';
+
+    const { warnings } = checkEligibility(input, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('SHAM_CONTRACT_RISK');
+  });
+
+  it.each([null, '2025-01-01', '2026-11-02'])(
+    'does not infer sham-contract risk from an unknown or unrelated start date (%s)',
+    (insuredSince) => {
+      const input = testScenario();
+      input.mother.insuredSince = insuredSince;
+
+      const { warnings } = checkEligibility(input, params);
+
+      expect(warnings.some((warning) => warning.code === 'SHAM_CONTRACT_RISK')).toBe(false);
+    },
+  );
+
+  it('detects a configured increase during pregnancy from monthly amounts in any order', () => {
+    const input = testScenario();
+    const monthlyBases = [
+      { month: '2026-03', amount_pln: 6500 },
+      { month: '2025-12', amount_pln: 5000 },
+      { month: '2026-02', amount_pln: 5000 },
+    ];
+
+    const { entitlements, warnings } = checkEligibility({ ...input, monthlyBases }, params);
+
+    expect(warnings.map((warning) => warning.code)).toContain('BASE_INCREASE_IN_PREGNANCY');
+    expect(entitlements).toEqual(checkEligibility(input, params).entitlements);
+  });
+
+  it.each([
+    { label: 'only a high amount from the form', monthlyBases: undefined },
+    { label: 'no comparison month', monthlyBases: [{ month: '2026-03', amount_pln: 9000 }] },
+    {
+      label: 'steady monthly amounts',
+      monthlyBases: [
+        { month: '2025-12', amount_pln: 18000 },
+        { month: '2026-03', amount_pln: 18000 },
+      ],
+    },
+    {
+      label: 'an excluded bonus',
+      monthlyBases: [
+        { month: '2025-12', amount_pln: 5000 },
+        { month: '2026-03', amount_pln: 8000, excluded_bonus_pln: 3000 },
+      ],
+    },
+    {
+      label: 'an increase outside pregnancy',
+      monthlyBases: [
+        { month: '2025-11', amount_pln: 5000 },
+        { month: '2025-12', amount_pln: 8000 },
+        { month: '2026-12', amount_pln: 16000 },
+      ],
+    },
+  ])('does not warn with $label', ({ monthlyBases }) => {
+    const input = testScenario();
+    input.mother.insuredSince = '2026-10-01';
+    input.mother.benefitBase = 18000;
+
+    const { warnings } = checkEligibility({ ...input, monthlyBases }, params);
+
+    expect(warnings.map((warning) => warning.code)).not.toContain('BASE_INCREASE_IN_PREGNANCY');
+  });
+
   it('handles pregnancy sickness, rehabilitation, maternity-equivalent benefit, and all risk warnings', () => {
     const pregnant = testScenario();
     pregnant.situation = 'pregnant';
@@ -264,7 +354,14 @@ describe('maternity leave extended scenarios', () => {
     pregnant.special.employerBankruptcyOrLiquidation = true;
 
     const elig = checkEligibility(
-      { ...pregnant, shamContractRiskHint: true, baseIncreasedInPregnancy: true },
+      {
+        ...pregnant,
+        shamContractRiskHint: true,
+        monthlyBases: [
+          { month: '2026-05', amount_pln: 5000 },
+          { month: '2026-10', amount_pln: 8000 },
+        ],
+      },
       params,
     );
     const codes = elig.warnings.map((w) => w.code);
