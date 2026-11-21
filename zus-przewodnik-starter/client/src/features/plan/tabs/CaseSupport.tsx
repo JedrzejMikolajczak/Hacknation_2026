@@ -1,7 +1,8 @@
 import type { BenefitParams, CaseInputs, CaseOutcome, ScenarioInput } from '@shared/types';
 import { OrganizationsDetails } from '../../support/OrganizationsSection';
 import { getMatchingSpecialSituationIds, getOrderedOrganizations } from '../../support/supportData';
-import { FaqDetails } from '../../support/FaqSection';
+import { AssistantSection } from '../../support/AssistantSection';
+import '../../support/AssistantSection.css';
 import { PueSimulationDetails, OfficialLinksAndUscDetails } from '../../support/PueSimulationSection';
 import { buildDefaultSpecial, buildEmptyParent, todayIsoDate } from '../planScenario';
 import './SupportTab.css';
@@ -51,6 +52,6 @@ export function CaseSupport({ input, outcome, params }: { input: CaseInputs; out
     <OrganizationsDetails organizations={getOrderedOrganizations(matching)} defaultOpen />
     <PueSimulationDetails scenario={preview} hasMotherInPlan={input.applicant_role === 'MOTHER'} motherInsuranceKnown usePrimarySubmit />
     <OfficialLinksAndUscDetails referenceDate={preview.referenceDate} />
-    <FaqDetails params={params} />
+    <AssistantSection params={params} />
   </div>;
 }

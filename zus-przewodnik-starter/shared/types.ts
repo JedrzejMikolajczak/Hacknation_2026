@@ -580,3 +580,8 @@ export interface CaseEvaluation {
   matches: boolean;
   differences: CaseDifference[];
 }
+
+export interface AssistantAnswer {
+  answer: string;
+  sources: string[];
+}
