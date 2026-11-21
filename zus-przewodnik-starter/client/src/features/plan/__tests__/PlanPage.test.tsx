@@ -296,4 +296,57 @@ describe('Twój plan', () => {
     expect(screen.getByRole('region', { name: 'Okresy: Tata' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dalej: Plan urlopów ›' })).toBeInTheDocument();
   });
+
+  it('w zakładce Dokumenty poprawnie wskazuje zleceniodawcę (> 20) bez Z-3a oraz ścieżkę ciążową bez daty L4', async () => {
+    const mandateScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-04-10',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'mandateContract',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2022-01-01',
+        insuranceEndDate: null,
+        benefitBase: 5500,
+        contributionDebt: null,
+        employerInsuredCount: 45,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/documents?situation=pregnant']}>
+        <ScenarioProvider initialScenario={mandateScenario}>
+          <Routes>
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Dokumenty i terminy', level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/U zleceniodawcy \(> 20 ubezpieczonych – wypłaca zleceniodawca\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Zwolnienie lekarskie w ciąży \(e-ZLA, kod „B”\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Z-3a –/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ZAS-12 –/)).not.toBeInTheDocument();
+  });
 });
