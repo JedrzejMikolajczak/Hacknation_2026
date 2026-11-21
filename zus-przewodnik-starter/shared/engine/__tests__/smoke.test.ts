@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { BenefitParams } from '../../types';
 import paramsJson from '../../params.json';
-import { checkEligibility } from '../index';
+import { planParentalSplit } from '../index';
 
 describe('shared smoke', () => {
   it('loads params.json with a version matching BenefitParams', () => {
@@ -10,7 +10,7 @@ describe('shared smoke', () => {
     expect(params.version.length).toBeGreaterThan(0);
   });
 
-  it('engine stubs throw until implemented', () => {
-    expect(() => checkEligibility({} as never, paramsJson)).toThrow('Not implemented');
+  it('unimplemented stubs throw until completed', () => {
+    expect(() => planParentalSplit({} as never, paramsJson)).toThrow('Not implemented');
   });
 });
