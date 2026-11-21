@@ -46,6 +46,15 @@ export interface PregnancySickLeave {
   untilBirth: boolean | null;
 }
 
+export type FieldSource = 'zus' | 'mobywatel' | 'user' | 'edited';
+
+export interface FieldConflict {
+  questionId: string;
+  userValue: string;
+  incomingValue: string;
+  incomingSource: 'zus' | 'mobywatel';
+}
+
 /** Stan interfejsu, oddzielony od kontraktu obliczeń. 'unknown' oznacza świadome pominięcie. */
 export interface ManualFormState {
   version: 2;
@@ -53,4 +62,6 @@ export interface ManualFormState {
   answers: Record<string, string>;
   currentQuestionId: string;
   completed: boolean;
+  fieldSources?: Record<string, FieldSource>;
+  pendingConflicts?: Record<string, FieldConflict>;
 }

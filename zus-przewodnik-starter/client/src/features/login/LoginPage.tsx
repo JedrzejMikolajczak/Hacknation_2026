@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import type { ApplicantRole, AuthSession, MockProfileSummary } from '@shared/types';
+import type {
+  ApplicantRole,
+  AuthSession,
+  InsuranceTitle,
+  MockProfileSummary,
+} from '@shared/types';
 import { apiGet, apiPost } from '../../api/client';
+import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { parseSituation } from '../../app/situation';
+import { formatPln, formatPolishDate } from '../plan/planScenario';
+import { computeAverageIncome, resolveRightArisesDate } from '../wizard/zusMerge';
+import { ContributionDebtCertificate, SickLeavePreview } from './ZusSimulationPanels';
 import '../wizard/WizardPage.css';
+import './LoginPage.css';
+
+const TITLE_LABELS: Record<InsuranceTitle, string> = {
+  employment: 'Umowa o pracę',
+  mandateContract: 'Umowa zlecenie',
+  selfEmployed: 'Działalność gospodarcza (JDG)',
+  none: 'Brak tytułu ubezpieczenia',
+};
 
 const applicantOptions = [
   { role: 'MOTHER', label: 'Mama' },
@@ -12,29 +29,44 @@ const applicantOptions = [
 ] as const;
 
 export function LoginPage() {
-  const { scenario, setSimulatedIdentity } = useScenario();
+  const {
+    scenario,
+    manualForm,
+    authSession,
+    loginWithProfile,
+    logoutMockSession,
+    setSimulatedIdentity,
+  } = useScenario();
   const [query] = useSearchParams();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const requestedRoles = state?.applicantRoles;
+
+  const locationState = state as { returnTo?: unknown; applicantRoles?: unknown } | null;
+  const requestedRoles = locationState?.applicantRoles;
   const availableApplicants = Array.isArray(requestedRoles)
     ? applicantOptions.filter(({ role }) => requestedRoles.includes(role))
     : applicantOptions;
+
   const [selectedRole, setSelectedRole] = useState<ApplicantRole | null>(null);
   const role = selectedRole ?? availableApplicants[0]?.role;
+
   const [profiles, setProfiles] = useState<MockProfileSummary[] | null>(null);
   const [selectedProfile, setSelectedProfile] = useState('');
-  const profileId = selectedProfile || profiles?.[0]?.profileId;
+  const profileId = selectedProfile || profiles?.[0]?.profileId || '';
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const mounted = useRef(false);
+
   const situation = parseSituation(query.get('situation')) ?? scenario.situation;
+  const rawReturnTo = locationState?.returnTo;
   const returnTo =
-    typeof state?.returnTo === 'string' && /^\/plan\/applications(?:\?.*)?$/.test(state.returnTo)
-      ? state.returnTo
+    typeof rawReturnTo === 'string' &&
+    /^\/(?:plan\/applications|wizard)(?:\?.*)?$/.test(rawReturnTo)
+      ? rawReturnTo
       : situation
         ? `/wizard?situation=${situation}`
         : '/';
+  const isApplicationIdentityFlow = returnTo.startsWith('/plan/applications');
 
   useEffect(() => {
     mounted.current = true;
@@ -57,7 +89,7 @@ export function LoginPage() {
     };
   }, []);
 
-  async function connect(event: FormEvent<HTMLFormElement>) {
+  async function connectApplicantIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!role || !profileId || submitting) return;
     setError('');
@@ -74,64 +106,250 @@ export function LoginPage() {
     }
   }
 
+  async function handleProfileLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profileId || submitting) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      await loginWithProfile(profileId, situation);
+    } catch (err) {
+      if (!mounted.current) return;
+      setError(
+        err instanceof Error ? err.message : 'Nie udało się zalogować wybranym profilem.',
+      );
+    } finally {
+      if (mounted.current) setSubmitting(false);
+    }
+  }
+
+  const conflictCount = Object.keys(manualForm?.pendingConflicts ?? {}).length;
+  const activeMother = authSession?.profile.mother ?? null;
+  const averageIncome = authSession ? computeAverageIncome(authSession.zusData.incomes) : null;
+  const rightArisesDate = resolveRightArisesDate(scenario, manualForm?.answers);
+
+  if (isApplicationIdentityFlow) {
+    return (
+      <main className="wizard__shell wizard__main">
+        <form className="wizard__card" onSubmit={connectApplicantIdentity}>
+          <h1>Logowanie przez mObywatela (symulacja)</h1>
+          <p>
+            Wybierz gotowy profil testowy. Imię, nazwisko, PESEL i data urodzenia zostaną
+            przeniesione do danych wnioskodawcy.
+          </p>
+          <div className="wizard__input-group">
+            <label className="wizard__field">
+              Wnioskodawca
+              <select
+                value={role ?? ''}
+                disabled={submitting || availableApplicants.length < 2}
+                onChange={(event) => {
+                  const applicant = availableApplicants.find(
+                    (candidate) => candidate.role === event.target.value,
+                  );
+                  if (applicant) setSelectedRole(applicant.role);
+                }}
+              >
+                {availableApplicants.map(({ role: optRole, label }) => (
+                  <option key={optRole} value={optRole}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="wizard__field">
+              Profil testowy
+              <select
+                value={profileId}
+                disabled={!profileId || submitting}
+                onChange={(event) => setSelectedProfile(event.target.value)}
+              >
+                {!profileId && (
+                  <option value="">{profiles === null ? 'Wczytywanie…' : 'Brak profili'}</option>
+                )}
+                {profiles?.map((profile) => (
+                  <option key={profile.profileId} value={profile.profileId}>
+                    {profile.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {error && <p role="alert">{error}</p>}
+          <div className="wizard__actions">
+            <Link className="wizard__button wizard__button--secondary" to={returnTo}>
+              Kontynuuj bez logowania
+            </Link>
+            <button
+              className="wizard__button wizard__button--primary"
+              type="submit"
+              disabled={!role || !profileId || submitting}
+            >
+              {submitting ? 'Pobieranie danych…' : 'Przekaż dane testowe'}
+            </button>
+          </div>
+        </form>
+      </main>
+    );
+  }
+
   return (
-    <main className="wizard__shell wizard__main">
-      <form className="wizard__card" onSubmit={connect}>
-        <h1>Logowanie przez mObywatela (symulacja)</h1>
-        <p>
-          Wybierz gotowy profil testowy. Imię, nazwisko, PESEL i data urodzenia zostaną przeniesione
-          do danych wnioskodawcy.
-        </p>
-        <div className="wizard__input-group">
-          <label className="wizard__field">
-            Wnioskodawca
-            <select
-              value={role ?? ''}
-              disabled={submitting || availableApplicants.length < 2}
-              onChange={(event) => {
-                const applicant = availableApplicants.find(({ role }) => role === event.target.value);
-                if (applicant) setSelectedRole(applicant.role);
-              }}
-            >
-              {availableApplicants.map(({ role, label }) => (
-                <option key={role} value={role}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="wizard__field">
-            Profil testowy
-            <select
-              value={profileId ?? ''}
-              disabled={!profileId || submitting}
-              onChange={(event) => setSelectedProfile(event.target.value)}
-            >
-              {!profileId && (
-                <option value="">{profiles === null ? 'Wczytywanie…' : 'Brak profili'}</option>
-              )}
-              {profiles?.map((profile) => (
-                <option key={profile.profileId} value={profile.profileId}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="login-page">
+      <div className="login-page__demo-strip">
+        <div className="wizard__shell">
+          Wersja demonstracyjna · logowanie mObywatel i dane ZUS są symulowane
         </div>
-        {error && <p role="alert">{error}</p>}
-        <div className="wizard__actions">
-          <Link className="wizard__button wizard__button--secondary" to={returnTo}>
-            Kontynuuj bez logowania
+      </div>
+
+      <header className="login-page__header">
+        <div className="wizard__shell">
+          <Link to={returnTo} className="wizard__back-link">
+            ← Wróć
           </Link>
-          <button
-            className="wizard__button wizard__button--primary"
-            type="submit"
-            disabled={!role || !profileId || submitting}
-          >
-            {submitting ? 'Pobieranie danych…' : 'Przekaż dane testowe'}
-          </button>
+          <h1>Logowanie przez mObywatela (symulacja)</h1>
+          <p>
+            Wybierz profil demonstracyjny, aby pobrać symulowane dane z ZUS (ubezpieczenie,
+            miesięczne zarobki, e-ZLA z kodem „B” i stan zadłużenia). W formularzu uzupełnimy
+            wyłącznie puste pola — bez nadpisywania Twoich wpisów.
+          </p>
         </div>
-      </form>
-    </main>
+      </header>
+
+      <main className="wizard__shell wizard__main">
+        <div className="login-page__stack">
+          <section className="wizard__card" aria-labelledby="mock-login-heading">
+            <h2 id="mock-login-heading">Wybierz profil mObywatela (symulacja)</h2>
+
+            {profiles === null && <p role="status">Ładowanie profili demonstracyjnych…</p>}
+            {error && profiles !== null && profiles.length === 0 && (
+              <p className="wizard__notice" role="status">
+                {error}
+              </p>
+            )}
+
+            {profiles && profiles.length > 0 && (
+              <form onSubmit={handleProfileLogin} className="login-page__stack">
+                <fieldset className="login-page__profile-list">
+                  <legend className="visually-hidden">Profile demonstracyjne mObywatel</legend>
+                  {profiles.map((item) => {
+                    const checked = profileId === item.profileId;
+                    return (
+                      <label
+                        key={item.profileId}
+                        className={
+                          checked
+                            ? 'login-page__profile-option login-page__profile-option--selected'
+                            : 'login-page__profile-option'
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="mockProfile"
+                          value={item.profileId}
+                          checked={checked}
+                          onChange={() => setSelectedProfile(item.profileId)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+
+                {error && (
+                  <p className="wizard__error" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <div className="wizard__actions">
+                  <button
+                    type="submit"
+                    className="wizard__button wizard__button--primary"
+                    disabled={!profileId || submitting}
+                  >
+                    {submitting
+                      ? 'Pobieranie danych z ZUS…'
+                      : 'Zaloguj przez mObywatela (symulacja)'}
+                  </button>
+                  <Link className="wizard__button wizard__button--secondary" to={returnTo}>
+                    Kontynuuj bez logowania
+                  </Link>
+                </div>
+              </form>
+            )}
+          </section>
+
+          {authSession && activeMother && (
+            <section className="wizard__card" aria-labelledby="zus-session-heading">
+              <div className="login-page__session-header">
+                <h2 id="zus-session-heading">
+                  Pobrano dane z ZUS: {authSession.profile.firstName}{' '}
+                  {authSession.profile.lastName}
+                </h2>
+                <button type="button" className="wizard__edit" onClick={logoutMockSession}>
+                  Wyloguj profil demo
+                </button>
+              </div>
+
+              <dl className="login-page__session-summary">
+                <div>
+                  <dt>Tytuł ubezpieczenia (ZUS)</dt>
+                  <dd>{TITLE_LABELS[activeMother.insuranceTitle]}</dd>
+                </div>
+                {activeMother.insuredSince && (
+                  <div>
+                    <dt>Początek ubezpieczenia (ZUS)</dt>
+                    <dd>{formatPolishDate(activeMother.insuredSince)}</dd>
+                  </div>
+                )}
+                {activeMother.employerInsuredCount !== null && (
+                  <div>
+                    <dt>Osoby zgłoszone u płatnika (ZUS)</dt>
+                    <dd>{activeMother.employerInsuredCount}</dd>
+                  </div>
+                )}
+                {averageIncome !== null && (
+                  <div>
+                    <dt>
+                      Średni przychód z ostatnich {authSession.zusData.incomes.length} mies. (ZUS)
+                    </dt>
+                    <dd>{formatPln(averageIncome)}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {conflictCount > 0 && (
+                <p className="wizard__notice" role="status">
+                  Wykryto {conflictCount === 1 ? '1 rozbieżność' : `${conflictCount} rozbieżności`}{' '}
+                  z wcześniej wpisanymi odpowiedziami. Twoje wpisy nie zostały nadpisane —
+                  zdecydujesz o nich w formularzu.
+                </p>
+              )}
+
+              {activeMother.insuranceTitle === 'selfEmployed' && (
+                <ContributionDebtCertificate
+                  payerName={`${authSession.profile.firstName} ${authSession.profile.lastName}`}
+                  asOfDate={rightArisesDate}
+                  contributionDebt={authSession.zusData.contributionDebt}
+                  params={DEFAULT_PARAMS}
+                />
+              )}
+
+              <SickLeavePreview certificates={authSession.zusData.sickLeaveCertificates} />
+
+              <div className="wizard__actions">
+                <button
+                  type="button"
+                  className="wizard__button wizard__button--primary"
+                  onClick={() => navigate(returnTo, { replace: true })}
+                >
+                  Przejdź do formularza z danymi ZUS →
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }

@@ -9,13 +9,13 @@ const api = '/api/v1/mock';
 describe('Symulacja logowania mObywatela', () => {
   it('udostępnia etykiety bez danych identyfikacyjnych i zwraca profil po logowaniu', async () => {
     const list = await request(app).get(`${api}/profiles`).expect(200);
-    expect(list.body).toEqual({
-      data: [
+    expect(list.body.error).toBeNull();
+    expect(list.body.data).toEqual(
+      expect.arrayContaining([
         { profileId: 'anna', label: 'Anna Testowa' },
         { profileId: 'jan', label: 'Jan Testowy' },
-      ],
-      error: null,
-    });
+      ]),
+    );
 
     const login = await request(app)
       .post(`${api}/login`)

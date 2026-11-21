@@ -1,0 +1,51 @@
+{
+  "label": "Maria Wiśniewska – umowa zlecenie (≤ 20 osób), e-ZLA w ciąży",
+  "profile": {
+    "profileId": "maria-zlecenie",
+    "firstName": "Maria",
+    "lastName": "Wiśniewska",
+    "pesel": "99092200086",
+    "birthDate": "1999-09-22",
+    "mother": {
+      "role": "mother",
+      "insuranceTitle": "mandateContract",
+      "sicknessInsurance": "voluntary",
+      "insuredSince": "2025-05-01",
+      "insuranceEndDate": "2027-06-30",
+      "benefitBase": null,
+      "employerInsuredCount": 12,
+      "age": 27,
+      "contributionDebt": null,
+      "wantsLeave": true
+    }
+  },
+  "incomes": [
+    { "month": "2025-10", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2025-11", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2025-12", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-01", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-02", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-03", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-04", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-05", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-06", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-07", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-08", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-09", "grossAmount": 6200, "workedDays": null, "requiredWorkingDays": null }
+  ],
+  "sickLeaveCertificates": [
+    {
+      "id": "EZLA-2026-02-0411",
+      "startDate": "2026-02-10",
+      "endDate": "2026-02-14",
+      "pregnancyCode": false
+    },
+    {
+      "id": "EZLA-2026-10-4821",
+      "startDate": "2026-10-05",
+      "endDate": "2026-11-02",
+      "pregnancyCode": true
+    }
+  ],
+  "contributionDebt": 0
+}

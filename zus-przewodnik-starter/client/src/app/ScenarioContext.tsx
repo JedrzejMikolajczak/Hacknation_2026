@@ -1,13 +1,32 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ApplicantRole, AuthSession, CaseInputs, SituationType } from '@shared/types';
+import type {
+  ApplicantRole,
+  AuthSession,
+  CaseInputs,
+  SituationType,
+  UserProfile,
+  ZusData,
+} from '@shared/types';
+import { apiGet, apiPost } from '../api/client';
 import { readPlanAddress } from './planAddress';
 import { wizardCase } from '../features/plan/caseScenario';
 import { buildScenario } from '../features/wizard/wizardModel';
-import type { ManualFormState, ScenarioDraft } from './scenarioDraft';
+import {
+  mergeZusIntoForm,
+  resolveConflictInForm,
+  selectZusIncomesForBuild,
+} from '../features/wizard/zusMerge';
+import type { FieldConflict, FieldSource, ManualFormState, ScenarioDraft } from './scenarioDraft';
 import { isSituationType } from './situation';
 
 export type { ScenarioDraft } from './scenarioDraft';
+
+export interface MockAuthSession {
+  sessionToken: string;
+  profile: UserProfile;
+  zusData: ZusData;
+}
 
 interface ScenarioContextValue {
   scenario: ScenarioDraft;
@@ -21,6 +40,14 @@ interface ScenarioContextValue {
   clearScenario: () => void;
   simulatedIdentities: Partial<Record<ApplicantRole, AuthSession>>;
   setSimulatedIdentity: (role: ApplicantRole, identity: AuthSession) => void;
+  authSession: MockAuthSession | null;
+  loginWithProfile: (
+    profileId: string,
+    targetSituation?: SituationType | null,
+    role?: ApplicantRole,
+  ) => Promise<MockAuthSession>;
+  logoutMockSession: () => void;
+  resolveFieldConflict: (questionId: string, choice: 'keepUser' | 'useIncoming') => void;
 }
 
 interface ScenarioState {
@@ -31,6 +58,25 @@ interface ScenarioState {
 const ScenarioContext = createContext<ScenarioContextValue | null>(null);
 export const SCENARIO_STORAGE_KEY = 'zus-manual-scenario-v1';
 export const MANUAL_FORM_STORAGE_KEY = 'zus-manual-form-v2';
+
+function isFieldSource(value: unknown): value is FieldSource {
+  return value === 'zus' || value === 'mobywatel' || value === 'user' || value === 'edited';
+}
+
+function isFieldConflict(value: unknown): value is FieldConflict {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'questionId' in value &&
+    typeof value.questionId === 'string' &&
+    'userValue' in value &&
+    typeof value.userValue === 'string' &&
+    'incomingValue' in value &&
+    typeof value.incomingValue === 'string' &&
+    'incomingSource' in value &&
+    (value.incomingSource === 'zus' || value.incomingSource === 'mobywatel')
+  );
+}
 
 function loadState(initialScenario?: ScenarioDraft): ScenarioState {
   if (initialScenario) return { scenario: initialScenario, manualForm: null };
@@ -65,7 +111,30 @@ function loadState(initialScenario?: ScenarioDraft): ScenarioState {
       !Array.isArray(form.answers) &&
       Object.values(form.answers).every((value) => typeof value === 'string')
     ) {
-      const manualForm = form as ManualFormState;
+      const raw = form as Record<string, unknown>;
+      const rawSources = raw.fieldSources;
+      const fieldSources =
+        typeof rawSources === 'object' && rawSources !== null && !Array.isArray(rawSources)
+          ? Object.fromEntries(
+              Object.entries(rawSources).filter(([, entry]) => isFieldSource(entry)),
+            )
+          : undefined;
+      const rawConflicts = raw.pendingConflicts;
+      const pendingConflicts =
+        typeof rawConflicts === 'object' && rawConflicts !== null && !Array.isArray(rawConflicts)
+          ? Object.fromEntries(
+              Object.entries(rawConflicts).filter(([, entry]) => isFieldConflict(entry)),
+            )
+          : undefined;
+      const manualForm: ManualFormState = {
+        version: 2,
+        situation: form.situation as SituationType,
+        answers: form.answers as Record<string, string>,
+        currentQuestionId: form.currentQuestionId,
+        completed: form.completed,
+        ...(fieldSources ? { fieldSources } : {}),
+        ...(pendingConflicts ? { pendingConflicts } : {}),
+      };
       return { scenario: buildScenario(manualForm.situation, manualForm.answers), manualForm };
     }
     return { scenario, manualForm: null };
@@ -82,6 +151,7 @@ interface ScenarioProviderProps {
 export function ScenarioProvider({ children, initialScenario }: ScenarioProviderProps) {
   const [state, setState] = useState<ScenarioState>(() => loadState(initialScenario));
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [authSession, setAuthSession] = useState<MockAuthSession | null>(null);
   const [simulatedIdentities, setSimulatedIdentities] = useState<
     ScenarioContextValue['simulatedIdentities']
   >({});
@@ -126,12 +196,54 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
     }
   }, []);
 
+  const mergeSessionIntoState = useCallback(
+    (
+      base: ScenarioState,
+      zusData: ZusData,
+      targetSituation?: SituationType | null,
+    ): ScenarioState => {
+      const situation = targetSituation ?? base.scenario.situation;
+      if (!situation) return base;
+      const existingForm: ManualFormState =
+        base.manualForm && base.manualForm.situation === situation
+          ? base.manualForm
+          : {
+              version: 2,
+              situation,
+              answers: {},
+              currentQuestionId: 'family',
+              completed: false,
+            };
+      const { form: mergedForm } = mergeZusIntoForm(existingForm, zusData);
+      const zusIncomes = selectZusIncomesForBuild(mergedForm, zusData);
+      return {
+        manualForm: mergedForm,
+        scenario: buildScenario(situation, mergedForm.answers, undefined, { zusIncomes }),
+      };
+    },
+    [],
+  );
+
   const setSituation = useCallback(
     (situation: SituationType | null) => {
-      if (state.scenario.situation !== situation)
-        commit({ scenario: { situation }, manualForm: null });
+      if (state.scenario.situation === situation) return;
+      if (!situation) {
+        commit({ scenario: { situation: null }, manualForm: null });
+        return;
+      }
+      if (authSession) {
+        commit(
+          mergeSessionIntoState(
+            { scenario: { situation }, manualForm: null },
+            authSession.zusData,
+            situation,
+          ),
+        );
+        return;
+      }
+      commit({ scenario: { situation }, manualForm: null });
     },
-    [state.scenario.situation, commit],
+    [state.scenario.situation, authSession, commit, mergeSessionIntoState],
   );
 
   const updateScenario = useCallback(
@@ -150,8 +262,55 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
 
   const clearScenario = useCallback(() => {
     setSimulatedIdentities({});
+    setAuthSession(null);
     commit({ scenario: { situation: null }, manualForm: null });
   }, [commit]);
+
+  const loginWithProfile = useCallback(
+    async (
+      profileId: string,
+      targetSituation?: SituationType | null,
+      role: ApplicantRole = 'MOTHER',
+    ): Promise<MockAuthSession> => {
+      const loginResult = await apiPost<AuthSession>('/mock/login', { profile_id: profileId });
+      const { sessionToken, profile } = loginResult;
+      const zusData = await apiGet<ZusData>('/mock/zus-data', {
+        Authorization: `Bearer ${sessionToken}`,
+      });
+      const session: MockAuthSession = { sessionToken, profile, zusData };
+      setAuthSession(session);
+      setSimulatedIdentities((current) => ({
+        ...current,
+        [role]: loginResult,
+      }));
+      const nextState = mergeSessionIntoState(state, zusData, targetSituation);
+      if (nextState !== state) commit(nextState);
+      return session;
+    },
+    [state, commit, mergeSessionIntoState],
+  );
+
+  const logoutMockSession = useCallback(() => {
+    setAuthSession(null);
+  }, []);
+
+  const resolveFieldConflict = useCallback(
+    (questionId: string, choice: 'keepUser' | 'useIncoming') => {
+      if (!state.manualForm) return;
+      const nextForm = resolveConflictInForm(
+        state.manualForm,
+        questionId,
+        choice,
+        authSession?.zusData ?? null,
+      );
+      const zusIncomes = selectZusIncomesForBuild(nextForm, authSession?.zusData ?? null);
+      commit({
+        manualForm: nextForm,
+        scenario: buildScenario(nextForm.situation, nextForm.answers, undefined, { zusIncomes }),
+      });
+    },
+    [state.manualForm, authSession, commit],
+  );
 
   const value = useMemo(
     () => ({
@@ -165,6 +324,10 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       clearScenario,
       simulatedIdentities,
       setSimulatedIdentity,
+      authSession,
+      loginWithProfile,
+      logoutMockSession,
+      resolveFieldConflict,
     }),
     [
       state,
@@ -177,6 +340,10 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       clearScenario,
       simulatedIdentities,
       setSimulatedIdentity,
+      authSession,
+      loginWithProfile,
+      logoutMockSession,
+      resolveFieldConflict,
     ],
   );
 

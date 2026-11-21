@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { SickLeaveCertificate } from '@shared/types';
+import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
-import type { ManualFormState } from '../../app/scenarioDraft';
+import type { FieldSource, ManualFormState } from '../../app/scenarioDraft';
 import { parseSituation } from '../../app/situation';
+import { ContributionDebtCertificate, SickLeavePreview } from '../login/ZusSimulationPanels';
 import {
   buildScenario,
-  changeAnswer,
   dateInputToIso,
   displayDate,
   formatAnswer,
@@ -16,11 +18,29 @@ import {
   validateAnswer,
   type WizardQuestion,
 } from './wizardModel';
+import {
+  FIELD_SOURCE_LABELS,
+  recordUserEdit,
+  resolveRightArisesDate,
+  selectZusIncomesForBuild,
+} from './zusMerge';
 import './WizardPage.css';
 
 function formatDateInput(value: string): string {
   const digits = displayDate(value).replace(/\D/g, '');
   return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
+}
+
+function SourceBadge({ source }: { source: FieldSource | undefined }) {
+  if (!source) return null;
+  return (
+    <span
+      className={`wizard__source-badge wizard__source-badge--${source}`}
+      data-source={source}
+    >
+      {FIELD_SOURCE_LABELS[source]}
+    </span>
+  );
 }
 
 function QuestionField({
@@ -132,8 +152,16 @@ function QuestionField({
 export function WizardPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { scenario, manualForm, setSituation, saveManualForm, clearScenario, storageAvailable } =
-    useScenario();
+  const {
+    scenario,
+    manualForm,
+    authSession,
+    setSituation,
+    saveManualForm,
+    clearScenario,
+    resolveFieldConflict,
+    storageAvailable,
+  } = useScenario();
   const situation = parseSituation(params.get('situation')) ?? scenario.situation;
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -156,6 +184,9 @@ export function WizardPage() {
     rate?.options?.length === 1 && form
       ? { ...form.answers, rateVariant: 'standard' }
       : (form?.answers ?? {});
+  const fieldSources = form?.fieldSources ?? {};
+  const pendingConflicts = form?.pendingConflicts ?? {};
+  const conflictList = Object.values(pendingConflicts);
   const firstMissing = questions.find(
     (question) => validateAnswer(question, answers[question.id]) !== null,
   );
@@ -179,17 +210,78 @@ export function WizardPage() {
     titleRef.current?.focus();
   }, [focusKey]);
 
-  function persist(answers: Record<string, string>, currentQuestionId: string, completed = false) {
-    if (!situation) return;
+  function persistForm(nextForm: ManualFormState) {
+    const zusIncomes = selectZusIncomesForBuild(nextForm, authSession?.zusData ?? null);
     saveManualForm(
-      { version: 2, situation, answers, currentQuestionId, completed },
-      buildScenario(situation, answers),
+      nextForm,
+      buildScenario(nextForm.situation, nextForm.answers, undefined, { zusIncomes }),
     );
+  }
+
+  function persist(nextAnswers: Record<string, string>, currentQuestionId: string, completed = false) {
+    if (!situation || !form) return;
+    persistForm({
+      ...form,
+      situation,
+      answers: nextAnswers,
+      currentQuestionId,
+      completed,
+    });
   }
 
   function answer(value: string) {
     if (!situation || !form || !question) return;
-    persist(changeAnswer(situation, answers, question.id, value), question.id);
+    const baseForm: ManualFormState = { ...form, answers };
+    const updated = recordUserEdit(baseForm, question.id, value);
+    persistForm({ ...updated, currentQuestionId: question.id, completed: false });
+    setError(null);
+  }
+
+  function applyEzlaStartDate(cert: SickLeaveCertificate) {
+    if (!situation || !form) return;
+    const nextAnswers = {
+      ...answers,
+      'mother.pregnancySickLeave': 'yes',
+      'mother.sickLeaveStart': cert.startDate,
+    };
+    const nextSources: Record<string, FieldSource> = {
+      ...fieldSources,
+      'mother.pregnancySickLeave': 'zus',
+      'mother.sickLeaveStart': 'zus',
+    };
+    const nextConflicts = { ...pendingConflicts };
+    delete nextConflicts['mother.pregnancySickLeave'];
+    delete nextConflicts['mother.sickLeaveStart'];
+    persistForm({
+      ...form,
+      situation,
+      answers: nextAnswers,
+      fieldSources: nextSources,
+      pendingConflicts: nextConflicts,
+      currentQuestionId: question?.id ?? form.currentQuestionId,
+      completed: false,
+    });
+    setError(null);
+  }
+
+  function applyZusDebt(amount: number) {
+    if (!situation || !form) return;
+    const nextAnswers = { ...answers, 'mother.contributionDebt': String(amount) };
+    const nextSources: Record<string, FieldSource> = {
+      ...fieldSources,
+      'mother.contributionDebt': 'zus',
+    };
+    const nextConflicts = { ...pendingConflicts };
+    delete nextConflicts['mother.contributionDebt'];
+    persistForm({
+      ...form,
+      situation,
+      answers: nextAnswers,
+      fieldSources: nextSources,
+      pendingConflicts: nextConflicts,
+      currentQuestionId: question?.id ?? form.currentQuestionId,
+      completed: false,
+    });
     setError(null);
   }
 
@@ -238,6 +330,21 @@ export function WizardPage() {
     );
   }
 
+  const activeConflict = question ? pendingConflicts[question.id] : undefined;
+  const showEzlaPreview =
+    Boolean(authSession?.zusData.sickLeaveCertificates.length) &&
+    Boolean(
+      question &&
+        (question.id === 'mother.pregnancySickLeave' ||
+          question.id === 'mother.sickLeaveStart' ||
+          question.id === 'mother.sickLeaveEnd'),
+    );
+  const showDebtCertificate =
+    Boolean(authSession?.zusData) &&
+    question?.id === 'mother.contributionDebt' &&
+    authSession?.profile.mother.insuranceTitle === 'selfEmployed';
+  const rightArisesDate = resolveRightArisesDate(scenario, answers);
+
   return (
     <div className="wizard">
       <header className="wizard__header">
@@ -248,6 +355,25 @@ export function WizardPage() {
           <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
           <h1>Plan dla Twojej rodziny</h1>
           <p>Pytania dopasujemy do Waszej sytuacji. Odpowiedzi można uzupełnić później.</p>
+          <div className="wizard__zus-bar">
+            {authSession ? (
+              <p className="wizard__zus-status" role="status">
+                Połączono z ZUS przez mObywatela (symulacja):{' '}
+                <strong>
+                  {authSession.profile.firstName} {authSession.profile.lastName}
+                </strong>
+                . Uzupełniono wyłącznie puste pola.
+              </p>
+            ) : (
+              <Link
+                to={`/login?situation=${situation}`}
+                state={{ returnTo: `/wizard?situation=${situation}` }}
+                className="wizard__zus-link"
+              >
+                Pobierz dane z ZUS przez mObywatela (symulacja) →
+              </Link>
+            )}
+          </div>
         </div>
       </header>
       <main className="wizard__shell wizard__main">
@@ -279,6 +405,31 @@ export function WizardPage() {
             </li>
           ))}
         </ol>
+
+        {!showComplete && !showSummary && conflictList.length > 0 && !activeConflict && (
+          <section className="wizard__conflict-banner" aria-label="Rozbieżności z danymi ZUS">
+            <p>
+              Wykryto {conflictList.length === 1 ? '1 rozbieżność' : `${conflictList.length} rozbieżności`}{' '}
+              między Twoimi wpisami a danymi z ZUS. Żaden Twój wpis nie został nadpisany.
+            </p>
+            <div className="wizard__conflict-jumps">
+              {conflictList.map((item) => {
+                const target = questions.find((q) => q.id === item.questionId);
+                if (!target) return null;
+                return (
+                  <button
+                    key={item.questionId}
+                    type="button"
+                    className="wizard__edit"
+                    onClick={() => edit(item.questionId)}
+                  >
+                    Rozstrzygnij: {target.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {showComplete ? (
           <section className="wizard__card" aria-labelledby="question-title">
@@ -326,26 +477,56 @@ export function WizardPage() {
                 <dl className="wizard__summary">
                   {questions
                     .filter((item) => item.stage === index)
-                    .map((item) => (
-                      <div key={item.id}>
-                        <dt>{item.label}</dt>
-                        <dd>
-                          {item.id === 'family' && ['deceased', 'abandoned'].includes(answers.motherSituation)
-                            ? 'Plan taty po zgonie mamy'
-                            : item.id === 'family' && answers.motherSituation === 'abandoned'
-                              ? 'Plan taty po porzuceniu dziecka przez mamę'
-                              : formatAnswer(item, answers[item.id])}
-                        </dd>
-                        <button
-                          type="button"
-                          className="wizard__edit"
-                          aria-label={`Zmień: ${item.label}`}
-                          onClick={() => edit(item.id)}
-                        >
-                          Zmień
-                        </button>
-                      </div>
-                    ))}
+                    .map((item) => {
+                      const conflict = pendingConflicts[item.id];
+                      return (
+                        <div key={item.id}>
+                          <dt>
+                            <span>{item.label}</span>
+                            <SourceBadge source={fieldSources[item.id]} />
+                          </dt>
+                          <dd>
+                            {item.id === 'family' && answers.motherSituation === 'deceased'
+                              ? 'Plan taty po zgonie mamy'
+                              : item.id === 'family' && answers.motherSituation === 'abandoned'
+                                ? 'Plan taty po porzuceniu dziecka przez mamę'
+                                : formatAnswer(item, answers[item.id])}
+                            {conflict && (
+                              <div className="wizard__conflict-inline">
+                                <p>
+                                  Dane z {FIELD_SOURCE_LABELS[conflict.incomingSource]}:{' '}
+                                  <strong>{formatAnswer(item, conflict.incomingValue)}</strong>
+                                </p>
+                                <div className="wizard__conflict-actions">
+                                  <button
+                                    type="button"
+                                    className="wizard__conflict-btn"
+                                    onClick={() => resolveFieldConflict(item.id, 'keepUser')}
+                                  >
+                                    Zostaw moją wartość
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="wizard__conflict-btn wizard__conflict-btn--primary"
+                                    onClick={() => resolveFieldConflict(item.id, 'useIncoming')}
+                                  >
+                                    Użyj danych z {FIELD_SOURCE_LABELS[conflict.incomingSource]}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </dd>
+                          <button
+                            type="button"
+                            className="wizard__edit"
+                            aria-label={`Zmień: ${item.label}`}
+                            onClick={() => edit(item.id)}
+                          >
+                            Zmień
+                          </button>
+                        </div>
+                      );
+                    })}
                 </dl>
               </section>
             ))}
@@ -360,7 +541,10 @@ export function WizardPage() {
         ) : (
           question && (
             <form className="wizard__card" noValidate onSubmit={next}>
-              <p className="wizard__eyebrow">{STAGES[question.stage]}</p>
+              <div className="wizard__card-top">
+                <p className="wizard__eyebrow">{STAGES[question.stage]}</p>
+                <SourceBadge source={fieldSources[question.id]} />
+              </div>
               <h2 ref={titleRef} tabIndex={-1} id="question-title">
                 {question.title}
               </h2>
@@ -369,6 +553,43 @@ export function WizardPage() {
                   {question.hint}
                 </p>
               )}
+
+              {activeConflict && (
+                <div
+                  className="wizard__conflict-box"
+                  role="region"
+                  aria-label="Rozbieżność z danymi ZUS"
+                >
+                  <p className="wizard__conflict-title">
+                    Wykryto rozbieżność z danymi z{' '}
+                    {FIELD_SOURCE_LABELS[activeConflict.incomingSource]} (Twój wpis nie został
+                    nadpisany)
+                  </p>
+                  <p className="wizard__conflict-values">
+                    Twoja odpowiedź: <strong>{formatAnswer(question, activeConflict.userValue)}</strong>
+                    {' · '}
+                    Dane z {FIELD_SOURCE_LABELS[activeConflict.incomingSource]}:{' '}
+                    <strong>{formatAnswer(question, activeConflict.incomingValue)}</strong>
+                  </p>
+                  <div className="wizard__conflict-actions">
+                    <button
+                      type="button"
+                      className="wizard__conflict-btn"
+                      onClick={() => resolveFieldConflict(question.id, 'keepUser')}
+                    >
+                      Zostaw moją wartość
+                    </button>
+                    <button
+                      type="button"
+                      className="wizard__conflict-btn wizard__conflict-btn--primary"
+                      onClick={() => resolveFieldConflict(question.id, 'useIncoming')}
+                    >
+                      Użyj danych z {FIELD_SOURCE_LABELS[activeConflict.incomingSource]}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <QuestionField
                 key={question.id}
                 question={question}
@@ -376,6 +597,29 @@ export function WizardPage() {
                 error={error}
                 onChange={answer}
               />
+
+              {showEzlaPreview && authSession && (
+                <SickLeavePreview
+                  certificates={authSession.zusData.sickLeaveCertificates}
+                  selectedStartDate={answers['mother.sickLeaveStart'] ?? null}
+                  onSelectStartDate={applyEzlaStartDate}
+                />
+              )}
+
+              {showDebtCertificate && authSession && (
+                <ContributionDebtCertificate
+                  payerName={`${authSession.profile.firstName} ${authSession.profile.lastName}`}
+                  asOfDate={rightArisesDate}
+                  contributionDebt={authSession.zusData.contributionDebt}
+                  params={DEFAULT_PARAMS}
+                  onApplyDebt={
+                    answers['mother.contributionDebt'] !== String(authSession.zusData.contributionDebt)
+                      ? applyZusDebt
+                      : undefined
+                  }
+                />
+              )}
+
               {error && (
                 <p className="wizard__error" id="question-error" role="alert">
                   {error}
