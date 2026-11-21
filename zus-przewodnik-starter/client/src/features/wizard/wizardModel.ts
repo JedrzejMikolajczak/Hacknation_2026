@@ -10,6 +10,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import type { ScenarioDraft } from '../../app/scenarioDraft';
+import { addDaysIso, formatPolishDate } from '../plan/planScenario';
 
 export const STAGES = ['Rodzina', 'Dziecko', 'Ubezpieczenie', 'Plany i kwoty', 'Podsumowanie'];
 export const SITUATION_LABELS: Record<SituationType, string> = {
@@ -32,7 +33,7 @@ export interface WizardQuestion {
   title: string;
   label: string;
   hint?: string;
-  type: 'choice' | 'date' | 'number';
+  type: 'choice' | 'multiple' | 'date' | 'number';
   options?: QuestionOption[];
   unknownLabel?: string;
   min?: number | string;
@@ -65,10 +66,46 @@ export function parentRoles(answers: Record<string, string>): ParentRole[] {
   return [];
 }
 
+function rateDeadlinePassed(
+  event: string | null | undefined,
+  reference: string,
+  params: BenefitParams,
+): boolean {
+  return (
+    !!event &&
+    isIsoCalendarDate(event) &&
+    reference > addDaysIso(event, params.combinedRateApplicationDeadlineDays)
+  );
+}
+
+function applicableParents(
+  situation: SituationType,
+  answers: Record<string, string>,
+): ParentRole[] {
+  const roles = parentRoles(answers);
+  return situation === 'afterBirth' &&
+    (answers.motherSituation === 'deceased' || answers.motherSituation === 'abandoned') &&
+    roles.includes('father')
+    ? roles.filter((role) => role !== 'mother')
+    : roles;
+}
+
 export function getQuestions(
   situation: SituationType,
   answers: Record<string, string>,
+  params: BenefitParams = DEFAULT_PARAMS,
 ): WizardQuestion[] {
+  const today = todayLocal();
+  const roles = applicableParents(situation, answers);
+  const motherDeceased =
+    situation === 'afterBirth' &&
+    answers.motherSituation === 'deceased' &&
+    roles.includes('father');
+  const motherAbandoned =
+    situation === 'afterBirth' &&
+    answers.motherSituation === 'abandoned' &&
+    roles.includes('father');
+  const motherUnavailable = motherDeceased || motherAbandoned;
   const questions: WizardQuestion[] = [
     {
       id: 'family',
@@ -200,6 +237,13 @@ export function getQuestions(
   const childLost =
     situation === 'afterBirth' &&
     (answers.birthOutcome === 'stillbirth' || answers.birthOutcome === 'childDeath');
+  const parsedChildrenCount = Number(answers.childrenCount);
+  const multipleBirth = Number.isInteger(parsedChildrenCount) && parsedChildrenCount > 1;
+  const parsedDeceasedCount = Number(answers.deceasedChildrenCount);
+  const allChildrenLost =
+    childLost &&
+    (!multipleBirth ||
+      (Number.isInteger(parsedDeceasedCount) && parsedDeceasedCount >= parsedChildrenCount));
 
   // Dane faktycznego porodu są dostępne wyłącznie na ścieżce po narodzinach.
   if (situation === 'afterBirth') {
@@ -216,6 +260,19 @@ export function getQuestions(
         { value: 'childDeath', label: 'Dziecko zmarło po porodzie' },
       ],
     });
+    if (childLost && multipleBirth) {
+      questions.push({
+        id: 'deceasedChildrenCount',
+        stage: 1,
+        type: 'number',
+        title: 'Ile dzieci z tego porodu nie przeżyło?',
+        label: 'Liczba zmarłych dzieci',
+        min: 1,
+        max: parsedChildrenCount,
+        step: '1',
+        hint: 'Przy porodzie mnogim wymiar urlopu ustala się stosownie do liczby dzieci pozostałych przy życiu (KP art. 180¹).',
+      });
+    }
     if (answers.birthOutcome === 'childDeath') {
       questions.push({
         id: 'childDeathDate',
@@ -229,7 +286,7 @@ export function getQuestions(
     }
   }
 
-  if (situation === 'afterBirth' && !childLost) {
+  if (situation === 'afterBirth' && !allChildrenLost) {
     questions.push({
       id: 'hospitalization',
       stage: 1,
@@ -277,7 +334,7 @@ export function getQuestions(
   }
 
   // Zaświadczenie „Za życiem” wydaje się także w czasie ciąży – wydłuża urlop rodzicielski.
-  if (situation === 'pregnant' || (situation === 'afterBirth' && !childLost)) {
+  if (situation === 'pregnant' || (situation === 'afterBirth' && !allChildrenLost)) {
     questions.push({
       id: 'zaZyciemCertificate',
       stage: 1,
@@ -297,10 +354,10 @@ export function getQuestions(
     questions.push({
       id: 'motherSituation',
       stage: 1,
-      type: 'choice',
+      type: 'multiple',
       title: 'Czy któraś z tych sytuacji dotyczy mamy?',
       label: 'Sytuacja mamy',
-      hint: 'Te informacje pozwolą sprawdzić, czy tata może przejąć część urlopu macierzyńskiego.',
+      hint: 'Możesz zaznaczyć pobyt w szpitalu i orzeczenie jednocześnie. Te informacje pomagają ustalić, czy tata może przejąć część urlopu macierzyńskiego.',
       options: [
         { value: 'none', label: 'Nie dotyczy' },
         { value: 'hospitalized', label: 'Mama przebywa w szpitalu' },
@@ -308,12 +365,41 @@ export function getQuestions(
           value: 'incapable',
           label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
         },
-        ...(situation === 'afterBirth' ? [{ value: 'deceased', label: 'Mama zmarła' }] : []),
+        ...(situation === 'afterBirth'
+          ? [
+              { value: 'deceased', label: 'Mama zmarła' },
+              { value: 'abandoned', label: 'Mama porzuciła dziecko' },
+            ]
+          : []),
       ],
     });
+    if (motherDeceased) {
+      questions.push({
+        id: 'motherDeathDate',
+        stage: 1,
+        type: 'date',
+        title: 'Kiedy zmarła mama dziecka?',
+        label: 'Data zgonu mamy',
+        min: answers.birthDate,
+        max: today,
+        hint: 'Ta data jest potrzebna do ustalenia początku urlopu taty.',
+      });
+    }
+    if (motherAbandoned) {
+      questions.push({
+        id: 'motherAbandonmentDate',
+        stage: 1,
+        type: 'date',
+        title: 'Kiedy mama porzuciła dziecko?',
+        label: 'Data porzucenia dziecka przez matkę',
+        min: answers.birthDate,
+        max: today,
+        hint: 'Ta data jest potrzebna do ustalenia początku przejęcia urlopu przez tatę (KP art. 180 § 13).',
+      });
+    }
   }
 
-  for (const role of parentRoles(answers)) {
+  for (const role of roles) {
     const person = role === 'mother' ? 'mamy' : 'taty';
     const title = answers[`${role}.insuranceTitle`];
     questions.push({
@@ -394,16 +480,28 @@ export function getQuestions(
       title === 'employment' &&
       (situation === 'pregnant' || situation === 'afterBirth')
     ) {
-      questions.push({
-        id: 'employerBankruptcyOrLiquidation',
-        stage: 2,
-        type: 'choice',
-        title:
-          'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
-        label: 'Upadłość lub likwidacja pracodawcy',
-        hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
-        options: YES_NO,
-      });
+      questions.push(
+        {
+          id: 'employerBankruptcyOrLiquidation',
+          stage: 2,
+          type: 'choice',
+          title:
+            'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
+          label: 'Upadłość lub likwidacja pracodawcy',
+          hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
+          options: YES_NO,
+        },
+        {
+          id: 'unlawfulTerminationConfirmedByCourt',
+          stage: 2,
+          type: 'choice',
+          title:
+            'Czy umowa mamy została rozwiązana z naruszeniem prawa i potwierdził to prawomocny wyrok sądu?',
+          label: 'Bezprawne zwolnienie potwierdzone wyrokiem',
+          hint: 'Zgodnie z art. 30 ust. 3 ustawy zasiłkowej ZUS wypłaca wówczas zasiłek w wysokości zasiłku macierzyńskiego do dnia porodu.',
+          options: YES_NO,
+        },
+      );
     }
     const motherSicknessInsured =
       title === 'employment' || answers['mother.sicknessInsurance'] === 'yes';
@@ -481,9 +579,41 @@ export function getQuestions(
         unknownLabel: 'Sprawdzimy to później',
       });
     }
+    if (title === 'employment' || title === 'mandateContract' || title === 'selfEmployed') {
+      questions.push({
+        id: `${role}.hasSecondaryTitle`,
+        stage: 2,
+        type: 'choice',
+        title: `Czy ${role === 'mother' ? 'mama' : 'tata'} ma jednocześnie drugi tytuł ubezpieczenia (np. dodatkowy etat, zlecenie lub JDG)?`,
+        label: `Drugi tytuł ubezpieczenia ${person}`,
+        hint: 'Przy dwóch równoległych tytułach zasiłek ustala się odrębnie dla każdego tytułu objętego składką chorobową.',
+        options: YES_NO,
+      });
+      if (answers[`${role}.hasSecondaryTitle`] === 'yes') {
+        const secondaryTitle = answers[`${role}.secondaryInsuranceTitle`];
+        questions.push({
+          id: `${role}.secondaryInsuranceTitle`,
+          stage: 2,
+          type: 'choice',
+          title: `Jaki jest drugi tytuł ubezpieczenia ${person}?`,
+          label: `Rodzaj drugiego tytułu ${person}`,
+          options: INSURANCE_OPTIONS.filter((option) => option.value !== 'none'),
+        });
+        if (secondaryTitle === 'mandateContract' || secondaryTitle === 'selfEmployed') {
+          questions.push({
+            id: `${role}.secondarySicknessInsurance`,
+            stage: 2,
+            type: 'choice',
+            title: `Czy z drugiego tytułu za ${person === 'mamy' ? 'mamę' : 'tatę'} jest opłacana dobrowolna składka chorobowa?`,
+            label: `Składka chorobowa z drugiego tytułu ${person}`,
+            options: YES_NO,
+          });
+        }
+      }
+    }
   }
 
-  for (const role of parentRoles(answers)) {
+  for (const role of roles) {
     const person = role === 'mother' ? 'mamy' : 'taty';
     questions.push({
       id: `${role}.wantsLeave`,
@@ -553,32 +683,65 @@ export function getQuestions(
     }
   }
 
-  if (!childLost && parentRoles(answers).length > 0) {
-    const rates = DEFAULT_PARAMS.rates;
-    const deadline = DEFAULT_PARAMS.combinedRateApplicationDeadlineDays;
+  if (
+    !allChildrenLost &&
+    !motherUnavailable &&
+    roles.length > 0 &&
+    (roles.includes('mother') || situation === 'adoption')
+  ) {
+    const { rates, combinedRateApplicationDeadlineDays: deadline } = params;
+    const event = combinedRateEvent(situation, answers);
+    const expired = isCombinedRateExpired(situation, answers, today, params);
+    const standard = {
+      value: 'standard',
+      label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
+      description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
+    };
     questions.push({
       id: 'rateVariant',
       stage: 3,
       type: 'choice',
-      title: 'Jak chcecie otrzymywać zasiłek macierzyński?',
+      title: expired
+        ? 'Obowiązują stawki rozdzielone'
+        : 'Jak chcecie otrzymywać zasiłek macierzyński?',
       label: 'Wariant wysokości zasiłku',
-      hint: `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
-      options: [
-        {
-          value: 'combined',
-          label: `${formatRate(rates.combined)} przez cały okres`,
-          description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
-        },
-        {
-          value: 'standard',
-          label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
-          description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
-        },
-        { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
-      ],
+      hint: expired
+        ? `Termin na złożenie nowego wniosku o ${formatRate(rates.combined)} upłynął ${formatPolishDate(addDaysIso(event!, deadline))}.`
+        : `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
+      options: expired
+        ? [standard]
+        : [
+            {
+              value: 'combined',
+              label: `${formatRate(rates.combined)} przez cały okres`,
+              description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
+            },
+            standard,
+            { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
+          ],
     });
   }
   return questions;
+}
+
+function combinedRateEvent(situation: SituationType, answers: Record<string, string>) {
+  if (situation === 'afterBirth') return answers.birthDate;
+  if (situation === 'adoption' && answers.adoptionStage === 'accepted')
+    return answers.childAcceptanceDate;
+  return undefined;
+}
+
+export function isCombinedRateExpired(
+  situation: SituationType,
+  answers: Record<string, string>,
+  today = todayLocal(),
+  params: BenefitParams = DEFAULT_PARAMS,
+): boolean {
+  return rateDeadlinePassed(combinedRateEvent(situation, answers), today, params);
+}
+
+export function selectedMotherSituations(value: string): string[] {
+  return value === 'hospitalizedIncapable' ? ['hospitalized', 'incapable'] : value.split(',');
 }
 
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
@@ -587,6 +750,18 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
     return question.options?.some((option) => option.value === value)
       ? null
       : 'Wybierz jedną z odpowiedzi.';
+  }
+  if (question.type === 'multiple') {
+    const selected = selectedMotherSituations(value);
+    const valid = selected.every((entry) =>
+      question.options?.some((option) => option.value === entry),
+    );
+    return valid &&
+      new Set(selected).size === selected.length &&
+      (selected.length === 1 ||
+        !selected.some((entry) => entry === 'none' || entry === 'deceased' || entry === 'abandoned'))
+      ? null
+      : 'Wybierz sytuacje, które mają zastosowanie.';
   }
   if (value === 'unknown') return question.unknownLabel ? null : 'Uzupełnij to pole.';
   if (question.type === 'number') {
@@ -599,18 +774,18 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
       return `Wpisz liczbę nie większą niż ${question.max}.`;
     return null;
   }
-  const date = new Date(`${value}T12:00:00Z`);
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    Number.isNaN(date.valueOf()) ||
-    date.toISOString().slice(0, 10) !== value
-  )
-    return 'Wpisz poprawną datę w formacie DD/MM/YYYY.';
+  if (!isIsoCalendarDate(value)) return 'Wpisz poprawną datę w formacie DD/MM/YYYY.';
   if (typeof question.min === 'string' && value < question.min)
     return 'Data jest wcześniejsza niż dozwolona.';
   if (typeof question.max === 'string' && value > question.max)
     return 'Ta data nie może być w przyszłości.';
   return null;
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }
 
 /** Usuwa odpowiedzi z gałęzi, która przestała obowiązywać. */
@@ -628,7 +803,10 @@ export function changeAnswer(
       if (key.startsWith(prefix) && key !== id && !key.endsWith('.wantsLeave')) delete next[key];
     }
   }
-  const active = new Set(getQuestions(situation, next).map((question) => question.id));
+  const questions = getQuestions(situation, next);
+  const active = new Set(questions.map((question) => question.id));
+  const rate = questions.find((question) => question.id === 'rateVariant');
+  if (rate?.options?.length === 1) next.rateVariant = 'standard';
   return Object.fromEntries(Object.entries(next).filter(([key]) => active.has(key)));
 }
 
@@ -711,7 +889,7 @@ export function buildScenario(
   answers: Record<string, string>,
   params: BenefitParams = DEFAULT_PARAMS,
 ): ScenarioDraft {
-  const active = getQuestions(situation, answers);
+  const active = getQuestions(situation, answers, params);
   const values = Object.fromEntries(
     active
       .filter((question) => validateAnswer(question, answers[question.id]) === null)
@@ -736,7 +914,9 @@ export function buildScenario(
   if (childrenCount !== null) scenario.childrenCount = childrenCount;
   const deferred = knownBoolean(values.schoolObligationDeferred);
   if (deferred !== undefined) scenario.schoolObligationDeferred = deferred;
-  if (values.rateVariant === 'combined' || values.rateVariant === 'standard')
+  if (active.find((question) => question.id === 'rateVariant')?.options?.length === 1)
+    scenario.rateVariant = 'standard';
+  else if (values.rateVariant === 'combined' || values.rateVariant === 'standard')
     scenario.rateVariant = values.rateVariant;
 
   // Zwolnienie w ciąży: koniec przy zwolnieniu do porodu = dzień przed (przewidywanym) porodem.
@@ -759,7 +939,7 @@ export function buildScenario(
   const maternityRightArisesOn =
     birth ?? scenario.childAcceptanceDate ?? scenario.referenceDate ?? todayLocal();
 
-  for (const role of parentRoles(values)) {
+  for (const role of applicableParents(situation, values)) {
     const parent: Partial<ParentData> = { role };
     const title = values[`${role}.insuranceTitle`];
     if (title && title !== 'unknown') parent.insuranceTitle = title as InsuranceTitle;
@@ -773,6 +953,19 @@ export function buildScenario(
     parent.contributionDebt = numberOrNull(values[`${role}.contributionDebt`]);
     parent.employerInsuredCount = numberOrNull(values[`${role}.employerInsuredCount`]);
     if (role === 'mother') parent.age = numberOrNull(values['mother.age']);
+    if (values[`${role}.hasSecondaryTitle`] === 'yes') {
+      const secondaryTitle = values[`${role}.secondaryInsuranceTitle`];
+      if (secondaryTitle && secondaryTitle !== 'unknown') {
+        parent.secondaryInsuranceTitle = secondaryTitle as InsuranceTitle;
+        if (secondaryTitle === 'employment') parent.secondarySicknessInsurance = 'mandatory';
+        else {
+          const secondaryVoluntary = knownBoolean(values[`${role}.secondarySicknessInsurance`]);
+          if (secondaryVoluntary !== undefined) {
+            parent.secondarySicknessInsurance = secondaryVoluntary ? 'voluntary' : 'none';
+          }
+        }
+      }
+    }
     const wantsLeave = knownBoolean(values[`${role}.wantsLeave`]);
     if (wantsLeave !== undefined) parent.wantsLeave = wantsLeave;
     scenario[role] = parent;
@@ -807,12 +1000,16 @@ export function buildScenario(
   const special: NonNullable<ScenarioDraft['special']> = {};
   if (situation === 'afterBirth') {
     const lost = values.birthOutcome === 'stillbirth' || values.birthOutcome === 'childDeath';
+    const deceasedCount = numberOrNull(values.deceasedChildrenCount);
+    const allLost =
+      lost && ((childrenCount ?? 1) <= 1 || (deceasedCount !== null && deceasedCount >= (childrenCount ?? 1)));
     if (values.birthOutcome) {
       special.stillbirth = values.birthOutcome === 'stillbirth';
       special.childDeathDate =
         values.birthOutcome === 'childDeath' ? dateOrNull(values.childDeathDate) : null;
+      if (lost && deceasedCount !== null) special.deceasedChildrenCount = deceasedCount;
     }
-    if (!lost) {
+    if (!allLost) {
       special.pregnancyWeekAtBirth = numberOrNull(values.pregnancyWeekAtBirth);
       special.birthWeightGrams = numberOrNull(values.birthWeightGrams);
       special.hospitalizationDays =
@@ -822,12 +1019,19 @@ export function buildScenario(
   const certificate = knownBoolean(values.zaZyciemCertificate);
   if (certificate !== undefined) special.zaZyciemCertificate = certificate;
   if (values.motherSituation) {
-    special.motherHospitalized = values.motherSituation === 'hospitalized';
-    special.motherIncapableOfIndependentLiving = values.motherSituation === 'incapable';
+    const situations = selectedMotherSituations(values.motherSituation);
+    special.motherHospitalized = situations.includes('hospitalized');
+    special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
+    special.motherAbandonedChild = values.motherSituation === 'abandoned';
+    if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
+    if (special.motherAbandonedChild)
+      scenario.motherAbandonmentDate = dateOrNull(values.motherAbandonmentDate);
   }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
+  const unlawful = knownBoolean(values.unlawfulTerminationConfirmedByCourt);
+  if (unlawful !== undefined) special.unlawfulTerminationConfirmedByCourt = unlawful;
   scenario.special = special;
   return scenario;
 }
@@ -843,6 +1047,13 @@ export function dateInputToIso(value: string): string {
 
 export function formatAnswer(question: WizardQuestion, value: string | undefined): string {
   if (!value || value === 'unknown') return 'Do uzupełnienia później';
+  if (question.type === 'multiple')
+    return (
+      question.options
+        ?.filter((option) => selectedMotherSituations(value).includes(option.value))
+        .map((option) => option.label)
+        .join(', ') || 'Do uzupełnienia później'
+    );
   if (question.type === 'choice')
     return (
       question.options?.find((option) => option.value === value)?.label ?? 'Do uzupełnienia później'

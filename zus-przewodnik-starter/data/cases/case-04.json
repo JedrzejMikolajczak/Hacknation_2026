@@ -1,0 +1,109 @@
+{
+  "case_id": "case-04",
+  "short_title": "Zasiłek macierzyński 81,5% dla matki bliźniąt-wcześniaków (28+5 Hbd) z zaświadczeniami 'Za życiem': 31 tyg. urlopu macierzyńskiego, 8 tyg. uzupełniającego urlopu macierzyńskiego i 58 tyg. urlopu rodzicielskiego.",
+  "scenario_category": "SYTUACJA_SZCZEGOLNA",
+  "inputs": {
+    "applicant_role": "MOTHER",
+    "stage": "POST_BIRTH",
+    "co_parenting": true,
+    "other_parent_insured": true,
+    "employment_type": "UOP",
+    "contract_type": "INDEFINITE",
+    "contract_end_date": null,
+    "payer_insured_count_nov_30": "<= 20",
+    "voluntary_sickness_insured": false,
+    "insurance_duration_days": null,
+    "has_b2b_arrears": false,
+    "applicant_age_50_plus": false,
+    "benefit_base_amount_pln": null,
+    "due_or_birth_date": "2025-07-20",
+    "application_date": "2025-08-12",
+    "days_from_birth_to_application": 15,
+    "children_count": 2,
+    "requested_payment_variant": "COMBINED_81_5",
+    "father_parental_weeks": 9,
+    "part_time_work_fraction": 0.0,
+    "special_circumstances": {
+      "has_code_b_on_ezla": true,
+      "premature_or_hospitalized_newborn": true,
+      "za_zyciem_certificate": true,
+      "stillbirth_or_child_death": "NONE",
+      "mother_hospitalized_or_incapable": false,
+      "employer_bankruptcy_or_liquidation": false,
+      "adopted_or_foster_child_age_years": null,
+      "is_professional_foster_family": false
+    },
+    "pregnancy_week_at_birth": "28+5",
+    "birth_weight_grams": [1150, 1290],
+    "newborn_hospitalization_start": "2025-07-20",
+    "newborn_hospitalization_end": "2025-11-02",
+    "application_to_payer_date": "2025-08-04"
+  },
+  "ground_truth_outcome": {
+    "is_qualified": true,
+    "decision_summary_pl": "Zawiadomieniem z 03.09.2025 r. przyznano zasiłek macierzyński w stawce 81,5% za podstawowy urlop macierzyński dla bliźniąt (31 tygodni / 217 dni: 20.07.2025–21.02.2026), odkładając rozstrzygnięcie w zakresie uzupełniającego urlopu macierzyńskiego oraz urlopu rodzicielskiego do czasu wypisu dzieci ze szpitala. Po dostarczeniu kart wypisowych ze szpitala (hospitalizacja powyżej 8 tygodni przy urodzeniu po ukończeniu 28. tyg. ciąży z masą > 1000 g) oraz zaświadczeń 'Za życiem' dla obu córek, przysługuje 8 tygodni (56 dni: 22.02.2026–18.04.2026) uzupełniającego urlopu macierzyńskiego oraz 58 tygodni (406 dni: 19.04.2026–29.05.2027) urlopu rodzicielskiego (67 tygodni puli minus 9 tygodni dla ojca ubezpieczonego w KRUS).",
+    "denial_or_reduction_reason_pl": "Czasowe wstrzymanie ustalenia prawa do uzupełniającego urlopu macierzyńskiego i urlopu rodzicielskiego w zawiadomieniu z 03.09.2025 r. do momentu zakończenia hospitalizacji noworodków i przedłożenia zaświadczeń szpitalnych.",
+    "who_pays": "ZUS",
+    "granted_rate_percent": 81.5,
+    "granted_duration_days": 679,
+    "granted_duration_weeks": 97,
+    "calculated_amount_pln": null,
+    "mapped_forms_2026": ["Z-3", "POG", "ZAM"],
+    "legal_basis_cited": [
+      "art. 180 § 1 pkt 2 Kodeksu pracy",
+      "art. 180(2) § 1 pkt 2 Kodeksu pracy",
+      "art. 182(1a) § 2 pkt 2 i § 4 Kodeksu pracy",
+      "art. 184 Kodeksu pracy",
+      "art. 29a ust. 1 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa",
+      "art. 4 ust. 3 ustawy z dnia 4 listopada 2016 r. o wsparciu kobiet w ciąży i rodzin 'Za życiem'",
+      "ustawa z dnia 6 grudnia 2024 r. o zmianie ustawy - Kodeks pracy oraz niektórych innych ustaw"
+    ],
+    "periods": [
+      {
+        "leave_type": "MATERNITY",
+        "parent_role": "MOTHER",
+        "start_date": "2025-07-20",
+        "end_date": "2026-02-21",
+        "days": 217,
+        "weeks": 31.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "SUPPLEMENTARY_MATERNITY",
+        "parent_role": "MOTHER",
+        "start_date": "2026-02-22",
+        "end_date": "2026-04-18",
+        "days": 56,
+        "weeks": 8.0,
+        "rate_percent": 100,
+        "denied": false,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2026-04-19",
+        "end_date": "2027-05-29",
+        "days": 406,
+        "weeks": 58.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "FATHER",
+        "start_date": "2027-05-30",
+        "end_date": "2027-07-31",
+        "days": 63,
+        "weeks": 9.0,
+        "rate_percent": 70,
+        "denied": false,
+        "work_fraction": 0
+      }
+    ]
+  },
+  "edge_case_notes": "Trzy krytyczne reguły dla kalkulatora i CLIPS: (1) Termin 21 dni na wniosek o 81,5% dla pracownicy (UoP) liczy się od złożenia wniosku u pracodawcy (04.08.2025 = 15. dzień po porodzie), nawet jeśli pracodawca przekazał Z-3 do ZUS po 21 dniach (12.08.2025 = 23. dzień). (2) Wcześniaki urodzone w 28+5 Hbd są urodzone PO ukończeniu 28. tygodnia ciąży (a nie przed ukończeniem 28. tyg.), więc przy masie 1150 g i 1290 g (> 1000 g) uzupełniający urlop macierzyński wynosi maks. 8 tygodni (nie 15 tyg.), mimo hospitalizacji trwającej > 15 tygodni. (3) Bliźnięta + zaświadczenia 'Za życiem' dają pulę 67 tygodni urlopu rodzicielskiego: 58 tygodni dla matki (ZUS) oraz 9 tygodni dla ojca ubezpieczonego w KRUS (do wykorzystania po zakończeniu urlopu matki)."
+}

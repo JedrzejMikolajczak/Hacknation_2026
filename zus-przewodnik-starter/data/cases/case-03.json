@@ -1,0 +1,165 @@
+{
+  "case_id": "case-03",
+  "short_title": "Zasiłek chorobowy w ciąży (100%) oraz zasiłek macierzyński 81,5% dla przedsiębiorczyni (B2B) po urodzeniu bliźniąt (31 tyg. macierzyńskiego rozpoczętego 6 dni przed porodem + 34 tyg. rodzicielskiego).",
+  "scenario_category": "MACIERZYNSKI",
+  "inputs": {
+    "applicant_role": "MOTHER",
+    "stage": "POST_BIRTH",
+    "co_parenting": true,
+    "other_parent_insured": null,
+    "employment_type": "B2B",
+    "contract_type": null,
+    "contract_end_date": null,
+    "payer_insured_count_nov_30": null,
+    "voluntary_sickness_insured": true,
+    "insurance_duration_days": 407,
+    "has_b2b_arrears": false,
+    "applicant_age_50_plus": false,
+    "benefit_base_amount_pln": null,
+    "due_or_birth_date": "2025-01-15",
+    "application_date": "2025-01-22",
+    "days_from_birth_to_application": 7,
+    "children_count": 2,
+    "requested_payment_variant": "COMBINED_81_5",
+    "father_parental_weeks": 0,
+    "part_time_work_fraction": 0.0,
+    "special_circumstances": {
+      "has_code_b_on_ezla": true,
+      "premature_or_hospitalized_newborn": false,
+      "za_zyciem_certificate": false,
+      "stillbirth_or_child_death": "NONE",
+      "mother_hospitalized_or_incapable": false,
+      "employer_bankruptcy_or_liquidation": false,
+      "adopted_or_foster_child_age_years": null,
+      "is_professional_foster_family": false
+    },
+    "title_start_date": "2023-08-18",
+    "maternity_leave_start_date": "2025-01-09",
+    "sickness_leave_start_date": "2024-09-27",
+    "sickness_leave_end_date": "2025-02-10",
+    "monthly_bases": [
+      {
+        "month": "2023-09",
+        "amount_pln": 4161
+      },
+      {
+        "month": "2023-10",
+        "amount_pln": 4161
+      },
+      {
+        "month": "2023-11",
+        "amount_pln": 4161
+      },
+      {
+        "month": "2023-12",
+        "amount_pln": 4161
+      },
+      {
+        "month": "2024-01",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-02",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-03",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-04",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-05",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-06",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-07",
+        "amount_pln": 4694.4
+      },
+      {
+        "month": "2024-08",
+        "amount_pln": 4694.4
+      }
+    ]
+  },
+  "ground_truth_outcome": {
+    "is_qualified": true,
+    "decision_summary_pl": "Wypłacono zasiłek chorobowy w ciąży (100%) od 27.09.2024 do 08.01.2025 (104 dni) oraz przyznano zasiłek macierzyński w stawce 81,5% za łączny okres 65 tygodni (455 dni) od 09.01.2025 do 08.04.2026: 31 tygodni (217 dni) urlopu macierzyńskiego z tytułu urodzenia bliźniąt (09.01.2025–13.08.2025) oraz 34 tygodnie (238 dni) urlopu rodzicielskiego (14.08.2025–08.04.2026).",
+    "denial_or_reduction_reason_pl": "Wypłatę zasiłku chorobowego zakończono z dniem 08.01.2025 r. (mimo wystawionego eZLA do 10.02.2025 r.), ponieważ ubezpieczona wystąpiła o zasiłek macierzyński przed porodem (od 09.01.2025 r., tj. 6 dni przed urodzeniem bliźniąt w dniu 15.01.2025 r.).",
+    "who_pays": "ZUS",
+    "granted_rate_percent": 81.5,
+    "granted_duration_days": 455,
+    "granted_duration_weeks": 65,
+    "calculated_amount_pln": null,
+    "mapped_forms_2026": ["ZAM", "POG", "e-ZLA"],
+    "legal_basis_cited": [
+      "art. 180 § 1 pkt 2 Kodeksu pracy",
+      "art. 180 § 2 Kodeksu pracy",
+      "art. 182(1a) § 1 pkt 2 Kodeksu pracy",
+      "art. 29a ust. 1 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa"
+    ],
+    "periods": [
+      {
+        "leave_type": "SICKNESS",
+        "parent_role": "MOTHER",
+        "start_date": "2024-09-27",
+        "end_date": "2025-01-08",
+        "days": 104,
+        "weeks": 14.857142857142858,
+        "rate_percent": 100,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 3897.37,
+        "daily_amount_pln": 129.91,
+        "monthly_amount_pln": 3897.37
+      },
+      {
+        "leave_type": "SICKNESS",
+        "parent_role": "MOTHER",
+        "start_date": "2025-01-09",
+        "end_date": "2025-02-10",
+        "days": 33,
+        "weeks": 4.714285714285714,
+        "rate_percent": null,
+        "denied": true,
+        "work_fraction": 0
+      },
+      {
+        "leave_type": "MATERNITY",
+        "parent_role": "MOTHER",
+        "start_date": "2025-01-09",
+        "end_date": "2025-08-13",
+        "days": 217,
+        "weeks": 31.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 3897.37,
+        "daily_amount_pln": 105.88,
+        "monthly_amount_pln": 3176.36
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2025-08-14",
+        "end_date": "2026-04-08",
+        "days": 238,
+        "weeks": 34.0,
+        "rate_percent": 81.5,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 3897.37,
+        "daily_amount_pln": 105.88,
+        "monthly_amount_pln": 3176.36
+      }
+    ],
+    "benefit_base_pln": 3897.37
+  },
+  "edge_case_notes": "Niuanse B2B przy ciąży bliźniaczej: (1) Dobrowolne ubezpieczenie chorobowe od 18.08.2023 r. (> 90 dni okresu wyczekiwania przed L4 z 27.09.2024 r.) oraz brak zadłużenia składkowego; miesięczne podstawy z 12 mies. to 4 x 4161,00 zł (09–12/2023) i 8 x 4694,40 zł (01–08/2024). (2) Skorzystanie z prawa do rozpoczęcia zasiłku macierzyńskiego przed porodem (09.01.2025 r. przy porodzie 15.01.2025 r.) przerywa trwające eZLA (wystawione do 10.02.2025 r.). (3) Przy bliźniętach matce przysługuje 31 tyg. urlopu macierzyńskiego i 34 tyg. urlopu rodzicielskiego (43 tyg. puli minus 9 tyg. nieprzenoszalnych dla ojca). (4) W trakcie zasiłku macierzyńskiego dobrowolne ubezpieczenie chorobowe z B2B ustaje (pozostaje składka zdrowotna). Formularze Z-3b po 24.10.2026 r. zastąpione przez ZAM."
+}

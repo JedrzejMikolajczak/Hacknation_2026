@@ -39,7 +39,7 @@ function renderWizard(situation = 'pregnant') {
   const user = userEvent.setup();
   const next = () => user.click(screen.getByRole('button', { name: /^Dalej/ }));
   const choice = async (name: string | RegExp) => {
-    await user.click(screen.getByRole('radio', { name }));
+    await user.click(screen.queryByRole('radio', { name }) ?? screen.getByRole('checkbox', { name }));
     await next();
   };
   const skip = async () => {
@@ -61,7 +61,12 @@ describe('family wizard', () => {
   it('saves separate parents, preserves unknowns and resumes the current question', async () => {
     let view = renderWizard();
     await view.choice(/^Dwoje rodziców/);
-    await view.input('2027-04-01');
+    const date = screen.getByPlaceholderText('DD/MM/YYYY');
+    await view.user.type(date, '01042');
+    expect(date).toHaveValue('01/04/2');
+    await view.user.type(date, '{Backspace}2027');
+    expect(date).toHaveValue('01/04/2027');
+    await view.next();
     await view.user.click(screen.getByRole('button', { name: 'Wstecz' }));
     expect(screen.getByPlaceholderText('DD/MM/YYYY')).toHaveValue('01/04/2027');
     await view.next();
@@ -84,14 +89,20 @@ describe('family wizard', () => {
     await view.input('31');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('upadłości lub likwidacji');
     await view.choice('Nie');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('prawomocny wyrok');
+    await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zwolnieniu lekarskim');
     await view.choice('Tak');
     await view.input('2026-10-01');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('aż do porodu');
     await view.choice('Tak');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł ubezpieczenia');
+    await view.choice('Nie');
     await view.choice('Działalność gospodarcza');
     await view.choice('Nie wiem / uzupełnię później');
     await view.skip();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł ubezpieczenia');
+    await view.choice('Nie');
     await view.choice('Tak');
     await view.skip();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
@@ -172,9 +183,9 @@ describe('family wizard', () => {
     ).toBe('unknown');
   });
 
-  it('completes the postbirth path for a single father without inventing a mother', async () => {
+  it('completes the surviving father’s path after starting a joint family plan', async () => {
     const view = renderWizard('afterBirth');
-    await view.choice(/^Samodzielnie — tata/);
+    await view.choice(/^Dwoje rodziców/);
     await view.input('2026-01-10');
     await view.input('1');
     await view.choice('Nie dotyczy');
@@ -185,14 +196,18 @@ describe('family wizard', () => {
     await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
     await view.choice('Mama zmarła');
+    await view.input('2026-01-14');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
+    // Mama zmarła: nie pytamy o jej plany; dziecko ma ponad 21 dni, więc 81,5% jest niedostępne.
+    expect(screen.queryByRole('radio', { name: /^81,5%/ })).not.toBeInTheDocument();
     await view.choice('Tak');
-    await view.choice('Jeszcze nie wiemy – pokażcie porównanie');
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    expect(screen.queryByText('Plan urlopu mamy')).not.toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
     expect(stored.mother).toBeNull();
+    expect(stored.motherDeathDate).toBe('2026-01-14');
     expect(stored.father).toMatchObject({ role: 'father', wantsLeave: true });
     expect(stored.special).toMatchObject({
       pregnancyWeekAtBirth: 35,

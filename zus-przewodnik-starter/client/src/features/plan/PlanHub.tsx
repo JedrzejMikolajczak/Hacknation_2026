@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { PLAN_TABS, type PlanTabId } from './planScenario';
 
-/** Krótki opis każdej sekcji planu – treść kafelka na ekranie /plan. */
+const RECOMMENDED_FIRST_TAB: PlanTabId = 'entitlements';
+
+/** Krótki jednozdaniowy opis każdej sekcji planu – treść kafelka na ekranie /plan. */
 const TILE_DESCRIPTIONS: Record<PlanTabId, string> = {
-  entitlements: 'Sprawdź, które świadczenia Ci przysługują w ciąży i po porodzie – i dlaczego.',
-  calculator: 'Policz okres i wysokość zasiłku macierzyńskiego. Porównaj 81,5% ze 100% + 70%.',
-  'leave-plan': 'Ułóż urlopy na osi czasu, podziel urlop rodzicielski i połącz go z pracą.',
-  documents: 'Jakie dokumenty, do kiedy i gdzie złożyć – u pracodawcy albo w ZUS.',
-  applications: 'Wypełnij i wyślij wnioski o urlopy i zasiłek (symulacja).',
-  support: 'Organizacje pomocowe, przydatne linki i odpowiedzi na pytania.',
+  entitlements: 'Jakie świadczenia Ci przysługują i kto je wypłaca.',
+  calculator: 'Wysokość zasiłku i porównanie wariantów stawki.',
+  'leave-plan': 'Oś czasu, podział urlopu i łączenie z pracą.',
+  documents: 'Lista dokumentów, terminy i miejsce złożenia.',
+  applications: 'Gotowe wnioski do wysłania (symulacja).',
+  support: 'Organizacje pomocowe, linki i asystent.',
 };
 
 /** Ikony liniowe (inline SVG, bez bibliotek) – dekoracyjne, ukryte przed czytnikami. */
@@ -62,51 +64,53 @@ interface PlanHubProps {
   querySuffix: string;
 }
 
-/** Ekran /plan: 6 kafelków – każdy prowadzi do jednej sekcji planu (/plan/:tab). */
+/** Ekran /plan: wskazówka kolejności i 6 kafelków – każdy prowadzi do jednej sekcji planu (/plan/:tab). */
 export function PlanHub({ querySuffix }: PlanHubProps) {
   return (
     <section className="plan-hub" aria-labelledby="plan-hub-heading">
       <h2 id="plan-hub-heading" className="plan-hub__title">
         Czym chcesz się teraz zająć?
       </h2>
-      <p className="plan-hub__lead">
-        Wybierz sekcję. Każda korzysta z danych z formularza, a do listy sekcji możesz wrócić w
-        każdej chwili.
+      <p className="plan-hub__hint">
+        <strong>Od czego zacząć?</strong> Najlepiej po kolei: Uprawnienia → Kalkulator → Plan
+        urlopów → Dokumenty i terminy → Wnioski → Wsparcie.
       </p>
       <ul className="plan-hub__grid">
-        {PLAN_TABS.map((item) => (
-          <li key={item.id} className="plan-hub__item">
-            <Link
-              to={`/plan/${item.id}${querySuffix}`}
-              className="plan-hub__tile"
-              aria-describedby={`plan-hub-desc-${item.id}`}
-            >
-              <svg
-                className="plan-hub__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.75}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                focusable="false"
+        {PLAN_TABS.map((item) => {
+          const isRecommended = item.id === RECOMMENDED_FIRST_TAB;
+          return (
+            <li key={item.id} className="plan-hub__item">
+              <Link
+                to={`/plan/${item.id}${querySuffix}`}
+                className={
+                  isRecommended ? 'plan-hub__tile plan-hub__tile--recommended' : 'plan-hub__tile'
+                }
+                aria-describedby={`plan-hub-desc-${item.id}`}
               >
-                {TILE_ICONS[item.id]}
-              </svg>
-              <span className="plan-hub__tile-title">{item.label}</span>
-              <span id={`plan-hub-desc-${item.id}`} className="plan-hub__tile-desc">
-                {TILE_DESCRIPTIONS[item.id]}
-              </span>
-              <span className="plan-hub__tile-cta" aria-hidden="true">
-                Przejdź
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path d="M6 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </Link>
-          </li>
-        ))}
+                <div className="plan-hub__tile-top">
+                  <svg
+                    className="plan-hub__icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.75}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    {TILE_ICONS[item.id]}
+                  </svg>
+                  <span className="plan-hub__tile-title">{item.label}</span>
+                  {isRecommended && <span className="plan-hub__badge">Zacznij tutaj</span>}
+                </div>
+                <span id={`plan-hub-desc-${item.id}`} className="plan-hub__tile-desc">
+                  {TILE_DESCRIPTIONS[item.id]}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

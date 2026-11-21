@@ -10,12 +10,18 @@ import {
   displayDate,
   formatAnswer,
   getQuestions,
+  selectedMotherSituations,
   SITUATION_LABELS,
   STAGES,
   validateAnswer,
   type WizardQuestion,
 } from './wizardModel';
 import './WizardPage.css';
+
+function formatDateInput(value: string): string {
+  const digits = displayDate(value).replace(/\D/g, '');
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
+}
 
 function QuestionField({
   question,
@@ -32,7 +38,18 @@ function QuestionField({
     [question.hint ? 'question-hint' : '', error ? 'question-error' : '']
       .filter(Boolean)
       .join(' ') || undefined;
-  if (question.type === 'choice') {
+  if (question.type === 'choice' || question.type === 'multiple') {
+    const multiple = question.type === 'multiple';
+    const selected = value ? (multiple ? selectedMotherSituations(value) : [value]) : [];
+    function toggle(option: string) {
+      if (!multiple) return onChange(option);
+      if (selected.includes(option))
+        return onChange(selected.filter((item) => item !== option).join(','));
+      if (option === 'none' || option === 'deceased') return onChange(option);
+      onChange(
+        [...selected.filter((item) => item !== 'none' && item !== 'deceased'), option].join(','),
+      );
+    }
     return (
       <fieldset
         className="wizard__choices"
@@ -43,14 +60,14 @@ function QuestionField({
         {question.options?.map((option) => (
           <label
             key={option.value}
-            className={`wizard__choice${value === option.value ? ' wizard__choice--selected' : ''}`}
+            className={`wizard__choice${selected.includes(option.value) ? ' wizard__choice--selected' : ''}`}
           >
             <input
-              type="radio"
+              type={multiple ? 'checkbox' : 'radio'}
               name={question.id}
               value={option.value}
-              checked={value === option.value}
-              onChange={() => onChange(option.value)}
+              checked={selected.includes(option.value)}
+              onChange={() => toggle(option.value)}
             />
             <span>
               <span className="wizard__choice-label">{option.label}</span>
@@ -76,16 +93,25 @@ function QuestionField({
           min={question.type === 'number' ? question.min : undefined}
           max={question.type === 'number' ? question.max : undefined}
           step={question.step}
-          inputMode={
-            question.type === 'number' ? (question.step === '1' ? 'numeric' : 'decimal') : undefined
-          }
+          inputMode={question.type === 'date' || question.step === '1' ? 'numeric' : 'decimal'}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
-          onChange={(event) =>
-            onChange(
-              question.type === 'date' ? dateInputToIso(event.target.value) : event.target.value,
-            )
-          }
+          onChange={(event) => {
+            const input = event.currentTarget;
+            if (question.type !== 'date') {
+              onChange(input.value);
+              return;
+            }
+
+            const formatted = formatDateInput(input.value);
+            if (formatted !== input.value) {
+              const prefix = input.value.slice(0, input.selectionStart ?? input.value.length);
+              const position = formatDateInput(prefix).length;
+              input.value = formatted;
+              input.setSelectionRange(position, position);
+            }
+            onChange(dateInputToIso(formatted));
+          }}
         />
       </label>
       {question.unknownLabel && (
@@ -124,8 +150,13 @@ export function WizardPage() {
         }
     : null;
   const questions = situation && form ? getQuestions(situation, form.answers) : [];
+  const rate = questions.find((item) => item.id === 'rateVariant');
+  const answers =
+    rate?.options?.length === 1 && form
+      ? { ...form.answers, rateVariant: 'standard' }
+      : (form?.answers ?? {});
   const firstMissing = questions.find(
-    (question) => validateAnswer(question, form?.answers[question.id]) !== null,
+    (question) => validateAnswer(question, answers[question.id]) !== null,
   );
   const showComplete = Boolean(form?.completed && !firstMissing);
   const showSummary = !showComplete && form?.currentQuestionId === 'summary' && !firstMissing;
@@ -157,14 +188,14 @@ export function WizardPage() {
 
   function answer(value: string) {
     if (!situation || !form || !question) return;
-    persist(changeAnswer(situation, form.answers, question.id, value), question.id);
+    persist(changeAnswer(situation, answers, question.id, value), question.id);
     setError(null);
   }
 
   function next(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !question) return;
-    const validation = validateAnswer(question, form.answers[question.id]);
+    const validation = validateAnswer(question, answers[question.id]);
     if (validation) {
       setError(validation);
       return;
@@ -172,7 +203,7 @@ export function WizardPage() {
     const nextQuestion = editing
       ? firstMissing
       : questions[questions.findIndex((item) => item.id === question.id) + 1];
-    persist(form.answers, nextQuestion?.id ?? 'summary');
+    persist(answers, nextQuestion?.id ?? 'summary');
     setError(null);
     if (!nextQuestion) setEditing(false);
   }
@@ -180,14 +211,14 @@ export function WizardPage() {
   function back() {
     if (!form || !question) return;
     const previous = questions[questions.findIndex((item) => item.id === question.id) - 1];
-    if (previous) persist(form.answers, previous.id);
+    if (previous) persist(answers, previous.id);
     setError(null);
     setEditing(false);
   }
 
   function edit(id: string) {
     if (!form) return;
-    persist(form.answers, id);
+    persist(answers, id);
     setEditing(true);
     setError(null);
   }
@@ -261,7 +292,7 @@ export function WizardPage() {
                 ? 'Możecie wrócić do nich na tym samym urządzeniu i w tej samej przeglądarce.'
                 : 'Pozostawcie tę stronę otwartą. Przeglądarka nie pozwoliła zapisać odpowiedzi na później.'}
             </p>
-            {questions.some((item) => form.answers[item.id] === 'unknown') && (
+            {questions.some((item) => answers[item.id] === 'unknown') && (
               <p className="wizard__notice">
                 Część danych czeka na uzupełnienie. Znajdziecie je w podsumowaniu.
               </p>
@@ -270,7 +301,7 @@ export function WizardPage() {
               <button
                 type="button"
                 className="wizard__button wizard__button--primary"
-                onClick={() => persist(form.answers, 'summary')}
+                onClick={() => persist(answers, 'summary')}
               >
                 Zobacz podsumowanie
               </button>
@@ -297,7 +328,13 @@ export function WizardPage() {
                     .map((item) => (
                       <div key={item.id}>
                         <dt>{item.label}</dt>
-                        <dd>{formatAnswer(item, form.answers[item.id])}</dd>
+                        <dd>
+                          {item.id === 'family' && answers.motherSituation === 'deceased'
+                            ? 'Plan taty po zgonie mamy'
+                            : item.id === 'family' && answers.motherSituation === 'abandoned'
+                              ? 'Plan taty po porzuceniu dziecka przez mamę'
+                              : formatAnswer(item, answers[item.id])}
+                        </dd>
                         <button
                           type="button"
                           className="wizard__edit"
@@ -314,7 +351,7 @@ export function WizardPage() {
             <button
               type="button"
               className="wizard__button wizard__button--primary"
-              onClick={() => persist(form.answers, 'summary', true)}
+              onClick={() => persist(answers, 'summary', true)}
             >
               Zapisz odpowiedzi
             </button>
@@ -334,7 +371,7 @@ export function WizardPage() {
               <QuestionField
                 key={question.id}
                 question={question}
-                value={form.answers[question.id] ?? ''}
+                value={answers[question.id] ?? ''}
                 error={error}
                 onChange={answer}
               />

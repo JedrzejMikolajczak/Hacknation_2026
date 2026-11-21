@@ -1,323 +1,168 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo } from 'react';
 import type {
+  ApplicantRole,
   BenefitParams,
-  LeavePartRequest,
-  MaternityCalculationResult,
-  ParentalSplitResult,
-  ParentalWithWorkResult,
-  ParentRole,
-  ScenarioInput,
+  CaseInputs,
+  CasePeriod,
+  CasePlan,
+  PlannedParentalPart,
 } from '@shared/types';
 import { formatRate } from '../../app/benefitParams';
+import { roles } from '../plan/caseLabels';
 import {
   addDaysIso,
-  DAYS_IN_WEEK,
-  formatIsoPl,
-  formatPlnAmount,
+  computeParentalUsage,
+  formatPolishDate,
+  formatWeeksPl,
   formatWorkFraction,
-  getAnchorDate,
-  getDefaultParentalStartDate,
+  getEventDate,
   getLeavePlanPresets,
-  getLeaveTypeLabel,
-  getMaternityBlockEndDate,
-  getParentalPoolSummary,
-  getPartLimitInfo,
-  getShortParentRoleLabel,
-  getWorkFractionOptions,
-  hasFatherInPlan,
-  isParentInsured,
-  isSingleChildLoss,
+  getParentalStartDate,
+  getPartDays,
+  getWorkFractionQuickOptions,
+  isChildLossNoParental,
   type LeavePlanPresetId,
 } from './leavePlanHelpers';
-import {
-  getAdoptionMaxChildAgeYears,
-  getParentalDeadlineDate,
-  getPaternityDeadlineDate,
-  type MaternityPlanOptions,
-  type PaternityPartPlan,
-  type ValidationIssue,
-} from './leavePlanValidation';
+import { getPaternityDeadline, type LeaveValidationIssue } from './leavePlanValidation';
 
 interface LeaveSplitPlannerProps {
-  scenario: ScenarioInput;
+  input: CaseInputs;
+  plan: CasePlan;
   params: BenefitParams;
-  maternity: MaternityCalculationResult;
-  parts: LeavePartRequest[];
+  parts: PlannedParentalPart[];
   activePreset: LeavePlanPresetId | null;
-  splitResult: ParentalSplitResult | null;
-  workByPartIndex: Record<number, number>;
-  withWorkResults: Record<number, ParentalWithWorkResult>;
-  maternityOptions: MaternityPlanOptions;
-  paternityParts: PaternityPartPlan[];
-  isPaternityCustom: boolean;
-  validationIssues: ValidationIssue[];
+  motherAvailable: boolean;
+  fatherAvailable: boolean;
+  validationIssues: LeaveValidationIssue[];
   onSelectPreset: (presetId: LeavePlanPresetId) => void;
-  onAddPart: (part: LeavePartRequest) => void;
-  onUpdatePart: (index: number, part: LeavePartRequest) => void;
-  onRemovePart: (index: number) => void;
-  onResetParts: () => void;
-  onChangeWorkForPart: (partIndex: number, workTimeFraction: number | null) => void;
-  onChangeMaternityOptions: (next: MaternityPlanOptions) => void;
-  onChangePaternityParts: (next: PaternityPartPlan[]) => void;
-  onResetPaternity: () => void;
+  onUpdate: (patch: Partial<CaseInputs>) => void;
 }
 
 export function LeaveSplitPlanner({
-  scenario,
+  input,
+  plan,
   params,
-  maternity,
   parts,
   activePreset,
-  splitResult,
-  workByPartIndex,
-  withWorkResults,
-  maternityOptions,
-  paternityParts,
-  isPaternityCustom,
+  motherAvailable,
+  fatherAvailable,
   validationIssues,
   onSelectPreset,
-  onAddPart,
-  onUpdatePart,
-  onRemovePart,
-  onResetParts,
-  onChangeWorkForPart,
-  onChangeMaternityOptions,
-  onChangePaternityParts,
-  onResetPaternity,
+  onUpdate,
 }: LeaveSplitPlannerProps) {
-  const pool = useMemo(() => getParentalPoolSummary(scenario, params), [scenario, params]);
   const presets = useMemo(() => getLeavePlanPresets(params), [params]);
-  const workOptions = useMemo(() => getWorkFractionOptions(params), [params]);
-  const singleChildLoss = isSingleChildLoss(scenario);
-  const fatherAvailable = hasFatherInPlan(scenario) && isParentInsured(scenario.father);
-  const motherAvailable = isParentInsured(scenario.mother) && !scenario.special.motherDeceased;
-  const anchorDate = getAnchorDate(scenario);
-  const parentalDeadline = useMemo(
-    () => getParentalDeadlineDate(scenario, params),
-    [scenario, params],
+  const workQuickOptions = useMemo(() => getWorkFractionQuickOptions(params), [params]);
+  const usage = useMemo(
+    () => computeParentalUsage(parts, input, plan, params),
+    [parts, input, plan, params],
   );
-  const paternityDeadline = useMemo(
-    () => getPaternityDeadlineDate(scenario, params),
-    [scenario, params],
-  );
+  const childLossNoParental = isChildLossNoParental(input, plan);
+  const parentalDeadline = plan.outcome.parental_deadline;
+  const paternityDeadline = useMemo(() => getPaternityDeadline(input, params), [input, params]);
 
-  const suggestedNextStartDate = useMemo(() => {
-    const defaultStart = getDefaultParentalStartDate(scenario, maternity) ?? scenario.referenceDate;
-    const preEnd = getMaternityBlockEndDate(scenario, maternity);
-    const parentalEnds = parts
-      .filter((p) => p.leaveType === 'parentalLeave')
-      .map((p, idx) => {
-        const workRes = withWorkResults[idx];
-        if (workRes && workRes.periods.length > 0) {
-          return workRes.periods[workRes.periods.length - 1].endDate;
-        }
-        return addDaysIso(p.startDate, p.weeks * DAYS_IN_WEEK - 1);
-      });
-    const allEnds = [...(preEnd ? [preEnd] : []), ...parentalEnds].sort();
-    const latestEnd = allEnds.at(-1);
-    return latestEnd ? addDaysIso(latestEnd, 1) : defaultStart;
-  }, [parts, withWorkResults, scenario, maternity]);
+  const errors = validationIssues.filter((item) => item.severity === 'error');
+  const warnings = validationIssues.filter((item) => item.severity === 'warning');
 
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<LeavePartRequest | null>(null);
-
-  const [parentRole, setParentRole] = useState<ParentRole>(fatherAvailable ? 'father' : 'mother');
-  const [dateMode, setDateMode] = useState<'auto' | 'parallel' | 'custom'>('auto');
-  const [customStartDate, setCustomStartDate] = useState<string>(suggestedNextStartDate);
-  const [weeks, setWeeks] = useState<number>(params.parentalLeave.nonTransferableWeeksPerParent);
-
-  const effectiveAddRole: ParentRole = !fatherAvailable
-    ? 'mother'
-    : !motherAvailable
-      ? 'father'
-      : parentRole;
-
-  const addLimit = useMemo(
-    () => getPartLimitInfo(parts, effectiveAddRole, scenario, params, null),
-    [parts, effectiveAddRole, scenario, params],
-  );
-
-  const editLimit = useMemo(() => {
-    if (editingIndex === null || !editDraft) return null;
-    return getPartLimitInfo(parts, editDraft.parentRole, scenario, params, editingIndex);
-  }, [parts, editingIndex, editDraft, scenario, params]);
-
-  const clampedAddWeeks = addLimit.maxWeeks > 0 ? Math.min(weeks, addLimit.maxWeeks) : 0;
-  const parallelStartDate =
-    parts[0]?.startDate ??
-    getDefaultParentalStartDate(scenario, maternity) ??
-    suggestedNextStartDate;
-  const effectiveStartDate =
-    dateMode === 'auto'
-      ? suggestedNextStartDate
-      : dateMode === 'parallel'
-        ? parallelStartDate
-        : customStartDate;
-  const previewEndDate =
-    effectiveStartDate && clampedAddWeeks > 0
-      ? addDaysIso(effectiveStartDate, clampedAddWeeks * DAYS_IN_WEEK - 1)
-      : null;
-
-  const parentalPartEntries = parts
-    .map((part, index) => ({ part, index }))
-    .filter((entry) => entry.part.leaveType === 'parentalLeave');
-
-  const motherUsedWeeks = parentalPartEntries
-    .filter((entry) => entry.part.parentRole === 'mother')
-    .reduce((sum, entry) => sum + entry.part.weeks, 0);
-  const fatherUsedWeeks = parentalPartEntries
-    .filter((entry) => entry.part.parentRole === 'father')
-    .reduce((sum, entry) => sum + entry.part.weeks, 0);
-  const totalUsedWeeks = motherUsedWeeks + fatherUsedWeeks;
   const poolPct =
-    pool.totalWeeks > 0 ? Math.min(100, Math.round((totalUsedWeeks / pool.totalWeeks) * 100)) : 0;
+    usage.poolWeeks > 0 ? Math.min(100, Math.round((usage.totalWeeks / usage.poolWeeks) * 100)) : 0;
 
-  const errorMessages = useMemo(() => {
-    const items: { message: string; legalBasis: string | null }[] = [];
-    const seen = new Set<string>();
-    const pushUnique = (message: string, legalBasis: string | null) => {
-      if (seen.has(message)) return;
-      seen.add(message);
-      items.push({ message, legalBasis });
+  const workExtensionByParentStart = useMemo(() => {
+    const map = new Map<string, CasePeriod>();
+    const periods = plan.outcome.periods.filter((p) => !p.denied);
+    for (let i = 0; i < periods.length; i += 1) {
+      const current = periods[i];
+      const next = periods[i + 1];
+      if (
+        (current.leave_type === 'PARENTAL' ||
+          current.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION') &&
+        next?.leave_type === 'PARENTAL_WORK_EXTENSION' &&
+        next.parent_role === current.parent_role
+      ) {
+        map.set(`${current.parent_role}:${current.start_date}`, next);
+      }
+    }
+    return map;
+  }, [plan.outcome.periods]);
+
+  const nextStartBase = useMemo(() => {
+    if (parts.length > 0) {
+      const lastEnd = parts
+        .map((p) => p.end_date)
+        .filter(Boolean)
+        .sort()
+        .at(-1);
+      if (lastEnd) return addDaysIso(lastEnd, 1);
+    }
+    return (
+      plan.default_father_parental_start_date ??
+      getParentalStartDate(input, plan) ??
+      getEventDate(input)
+    );
+  }, [parts, plan, input]);
+
+  function editPart(index: number, patch: Partial<PlannedParentalPart>) {
+    onUpdate({
+      parental_leave_parts: parts.map((part, i) => (index === i ? { ...part, ...patch } : part)),
+    });
+  }
+
+  function handleAddPart() {
+    if (!nextStartBase) return;
+    const defaultRole: ApplicantRole =
+      usage.remainingByRole.FATHER > 0 && fatherAvailable && usage.remainingByRole.MOTHER === 0
+        ? 'FATHER'
+        : usage.remainingByRole.MOTHER > 0 && motherAvailable
+          ? 'MOTHER'
+          : input.applicant_role;
+    const availableWeeks = Math.max(
+      1,
+      Math.min(
+        usage.remainingByRole[defaultRole] || 1,
+        params.parentalLeave.nonTransferableWeeksPerParent,
+      ),
+    );
+    const newPart: PlannedParentalPart = {
+      parent_role: defaultRole,
+      start_date: nextStartBase,
+      end_date: addDaysIso(nextStartBase, availableWeeks * params.calendar.daysPerWeek - 1),
+      work_fraction: 0,
     };
-
-    for (const issue of validationIssues) {
-      if (issue.severity === 'error') {
-        pushUnique(issue.message, issue.legalBasis);
-      }
-    }
-    if (splitResult && !splitResult.valid) {
-      for (const err of splitResult.errors) {
-        pushUnique(err.message, err.legalBasis);
-      }
-    }
-    return items;
-  }, [validationIssues, splitResult]);
-
-  const warningMessages = useMemo(
-    () => validationIssues.filter((issue) => issue.severity === 'warning'),
-    [validationIssues],
-  );
-
-  const hasSupplementaryPeriod = maternity.periods.some(
-    (period) => period.leaveType === 'supplementaryMaternityLeave',
-  );
-  const maternityPeriod = maternity.periods.find(
-    (period) =>
-      period.leaveType === 'maternityLeave' || period.leaveType === 'adoptionMaternityLeave',
-  );
-
-  function startEditing(index: number) {
-    setEditingIndex(index);
-    setEditDraft({ ...parts[index] });
+    onUpdate({ parental_leave_parts: [...parts, newPart] });
   }
 
-  function cancelEditing() {
-    setEditingIndex(null);
-    setEditDraft(null);
-  }
-
-  function saveEditing(event: FormEvent) {
-    event.preventDefault();
-    if (editingIndex === null || !editDraft) return;
-    if (editDraft.weeks < 1) return;
-    onUpdatePart(editingIndex, {
-      ...editDraft,
-      leaveType: 'parentalLeave',
-    });
-    setEditingIndex(null);
-    setEditDraft(null);
-  }
-
-  function handleAddSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (addLimit.maxPartsReached || addLimit.maxWeeks === 0) return;
-    if (!effectiveStartDate || clampedAddWeeks < 1) return;
-    onAddPart({
-      parentRole: effectiveAddRole,
-      leaveType: 'parentalLeave',
-      startDate: effectiveStartDate,
-      weeks: clampedAddWeeks,
-    });
-  }
-
-  function handlePaternityModeChange(mode: 'none' | 'single' | 'split') {
-    const startBase = anchorDate ?? scenario.referenceDate;
-    if (mode === 'none') {
-      onChangePaternityParts([]);
-      return;
-    }
-    if (mode === 'single') {
-      onChangePaternityParts([
-        {
-          startDate: paternityParts[0]?.startDate ?? addDaysIso(startBase, DAYS_IN_WEEK),
-          weeks: params.paternityLeave.weeks,
-        },
-      ]);
-      return;
-    }
-    const firstStart = paternityParts[0]?.startDate ?? addDaysIso(startBase, DAYS_IN_WEEK);
-    const secondStart = paternityParts[1]?.startDate ?? addDaysIso(firstStart, DAYS_IN_WEEK * 4);
-    onChangePaternityParts([
-      { startDate: firstStart, weeks: params.paternityLeave.minPartWeeks },
-      {
-        startDate: secondStart,
-        weeks: Math.max(
-          params.paternityLeave.minPartWeeks,
-          params.paternityLeave.weeks - params.paternityLeave.minPartWeeks,
-        ),
-      },
-    ]);
-  }
-
-  const paternityMode: 'none' | 'single' | 'split' =
-    paternityParts.length === 0 ? 'none' : paternityParts.length === 1 ? 'single' : 'split';
-
-  const addBlocked = addLimit.maxPartsReached || addLimit.maxWeeks === 0;
+  const maxPartsReached = parts.length >= params.parentalLeave.maxParts;
+  const mandatoryMotherWeeks = input.special_circumstances.mother_hospitalized_or_incapable
+    ? params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate
+    : params.maternityLeave.motherMandatoryWeeksAfterBirth;
 
   return (
     <section className="lp-card" aria-labelledby="planner-heading">
       <div className="lp-card__header">
         <div>
-          <h2 id="planner-heading" className="lp-card__title">
-            Zaplanuj podział urlopów i powrót do pracy
-          </h2>
-          {singleChildLoss ? (
+          <h3 id="planner-heading" className="lp-card__title">
+            Jak chcecie podzielić urlop?
+          </h3>
+          {childLossNoParental ? (
             <p className="lp-card__lead">
-              W tej sytuacji przysługuje skrócony urlop macierzyński zgodnie z wyliczeniem silnika.
-              Urlop rodzicielski nie przysługuje.
+              W tej sytuacji przysługuje skrócony urlop macierzyński. Urlop rodzicielski nie
+              przysługuje.
             </p>
           ) : (
             <p className="lp-card__lead">
-              Wybierz gotowy scenariusz albo dostosuj części ręcznie. Urlop rodzicielski możesz
-              podzielić na maksymalnie {params.parentalLeave.maxParts} części i wykorzystać
-              jednocześnie lub naprzemiennie
-              {parentalDeadline ? ` do ${formatIsoPl(parentalDeadline)}` : ''}. Po{' '}
-              {pool.nonTransferable} tyg. przysługuje wyłącznie każdemu z rodziców.
+              Wybierz gotowy scenariusz podziału – oś czasu, terminy wniosków i daty powrotu
+              przeliczą się od razu.
             </p>
           )}
         </div>
-        {!singleChildLoss && (
-          <button
-            type="button"
-            className="plan-btn plan-btn--secondary"
-            onClick={() => {
-              cancelEditing();
-              onResetParts();
-            }}
-          >
-            Przywróć propozycję startową
-          </button>
-        )}
       </div>
 
-      {/* Komunikaty walidacji ustawowej */}
-      {errorMessages.length > 0 && (
+      {/* Komunikaty walidacji – zawsze widoczne poza <details> */}
+      {errors.length > 0 && (
         <div className="lp-planner-errors" role="alert">
-          <h3 className="lp-planner-errors__title">Sprawdź ograniczenia ustawowe:</h3>
+          <h4 className="lp-planner-errors__title">Sprawdź ograniczenia ustawowe:</h4>
           <ul>
-            {errorMessages.map((err, idx) => (
-              <li key={`${err.message}-${idx}`}>
+            {errors.map((err, idx) => (
+              <li key={`${err.code}-${idx}`}>
                 {err.message}
                 {err.legalBasis && <span className="lp-legal"> ({err.legalBasis})</span>}
               </li>
@@ -326,10 +171,10 @@ export function LeaveSplitPlanner({
         </div>
       )}
 
-      {warningMessages.length > 0 && (
+      {warnings.length > 0 && (
         <div className="lp-planner-warnings" role="status">
           <ul>
-            {warningMessages.map((warn, idx) => (
+            {warnings.map((warn, idx) => (
               <li key={`${warn.code}-${idx}`}>
                 {warn.message}
                 {warn.legalBasis && <span className="lp-legal"> ({warn.legalBasis})</span>}
@@ -339,32 +184,26 @@ export function LeaveSplitPlanner({
         </div>
       )}
 
-      {!singleChildLoss && splitResult && splitResult.valid && errorMessages.length === 0 && (
+      {!childLossNoParental && usage.poolWeeks > 0 && errors.length === 0 && parts.length > 0 && (
         <div className="lp-planner-success" role="status">
-          <strong>Podział zgodny z Kodeksem pracy.</strong> Pozostało do wykorzystania: Matka{' '}
-          <strong>{splitResult.remainingWeeks.mother} tyg.</strong>
-          {fatherAvailable && (
-            <>
-              , Ojciec <strong>{splitResult.remainingWeeks.father} tyg.</strong>
-            </>
-          )}
-          .
+          <strong>Podział zgodny z Kodeksem pracy.</strong> Wykorzystano{' '}
+          {formatWeeksPl(usage.totalWeeks)} z {usage.poolWeeks} tyg. urlopu rodzicielskiego (Mama:{' '}
+          {formatWeeksPl(usage.motherWeeks)}
+          {fatherAvailable && <>, Tata: {formatWeeksPl(usage.fatherWeeks)}</>}).
         </div>
       )}
 
-      {!singleChildLoss && (
+      {!childLossNoParental && usage.poolWeeks > 0 && (
         <>
-          {/* 1. Gotowe scenariusze */}
-          <div className="lp-presets-section" aria-labelledby="presets-heading">
-            <h3 id="presets-heading" className="lp-planner-subtitle">
-              1. Wybierz gotowy scenariusz podziału urlopu rodzicielskiego
-            </h3>
+          {/* Gotowe scenariusze podziału */}
+          <div className="lp-presets-section" aria-label="Gotowe scenariusze podziału urlopu">
             <div className="lp-presets-grid">
               {presets.map((preset) => {
                 const isSelected = activePreset === preset.id;
-                const disabled =
-                  (preset.requiresFather && !fatherAvailable) ||
-                  (preset.id === 'onlyMother' && !motherAvailable);
+                const missingFather = preset.requiresFather && !fatherAvailable;
+                const missingMother = preset.requiresMother && !motherAvailable;
+                const disabled = missingFather || missingMother;
+
                 return (
                   <button
                     key={preset.id}
@@ -374,16 +213,15 @@ export function LeaveSplitPlanner({
                       isSelected ? 'lp-preset-card lp-preset-card--active' : 'lp-preset-card'
                     }
                     aria-pressed={isSelected}
-                    onClick={() => {
-                      cancelEditing();
-                      onSelectPreset(preset.id);
-                    }}
+                    onClick={() => onSelectPreset(preset.id)}
                   >
                     <span className="lp-preset-card__title">{preset.title}</span>
                     <span className="lp-preset-card__desc">
-                      {disabled && preset.requiresFather
-                        ? 'Wymaga uwzględnienia ubezpieczonego drugiego rodzica w planie.'
-                        : preset.description}
+                      {missingFather
+                        ? 'Wymaga potwierdzonego ubezpieczenia taty w planie.'
+                        : missingMother
+                          ? 'Wymaga potwierdzonego ubezpieczenia mamy w planie.'
+                          : preset.description}
                     </span>
                   </button>
                 );
@@ -391,667 +229,307 @@ export function LeaveSplitPlanner({
             </div>
           </div>
 
-          {/* Wizualny pasek wykorzystanej puli tygodni */}
-          <div className="lp-pool-progress" aria-label="Wykorzystanie puli urlopu rodzicielskiego">
-            <div className="lp-pool-progress__top">
-              <strong>
-                Wykorzystano {totalUsedWeeks} z {pool.totalWeeks} tygodni urlopu rodzicielskiego
-              </strong>
-              <span className="lp-pool-progress__breakdown">
-                Mama: {motherUsedWeeks} tyg. · Tata: {fatherUsedWeeks} tyg.
-              </span>
-            </div>
-            <div
-              className="lp-pool-progress__track"
-              role="progressbar"
-              aria-valuenow={totalUsedWeeks}
-              aria-valuemin={0}
-              aria-valuemax={pool.totalWeeks}
-            >
-              <div className="lp-pool-progress__fill" style={{ width: `${poolPct}%` }} />
-            </div>
-            {scenario.situation === 'adoption' && (
-              <p className="lp-pool-progress__note">
-                Limit wieku dziecka w tej sytuacji: do{' '}
-                {getAdoptionMaxChildAgeYears(scenario, params)} lat (minimalny wymiar urlopu na
-                warunkach macierzyńskiego: {params.adoptionMaternityLeave.minWeeks} tyg.).
-              </p>
-            )}
-          </div>
+          {/* Ręczna edycja części, łączenie z pracą i pozostałe daty – zwinięte w <details> */}
+          <details className="lp-details">
+            <summary className="lp-details__summary">Ułóż ręcznie / połącz z pracą</summary>
+            <div className="lp-details__body">
+              <div className="lp-manual-intro">
+                <p className="lp-card__lead">
+                  Urlop rodzicielski można podzielić na maksymalnie {params.parentalLeave.maxParts}{' '}
+                  części i wykorzystać jednocześnie lub naprzemiennie
+                  {parentalDeadline ? ` do ${formatPolishDate(parentalDeadline)}` : ''}. Po{' '}
+                  {usage.nonTransferableWeeks} tyg. jest nieprzenoszalne dla każdego z rodziców.
+                </p>
+                {input.parental_leave_parts && !input.parental_only && (
+                  <button
+                    type="button"
+                    className="plan-btn plan-btn--secondary"
+                    onClick={() => onUpdate({ parental_leave_parts: undefined })}
+                  >
+                    Przywróć proponowany rozkład
+                  </button>
+                )}
+              </div>
 
-          <div className="lp-planner-grid">
-            {/* 2. Części urlopu rodzicielskiego */}
-            <div className="lp-planner-col">
-              <h3 className="lp-planner-subtitle">
-                2. Części urlopu rodzicielskiego ({parentalPartEntries.length}/
-                {params.parentalLeave.maxParts} części)
-              </h3>
+              {/* Pasek wykorzystania puli */}
+              <div
+                className="lp-pool-progress"
+                aria-label="Wykorzystanie puli urlopu rodzicielskiego"
+              >
+                <div className="lp-pool-progress__top">
+                  <strong>
+                    Wykorzystano {formatWeeksPl(usage.totalWeeks)} z {usage.poolWeeks} tyg. urlopu
+                    rodzicielskiego
+                  </strong>
+                  <span className="lp-pool-progress__breakdown">
+                    Mama: {formatWeeksPl(usage.motherWeeks)} · Tata:{' '}
+                    {formatWeeksPl(usage.fatherWeeks)} · Części: {parts.length}/
+                    {params.parentalLeave.maxParts}
+                  </span>
+                </div>
+                <div
+                  className="lp-pool-progress__track"
+                  role="progressbar"
+                  aria-valuenow={Math.round(usage.totalWeeks)}
+                  aria-valuemin={0}
+                  aria-valuemax={usage.poolWeeks}
+                >
+                  <div className="lp-pool-progress__fill" style={{ width: `${poolPct}%` }} />
+                </div>
+                <p className="lp-pool-progress__note">
+                  Pozostało w puli: <strong>{usage.remainingTotalWeeks} tyg.</strong> (Mama: do{' '}
+                  {usage.remainingByRole.MOTHER} tyg.
+                  {fatherAvailable && <>, Tata: do {usage.remainingByRole.FATHER} tyg.</>}).
+                </p>
+              </div>
+
+              <h4 className="lp-planner-subtitle">
+                Części urlopu rodzicielskiego ({parts.length}/{params.parentalLeave.maxParts})
+              </h4>
 
               {parts.length === 0 ? (
                 <p className="lp-card__empty">
-                  Brak zaplanowanych części urlopu rodzicielskiego. Wybierz scenariusz powyżej lub
-                  dodaj część poniżej.
+                  Brak zaplanowanych części urlopu rodzicielskiego. Wybierz gotowy scenariusz
+                  powyżej lub dodaj część poniżej.
                 </p>
               ) : (
-                <ul className="lp-parts-list">
+                <div className="lp-manual-parts">
                   {parts.map((part, index) => {
-                    const partEndDate = addDaysIso(part.startDate, part.weeks * DAYS_IN_WEEK - 1);
-                    const isEditing = editingIndex === index && editDraft !== null;
-                    const workFrac = workByPartIndex[index];
-                    const workRes = withWorkResults[index];
-                    const isCombinedWithWork = Boolean(workFrac && workRes);
-                    const splitPeriod = splitResult?.periods[index];
-
-                    if (isEditing && editDraft && editLimit) {
-                      const editExceeds = editDraft.weeks > editLimit.maxWeeks;
-                      return (
-                        <li
-                          key={`edit-${part.startDate}-${index}`}
-                          className="lp-parts-item lp-parts-item--editing"
-                        >
-                          <form className="lp-parts-edit-form" onSubmit={saveEditing}>
-                            <div className="lp-planner-form__fields">
-                              <label className="lp-field">
-                                <span>Kto bierze urlop</span>
-                                <select
-                                  value={editDraft.parentRole}
-                                  onChange={(e) =>
-                                    setEditDraft({
-                                      ...editDraft,
-                                      parentRole: e.target.value as ParentRole,
-                                    })
-                                  }
-                                >
-                                  {motherAvailable && <option value="mother">Matka</option>}
-                                  {fatherAvailable && <option value="father">Ojciec</option>}
-                                </select>
-                              </label>
-
-                              <label className="lp-field">
-                                <span>Data rozpoczęcia</span>
-                                <input
-                                  type="date"
-                                  value={editDraft.startDate}
-                                  onChange={(e) =>
-                                    setEditDraft({ ...editDraft, startDate: e.target.value })
-                                  }
-                                  required
-                                />
-                              </label>
-
-                              <div className="lp-field lp-field--full">
-                                <label htmlFor={`edit-weeks-${index}`}>Liczba tygodni</label>
-                                <div className="lp-stepper-row">
-                                  <button
-                                    type="button"
-                                    className="lp-stepper-btn"
-                                    aria-label="Zmniejsz liczbę tygodni"
-                                    onClick={() =>
-                                      setEditDraft({
-                                        ...editDraft,
-                                        weeks: Math.max(1, editDraft.weeks - 1),
-                                      })
-                                    }
-                                  >
-                                    −1
-                                  </button>
-                                  <input
-                                    id={`edit-weeks-${index}`}
-                                    type="number"
-                                    min={1}
-                                    max={Math.max(1, editLimit.maxWeeks)}
-                                    value={editDraft.weeks}
-                                    onChange={(e) => {
-                                      const raw = Number(e.target.value);
-                                      if (!Number.isNaN(raw)) {
-                                        setEditDraft({
-                                          ...editDraft,
-                                          weeks: Math.max(1, raw),
-                                        });
-                                      }
-                                    }}
-                                    required
-                                  />
-                                  <button
-                                    type="button"
-                                    className="lp-stepper-btn"
-                                    aria-label="Zwiększ liczbę tygodni"
-                                    disabled={editDraft.weeks >= editLimit.maxWeeks}
-                                    onClick={() =>
-                                      setEditDraft({
-                                        ...editDraft,
-                                        weeks: Math.min(editLimit.maxWeeks, editDraft.weeks + 1),
-                                      })
-                                    }
-                                  >
-                                    +1
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-
-                            {editLimit.limitReason && (
-                              <p
-                                className={
-                                  editDraft.weeks >= editLimit.maxWeeks || editExceeds
-                                    ? 'lp-limit-notice lp-limit-notice--warn'
-                                    : 'lp-limit-notice'
-                                }
-                                role={editExceeds ? 'alert' : undefined}
-                              >
-                                {editDraft.weeks >= editLimit.maxWeeks
-                                  ? `Limit: ${editLimit.limitReason}`
-                                  : editLimit.limitReason}
-                              </p>
-                            )}
-
-                            <div className="lp-parts-edit-form__actions">
-                              <button
-                                type="submit"
-                                className="plan-btn plan-btn--primary"
-                                disabled={editExceeds || editLimit.maxWeeks === 0}
-                              >
-                                Zapisz zmiany
-                              </button>
-                              <button
-                                type="button"
-                                className="plan-btn plan-btn--secondary"
-                                onClick={cancelEditing}
-                              >
-                                Anuluj
-                              </button>
-                            </div>
-                          </form>
-                        </li>
-                      );
-                    }
+                    const role = part.parent_role ?? input.applicant_role;
+                    const days = getPartDays(part);
+                    const weeks =
+                      days > 0 ? Math.round((days / params.calendar.daysPerWeek) * 10) / 10 : 0;
+                    const workFraction = part.work_fraction ?? 0;
+                    const extensionPeriod = workExtensionByParentStart.get(
+                      `${role}:${part.start_date}`,
+                    );
 
                     return (
-                      <li
-                        key={`${part.parentRole}-${part.startDate}-${index}`}
-                        className="lp-parts-item"
-                      >
-                        <div className="lp-parts-item__info">
-                          <strong>{getShortParentRoleLabel(part.parentRole)}</strong> –{' '}
-                          {getLeaveTypeLabel(part.leaveType)}
-                          {isCombinedWithWork && workFrac && (
-                            <span className="lp-parts-item__work-tag">
-                              + praca ({formatWorkFraction(workFrac)})
+                      <fieldset className="lp-part-fieldset" key={index}>
+                        <legend className="lp-part-fieldset__legend">
+                          Część {index + 1}
+                          {days > 0 && (
+                            <span className="lp-part-fieldset__meta">
+                              {' '}
+                              ({formatWeeksPl(weeks)} / {days} dni)
                             </span>
                           )}
-                          <div className="lp-parts-item__meta">
-                            {formatIsoPl(part.startDate)} – {formatIsoPl(partEndDate)} ·{' '}
-                            {part.weeks} tyg.
-                            {splitPeriod && <> · stawka {formatRate(splitPeriod.rate)}</>}
-                            {isCombinedWithWork && workRes && (
-                              <> → wydłużenie +{workRes.extendedWeeks} tyg.</>
-                            )}
-                          </div>
+                        </legend>
+
+                        <div className="lp-part-fields">
+                          <label className="lp-field">
+                            <span>Rodzic</span>
+                            <select
+                              className="plan-field__input"
+                              value={role}
+                              onChange={(event) =>
+                                editPart(index, {
+                                  parent_role:
+                                    event.target.value === roles[1] ? roles[1] : roles[0],
+                                })
+                              }
+                            >
+                              <option value="MOTHER">Matka</option>
+                              <option value="FATHER">Ojciec</option>
+                            </select>
+                          </label>
+
+                          <label className="lp-field">
+                            <span>Początek</span>
+                            <input
+                              aria-label={`Początek części ${index + 1}`}
+                              type="date"
+                              className="plan-field__input"
+                              value={part.start_date}
+                              onChange={(event) => {
+                                if (event.target.value) {
+                                  editPart(index, { start_date: event.target.value });
+                                }
+                              }}
+                            />
+                          </label>
+
+                          <label className="lp-field">
+                            <span>Koniec</span>
+                            <input
+                              aria-label={`Koniec części ${index + 1}`}
+                              type="date"
+                              className="plan-field__input"
+                              value={part.end_date}
+                              onChange={(event) => {
+                                if (event.target.value) {
+                                  editPart(index, { end_date: event.target.value });
+                                }
+                              }}
+                            />
+                          </label>
+
+                          <label className="lp-field">
+                            <span>
+                              Część etatu podczas urlopu (maks.{' '}
+                              {formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)})
+                            </span>
+                            <input
+                              aria-label={`Część etatu podczas urlopu w części ${index + 1}`}
+                              className="plan-field__input"
+                              type="number"
+                              min="0"
+                              max={params.parentalLeave.maxWorkTimeFraction}
+                              step="0.05"
+                              value={workFraction}
+                              onChange={(event) =>
+                                editPart(index, { work_fraction: Number(event.target.value) })
+                              }
+                            />
+                          </label>
                         </div>
-                        <div className="lp-parts-item__actions">
-                          <button
-                            type="button"
-                            className="lp-parts-item__edit"
-                            onClick={() => startEditing(index)}
-                            aria-label={`Edytuj część: ${getShortParentRoleLabel(part.parentRole)}, ${getLeaveTypeLabel(part.leaveType)}`}
-                          >
-                            Edytuj
-                          </button>
+
+                        <div
+                          className="lp-work-quick-row"
+                          aria-label={`Szybki wybór etatu dla części ${index + 1}`}
+                        >
+                          {workQuickOptions.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              className={
+                                Math.abs(workFraction - opt.value) < 0.001
+                                  ? 'lp-quick-chip lp-quick-chip--active'
+                                  : 'lp-quick-chip'
+                              }
+                              onClick={() => editPart(index, { work_fraction: opt.value })}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {workFraction > 0 && extensionPeriod && (
+                          <p className="lp-work-result" role="status">
+                            <strong>
+                              Wydłużenie po pracy ({formatWorkFraction(workFraction)}):
+                            </strong>{' '}
+                            {formatPolishDate(extensionPeriod.start_date)} –{' '}
+                            {formatPolishDate(extensionPeriod.end_date)} (+
+                            {formatWeeksPl(extensionPeriod.weeks)} / {extensionPeriod.days} dni).
+                            Powrót do pracy po tej części:{' '}
+                            <strong>
+                              {formatPolishDate(addDaysIso(extensionPeriod.end_date, 1))}
+                            </strong>
+                            .
+                          </p>
+                        )}
+
+                        <div className="lp-part-actions">
                           <button
                             type="button"
                             className="lp-parts-item__remove"
-                            onClick={() => {
-                              if (editingIndex === index) cancelEditing();
-                              onRemovePart(index);
-                            }}
-                            aria-label={`Usuń część: ${getShortParentRoleLabel(part.parentRole)}, ${getLeaveTypeLabel(part.leaveType)}`}
+                            onClick={() =>
+                              onUpdate({
+                                parental_leave_parts: parts.filter((_, i) => i !== index),
+                              })
+                            }
                           >
-                            Usuń
+                            Usuń część
                           </button>
                         </div>
-                      </li>
+                      </fieldset>
                     );
                   })}
-                </ul>
+                </div>
               )}
 
-              <form className="lp-planner-form" onSubmit={handleAddSubmit}>
-                <h4 className="lp-planner-form__title">
-                  Dodaj kolejną część urlopu rodzicielskiego
-                </h4>
-                <div className="lp-planner-form__fields">
-                  <label className="lp-field">
-                    <span>Kto bierze urlop</span>
-                    <select
-                      value={effectiveAddRole}
-                      disabled={!fatherAvailable || !motherAvailable}
-                      onChange={(e) => setParentRole(e.target.value as ParentRole)}
-                    >
-                      {motherAvailable && <option value="mother">Matka</option>}
-                      {fatherAvailable && <option value="father">Ojciec</option>}
-                    </select>
-                  </label>
+              {maxPartsReached && (
+                <p className="lp-limit-notice lp-limit-notice--warn" role="status">
+                  Osiągnięto limit {params.parentalLeave.maxParts} części urlopu rodzicielskiego.
+                </p>
+              )}
 
-                  <div className="lp-field lp-field--full">
-                    <span>Kiedy ma się zacząć?</span>
-                    <div className="lp-date-mode-group">
-                      <label className="lp-radio-inline">
+              <div className="lp-manual-actions">
+                {nextStartBase && (
+                  <button
+                    type="button"
+                    className="plan-btn plan-btn--secondary"
+                    disabled={maxPartsReached}
+                    onClick={handleAddPart}
+                  >
+                    Dodaj część
+                  </button>
+                )}
+              </div>
+
+              {/* Pozostałe daty: macierzyński przed porodem, ojcowski, przejęcie macierzyńskiego */}
+              <div className="lp-extra-leaves" aria-labelledby="extra-leaves-heading">
+                <h4 id="extra-leaves-heading" className="lp-planner-subtitle">
+                  Pozostałe daty (macierzyński i ojcowski)
+                </h4>
+                <div className="lp-extra-grid">
+                  {input.applicant_role === 'MOTHER' && input.stage !== 'ADOPTION' && (
+                    <div className="lp-extra-card">
+                      <label className="lp-field">
+                        <span>Początek macierzyńskiego</span>
                         <input
-                          type="radio"
-                          name="partDateMode"
-                          checked={dateMode === 'auto'}
-                          onChange={() => setDateMode('auto')}
+                          type="date"
+                          className="plan-field__input"
+                          value={input.maternity_leave_start_date ?? input.due_or_birth_date ?? ''}
+                          onChange={(event) =>
+                            onUpdate({
+                              maternity_leave_start_date: event.target.value || undefined,
+                            })
+                          }
                         />
-                        <span>
-                          Zaraz po poprzednim urlopie ({formatIsoPl(suggestedNextStartDate)})
-                        </span>
                       </label>
-                      {parts.length > 0 && fatherAvailable && (
-                        <label className="lp-radio-inline">
-                          <input
-                            type="radio"
-                            name="partDateMode"
-                            checked={dateMode === 'parallel'}
-                            onChange={() => setDateMode('parallel')}
-                          />
-                          <span>
-                            Jednocześnie z drugim rodzicem ({formatIsoPl(parallelStartDate)})
-                          </span>
-                        </label>
-                      )}
-                      <label className="lp-radio-inline">
-                        <input
-                          type="radio"
-                          name="partDateMode"
-                          checked={dateMode === 'custom'}
-                          onChange={() => {
-                            setCustomStartDate(suggestedNextStartDate);
-                            setDateMode('custom');
-                          }}
-                        />
-                        <span>Wybieram własną datę</span>
-                      </label>
+                      <p className="lp-extra-card__hint">
+                        Można rozpocząć do {params.maternityLeave.maxWeeksBeforeBirth} tyg. przed
+                        przewidywaną datą porodu (stawka {formatRate(params.rates.maternity)} lub{' '}
+                        {formatRate(params.rates.combined)}).
+                      </p>
                     </div>
-                    {dateMode === 'custom' && (
+                  )}
+
+                  <div className="lp-extra-card">
+                    <label className="lp-field">
+                      <span>Początek ojcowskiego</span>
                       <input
                         type="date"
-                        aria-label="Własna data rozpoczęcia"
-                        value={customStartDate}
-                        onChange={(e) => setCustomStartDate(e.target.value)}
-                        required
-                      />
-                    )}
-                  </div>
-
-                  <div className="lp-field lp-field--full">
-                    <label htmlFor="part-weeks-input">Liczba tygodni</label>
-                    <div className="lp-stepper-row">
-                      <button
-                        type="button"
-                        className="lp-stepper-btn"
-                        aria-label="Zmniejsz o 1 tydzień"
-                        disabled={addBlocked || clampedAddWeeks <= 1}
-                        onClick={() => setWeeks(Math.max(1, clampedAddWeeks - 1))}
-                      >
-                        −1
-                      </button>
-                      <input
-                        id="part-weeks-input"
-                        type="number"
-                        min={addBlocked ? 0 : 1}
-                        max={Math.max(1, addLimit.maxWeeks)}
-                        disabled={addBlocked}
-                        value={clampedAddWeeks}
-                        onChange={(e) => {
-                          const raw = Number(e.target.value);
-                          if (!Number.isNaN(raw)) {
-                            setWeeks(Math.min(Math.max(1, raw), Math.max(1, addLimit.maxWeeks)));
-                          }
-                        }}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="lp-stepper-btn"
-                        aria-label="Zwiększ o 1 tydzień"
-                        disabled={addBlocked || clampedAddWeeks >= addLimit.maxWeeks}
-                        onClick={() => setWeeks(Math.min(addLimit.maxWeeks, clampedAddWeeks + 1))}
-                      >
-                        +1
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {addLimit.limitReason && (
-                  <p
-                    className={
-                      addBlocked || clampedAddWeeks >= addLimit.maxWeeks
-                        ? 'lp-limit-notice lp-limit-notice--warn'
-                        : 'lp-limit-notice'
-                    }
-                    role={addBlocked ? 'status' : undefined}
-                  >
-                    {addBlocked
-                      ? `Nie można dodać więcej: ${addLimit.limitReason}`
-                      : clampedAddWeeks >= addLimit.maxWeeks
-                        ? `Maksimum dla tej części: ${addLimit.limitReason}`
-                        : addLimit.limitReason}
-                  </p>
-                )}
-
-                {previewEndDate && !addBlocked && (
-                  <p className="lp-planner-preview">
-                    Ten urlop potrwa od <strong>{formatIsoPl(effectiveStartDate)}</strong> do{' '}
-                    <strong>{formatIsoPl(previewEndDate)}</strong> ({clampedAddWeeks} tyg.).
-                  </p>
-                )}
-
-                <button type="submit" className="plan-btn plan-btn--primary" disabled={addBlocked}>
-                  Dodaj część do planu
-                </button>
-              </form>
-            </div>
-
-            {/* 3. Łączenie urlopu rodzicielskiego z pracą */}
-            <div className="lp-work-combine-box">
-              <h3 className="lp-planner-subtitle">
-                3. Łączenie urlopu rodzicielskiego z pracą (do{' '}
-                {formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)})
-              </h3>
-              <p className="lp-work-combine-box__lead">
-                Urlop rodzicielski można łączyć z pracą u pracodawcy maksymalnie do{' '}
-                {formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)}. Urlop ulega
-                proporcjonalnemu wydłużeniu (KP art. 182¹f) – pokazujemy obie części oraz datę
-                powrotu do pracy.
-              </p>
-
-              {parentalPartEntries.length === 0 ? (
-                <p className="lp-work-combine-box__empty">
-                  Dodaj najpierw część urlopu rodzicielskiego, aby zasymulować łączenie z pracą.
-                </p>
-              ) : (
-                <div className="lp-work-parts-list">
-                  {parentalPartEntries.map(({ part, index }) => {
-                    const selectedFraction = workByPartIndex[index] ?? null;
-                    const workRes = withWorkResults[index];
-                    const lastWorkPeriod =
-                      workRes && workRes.periods.length > 0
-                        ? workRes.periods[workRes.periods.length - 1]
-                        : null;
-                    const returnToWorkDate = lastWorkPeriod
-                      ? addDaysIso(lastWorkPeriod.endDate, 1)
-                      : null;
-                    const parentBaseMissing =
-                      part.parentRole === 'mother'
-                        ? scenario.mother.benefitBase === null
-                        : (scenario.father?.benefitBase ?? null) === null;
-
-                    return (
-                      <div key={`work-card-${index}`} className="lp-planner-form lp-work-part-card">
-                        <label className="lp-field">
-                          <span>
-                            {getShortParentRoleLabel(part.parentRole)} · od{' '}
-                            {formatIsoPl(part.startDate)} ({part.weeks} tyg.)
-                          </span>
-                          <select
-                            aria-label={`Praca w trakcie urlopu: ${getShortParentRoleLabel(part.parentRole)} od ${formatIsoPl(part.startDate)}`}
-                            value={selectedFraction === null ? '' : String(selectedFraction)}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              onChangeWorkForPart(index, val === '' ? null : Number(val));
-                            }}
-                          >
-                            <option value="">Pełny urlop (nie pracuję)</option>
-                            {workOptions.map((opt) => (
-                              <option key={opt.value} value={String(opt.value)}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        {selectedFraction !== null && workRes && (
-                          <div className="lp-work-result" aria-live="polite">
-                            <p className="lp-work-result__headline">
-                              <strong>Wydłużenie urlopu rodzicielskiego:</strong> +
-                              {workRes.extendedWeeks} tyg. ({workRes.extendedDays} dni)
-                            </p>
-
-                            <ul className="lp-work-result__periods">
-                              {workRes.periods.map((period, pIdx) => (
-                                <li key={`${period.startDate}-${pIdx}`}>
-                                  <strong>
-                                    {pIdx === 0
-                                      ? `Część 1 – praca ${formatWorkFraction(selectedFraction)} + obniżony zasiłek:`
-                                      : 'Część 2 – proporcjonalne wydłużenie (pełny zasiłek):'}
-                                  </strong>{' '}
-                                  {formatIsoPl(period.startDate)} – {formatIsoPl(period.endDate)} (
-                                  {period.weeks} tyg. / {period.days} dni, stawka{' '}
-                                  {formatRate(period.rate)}
-                                  {!parentBaseMissing && (
-                                    <>
-                                      , {formatPlnAmount(period.monthlyAmount)}/mies., łącznie{' '}
-                                      {formatPlnAmount(period.totalAmount)}
-                                    </>
-                                  )}
-                                  )
-                                </li>
-                              ))}
-                            </ul>
-
-                            {returnToWorkDate && (
-                              <p className="lp-work-result__return">
-                                <strong>Powrót do pracy po tej części:</strong>{' '}
-                                {formatIsoPl(returnToWorkDate)}
-                              </p>
-                            )}
-
-                            {workRes.explanations.map((exp, eIdx) => (
-                              <p key={`${exp.message}-${eIdx}`} className="lp-work-result__note">
-                                {exp.message}
-                                {exp.legalBasis && (
-                                  <span className="lp-legal"> ({exp.legalBasis})</span>
-                                )}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* 4. Opcje urlopu macierzyńskiego, uzupełniającego i ojcowskiego */}
-      {!singleChildLoss && (
-        <div className="lp-extra-leaves" aria-labelledby="extra-leaves-heading">
-          <h3 id="extra-leaves-heading" className="lp-planner-subtitle">
-            4. Urlop macierzyński, uzupełniający i ojcowski – zasady i terminy
-          </h3>
-
-          <div className="lp-extra-grid">
-            {/* Macierzyński przed porodem i przejęcie przez ojca */}
-            {scenario.situation !== 'adoption' && (
-              <div className="lp-extra-card">
-                <h4 className="lp-extra-card__title">Urlop macierzyński</h4>
-                <p className="lp-extra-card__hint">
-                  Przed przewidywaną datą porodu można wykorzystać do{' '}
-                  {params.maternityLeave.maxWeeksBeforeBirth} tyg. Pierwsze{' '}
-                  {params.maternityLeave.motherMandatoryWeeksAfterBirth} tyg. po porodzie
-                  przysługuje wyłącznie matce (wcześniejsze przejęcie przez ojca tylko w sytuacjach
-                  szczególnych).
-                </p>
-
-                {(scenario.situation === 'planning' || scenario.situation === 'pregnant') && (
-                  <label className="lp-field">
-                    <span>
-                      Tygodnie urlopu macierzyńskiego przed porodem (maks.{' '}
-                      {params.maternityLeave.maxWeeksBeforeBirth})
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={params.maternityLeave.maxWeeksBeforeBirth + 4}
-                      value={maternityOptions.weeksBeforeBirth}
-                      onChange={(e) => {
-                        const val = Number.parseInt(e.target.value, 10);
-                        onChangeMaternityOptions({
-                          ...maternityOptions,
-                          weeksBeforeBirth: Number.isNaN(val) ? 0 : val,
-                        });
-                      }}
-                    />
-                  </label>
-                )}
-
-                {scenario.father && (
-                  <div className="lp-extra-card__group">
-                    <label className="lp-checkbox-inline">
-                      <input
-                        type="checkbox"
-                        checked={maternityOptions.transferToFather}
-                        onChange={(e) =>
-                          onChangeMaternityOptions({
-                            ...maternityOptions,
-                            transferToFather: e.target.checked,
-                          })
+                        className="plan-field__input"
+                        value={input.paternity_leave_start_date ?? ''}
+                        onChange={(event) =>
+                          onUpdate({ paternity_leave_start_date: event.target.value || undefined })
                         }
                       />
-                      <span>Ojciec przejmuje pozostałą część urlopu macierzyńskiego</span>
                     </label>
+                    <p className="lp-extra-card__hint">
+                      {params.paternityLeave.weeks} tyg. ({formatRate(params.rates.paternity)}), do
+                      wykorzystania w ciągu {params.paternityLeave.deadlineChildAgeMonths} mies.
+                      {paternityDeadline ? ` (do ${formatPolishDate(paternityDeadline)})` : ''}.
+                    </p>
+                  </div>
 
-                    {maternityOptions.transferToFather && (
+                  {input.applicant_role === 'MOTHER' && input.stage !== 'ADOPTION' && (
+                    <div className="lp-extra-card">
                       <label className="lp-field">
-                        <span>
-                          Liczba tygodni wykorzystanych przez matkę po porodzie (min.{' '}
-                          {scenario.special.motherDeceased
-                            ? 0
-                            : scenario.special.motherIncapableOfIndependentLiving
-                              ? params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate
-                              : params.maternityLeave.motherMandatoryWeeksAfterBirth}{' '}
-                          tyg.)
-                        </span>
+                        <span>Przejęcie macierzyńskiego przez ojca</span>
                         <input
-                          type="number"
-                          min={0}
-                          max={
-                            maternityPeriod?.weeks ??
-                            params.maternityLeave.weeksByChildrenCount['5']
+                          type="date"
+                          className="plan-field__input"
+                          value={input.father_takeover_date ?? ''}
+                          onChange={(event) =>
+                            onUpdate({ father_takeover_date: event.target.value || undefined })
                           }
-                          value={maternityOptions.motherWeeksAfterBirth}
-                          onChange={(e) => {
-                            const val = Number.parseInt(e.target.value, 10);
-                            onChangeMaternityOptions({
-                              ...maternityOptions,
-                              motherWeeksAfterBirth: Number.isNaN(val) ? 0 : val,
-                            });
-                          }}
                         />
                       </label>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Uzupełniający urlop macierzyński */}
-            {hasSupplementaryPeriod && (
-              <div className="lp-extra-card">
-                <h4 className="lp-extra-card__title">Uzupełniający urlop macierzyński</h4>
-                <p className="lp-extra-card__hint">
-                  Udzielany w jednej części bezpośrednio po urlopie macierzyńskim. Może z niego
-                  skorzystać matka albo ojciec (stawka{' '}
-                  {formatRate(params.rates.supplementaryMaternity)}).
-                </p>
-                <label className="lp-field">
-                  <span>Kto korzysta z uzupełniającego urlopu macierzyńskiego?</span>
-                  <select
-                    value={maternityOptions.supplementaryParent}
-                    disabled={!scenario.father}
-                    onChange={(e) =>
-                      onChangeMaternityOptions({
-                        ...maternityOptions,
-                        supplementaryParent: e.target.value as ParentRole,
-                      })
-                    }
-                  >
-                    <option value="mother">Matka</option>
-                    {scenario.father && <option value="father">Ojciec / drugi rodzic</option>}
-                  </select>
-                </label>
-              </div>
-            )}
-
-            {/* Urlop ojcowski */}
-            {scenario.father && (
-              <div className="lp-extra-card">
-                <div className="lp-extra-card__header">
-                  <h4 className="lp-extra-card__title">
-                    Urlop ojcowski ({params.paternityLeave.weeks} tyg.,{' '}
-                    {formatRate(params.rates.paternity)})
-                  </h4>
-                  {isPaternityCustom && (
-                    <button type="button" className="lp-link-btn" onClick={onResetPaternity}>
-                      Przywróć domyślny
-                    </button>
+                      <p className="lp-extra-card__hint">
+                        Możliwe po wykorzystaniu przez matkę pierwszych {mandatoryMotherWeeks} tyg.
+                        po porodzie (wymaga ubezpieczenia chorobowego ojca).
+                      </p>
+                    </div>
                   )}
                 </div>
-                <p className="lp-extra-card__hint">
-                  W całości lub w {params.paternityLeave.maxParts} częściach po min.{' '}
-                  {params.paternityLeave.minPartWeeks} tyg.
-                  {paternityDeadline && (
-                    <> Do wykorzystania do {formatIsoPl(paternityDeadline)}.</>
-                  )}{' '}
-                  Wniosek najpóźniej {params.applicationDeadlinesDays.paternityLeave} dni przed
-                  startem.
-                </p>
-
-                <label className="lp-field">
-                  <span>Sposób wykorzystania urlopu ojcowskiego</span>
-                  <select
-                    value={paternityMode}
-                    onChange={(e) =>
-                      handlePaternityModeChange(e.target.value as 'none' | 'single' | 'split')
-                    }
-                  >
-                    <option value="single">
-                      W całości ({params.paternityLeave.weeks} tyg. w 1 części)
-                    </option>
-                    <option value="split">
-                      W {params.paternityLeave.maxParts} częściach po{' '}
-                      {params.paternityLeave.minPartWeeks} tyg.
-                    </option>
-                    <option value="none">Nie planuję urlopu ojcowskiego</option>
-                  </select>
-                </label>
-
-                {paternityParts.map((pPart, pIdx) => (
-                  <label key={`pat-${pIdx}`} className="lp-field">
-                    <span>
-                      Data startu {paternityParts.length > 1 ? `części ${pIdx + 1}` : 'urlopu'} (
-                      {pPart.weeks} tyg.)
-                    </span>
-                    <input
-                      type="date"
-                      value={pPart.startDate}
-                      onChange={(e) => {
-                        const next = paternityParts.map((item, idx) =>
-                          idx === pIdx ? { ...item, startDate: e.target.value } : item,
-                        );
-                        onChangePaternityParts(next);
-                      }}
-                    />
-                  </label>
-                ))}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </details>
+        </>
       )}
     </section>
   );

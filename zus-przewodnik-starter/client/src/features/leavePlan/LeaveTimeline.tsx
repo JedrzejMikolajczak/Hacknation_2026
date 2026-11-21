@@ -1,26 +1,18 @@
-import type { IsoDate, LeavePeriod, ParentRole } from '@shared/types';
-import { formatRate } from '../../app/benefitParams';
+import type { ApplicantRole, CasePeriod } from '@shared/types';
+import { benefitLabels, parentLabels } from '../plan/caseLabels';
 import {
-  formatIsoPl,
-  formatPlnAmount,
+  formatPln,
+  formatPolishDate,
+  formatRatePercent,
+  formatWeeksPl,
   formatWorkFraction,
-  getLeaveTypeLabel,
-  getParentRoleLabel,
-  getShortParentRoleLabel,
+  getPlainParentLabel,
+  getShortLeaveLabel,
 } from './leavePlanHelpers';
-import type { TimelineMilestone } from './leavePlanValidation';
-
-export interface TimelineLeavePeriod extends LeavePeriod {
-  workTimeFraction?: number;
-  isWorkExtension?: boolean;
-  missingBase?: boolean;
-}
 
 interface LeaveTimelineProps {
-  periods: TimelineLeavePeriod[];
-  milestones: TimelineMilestone[];
-  referenceDate: IsoDate;
-  hasFather: boolean;
+  periods: CasePeriod[];
+  rolesToShow: ApplicantRole[];
   onSelectDate: (isoDate: string, openDayDetails?: boolean) => void;
 }
 
@@ -29,100 +21,91 @@ function toEpochDays(isoDate: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
-function getPeriodKindClass(period: TimelineLeavePeriod): string {
-  if (period.workTimeFraction) return 'lp-timeline-bar--with-work';
-  if (period.isWorkExtension) return 'lp-timeline-bar--extension';
-  if (period.leaveType === 'parentalLeave') return 'lp-timeline-bar--parental';
-  if (period.leaveType === 'paternityLeave') return 'lp-timeline-bar--paternity';
-  if (period.leaveType === 'supplementaryMaternityLeave') return 'lp-timeline-bar--supplementary';
+function getPeriodKindClass(period: CasePeriod): string {
+  if (period.leave_type === 'PARENTAL_WORK_EXTENSION') return 'lp-timeline-bar--extension';
+  if (period.work_fraction > 0) return 'lp-timeline-bar--with-work';
+  if (period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION') {
+    return 'lp-timeline-bar--parental';
+  }
+  if (period.leave_type === 'PATERNITY') return 'lp-timeline-bar--paternity';
+  if (period.leave_type === 'SUPPLEMENTARY_MATERNITY') return 'lp-timeline-bar--supplementary';
   return 'lp-timeline-bar--maternity';
 }
 
-function getPeriodDisplayName(period: TimelineLeavePeriod): string {
-  const base = getLeaveTypeLabel(period.leaveType);
-  if (period.workTimeFraction) {
-    return `${base} + praca (${formatWorkFraction(period.workTimeFraction)})`;
-  }
-  if (period.isWorkExtension) {
-    return `${base} (wydłużenie po pracy)`;
+function getPeriodShortTitle(period: CasePeriod): string {
+  const base = getShortLeaveLabel(period.leave_type);
+  if (period.work_fraction > 0 && period.leave_type !== 'PARENTAL_WORK_EXTENSION') {
+    return `${base} + praca`;
   }
   return base;
 }
 
-export function LeaveTimeline({
-  periods,
-  milestones,
-  referenceDate,
-  hasFather,
-  onSelectDate,
-}: LeaveTimelineProps) {
+function assignSubRows(rolePeriods: CasePeriod[]): { period: CasePeriod; row: number }[] {
+  const sorted = [...rolePeriods].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const rowEnds: string[] = [];
+  return sorted.map((period) => {
+    let row = rowEnds.findIndex((end) => period.start_date > end);
+    if (row === -1) {
+      row = rowEnds.length;
+      rowEnds.push(period.end_date);
+    } else {
+      rowEnds[row] = period.end_date;
+    }
+    return { period, row };
+  });
+}
+
+export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimelineProps) {
   if (periods.length === 0) {
     return (
       <section className="lp-card" aria-labelledby="timeline-heading">
-        <h2 id="timeline-heading" className="lp-card__title">
-          Oś czasu urlopów obojga rodziców
-        </h2>
+        <h3 id="timeline-heading" className="lp-card__title">
+          Oś czasu urlopów
+        </h3>
         <p className="lp-card__empty">
-          Brak zaplanowanych okresów urlopu. Dodaj część urlopu poniżej lub uzupełnij dane w
-          kreatorze, aby zobaczyć oś czasu.
+          Brak zaplanowanych okresów urlopu. Wybierz gotowy podział poniżej lub sprawdź komunikaty
+          walidacji.
         </p>
       </section>
     );
   }
 
-  const allStarts = periods.map((p) => toEpochDays(p.startDate));
-  const allEnds = periods.map((p) => toEpochDays(p.endDate));
+  const allStarts = periods.map((p) => toEpochDays(p.start_date));
+  const allEnds = periods.map((p) => toEpochDays(p.end_date));
   const minDay = Math.min(...allStarts);
   const maxDay = Math.max(...allEnds);
   const totalSpan = Math.max(1, maxDay - minDay + 1);
+  const minIso = periods.reduce(
+    (acc, p) => (p.start_date < acc ? p.start_date : acc),
+    periods[0].start_date,
+  );
+  const maxIso = periods.reduce(
+    (acc, p) => (p.end_date > acc ? p.end_date : acc),
+    periods[0].end_date,
+  );
 
-  const roles: ParentRole[] = ['mother', 'father'];
+  // Zawsze pokazujemy każdego rodzica obecnego w okresach + role z rolesToShow (data-driven)
+  const roles: ApplicantRole[] = [];
+  for (const candidate of ['MOTHER', 'FATHER'] as const) {
+    if (
+      rolesToShow.includes(candidate) ||
+      periods.some((period) => period.parent_role === candidate)
+    ) {
+      roles.push(candidate);
+    }
+  }
 
   return (
     <section className="lp-card" aria-labelledby="timeline-heading">
-      <div className="lp-card__header">
-        <div>
-          <h2 id="timeline-heading" className="lp-card__title">
-            Oś czasu urlopów obojga rodziców
-          </h2>
-          <p className="lp-card__lead">
-            Kliknij wybrany okres lub termin złożenia wniosku, aby przejść do niego w kalendarzu
-            miesięcznym. Data odniesienia dla terminów: {formatIsoPl(referenceDate)}.
-          </p>
-        </div>
-
-        {milestones.length > 0 && (
-          <div className="lp-milestones" aria-label="Ważne daty i terminy wniosków">
-            {milestones.map((milestone) => (
-              <button
-                key={`${milestone.date}-${milestone.label}`}
-                type="button"
-                className={[
-                  'lp-milestone-chip',
-                  milestone.kind === 'deadline' ? 'lp-milestone-chip--deadline' : '',
-                  milestone.isPast ? 'lp-milestone-chip--past' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                title={milestone.description}
-                onClick={() => onSelectDate(milestone.date, true)}
-              >
-                {milestone.isPast ? (
-                  <span className="lp-milestone-chip__past">Termin minął</span>
-                ) : (
-                  milestone.kind === 'deadline' && (
-                    <span className="lp-milestone-chip__kind">Termin wniosku</span>
-                  )
-                )}
-                <span className="lp-milestone-chip__date">{formatIsoPl(milestone.date)}</span>
-                <span className="lp-milestone-chip__text">{milestone.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+      <div className="lp-timeline-header">
+        <h3 id="timeline-heading" className="lp-card__title">
+          Oś czasu urlopów
+        </h3>
+        <p className="lp-timeline-range">
+          {formatPolishDate(minIso)} – {formatPolishDate(maxIso)}
+        </p>
       </div>
 
-      {/* Widok osi poziomej z bezpiecznym przewijaniem na mniejszych ekranach */}
       <div className="lp-timeline-tracks-wrap">
         <div
           className="lp-timeline-tracks"
@@ -130,43 +113,54 @@ export function LeaveTimeline({
           aria-label="Oś czasu w podziale na rodziców"
         >
           {roles.map((role) => {
-            const rolePeriods = periods.filter((p) => p.parentRole === role);
+            const rolePeriods = periods.filter((p) => p.parent_role === role);
+            const positioned = assignSubRows(rolePeriods);
+            const rowCount = Math.max(1, ...positioned.map((item) => item.row + 1));
             const laneAriaLabel =
-              role === 'mother' ? 'Oś czasu urlopów matki' : 'Oś czasu urlopów drugiego rodzica';
+              role === 'MOTHER' ? 'Oś czasu urlopów mamy' : 'Oś czasu urlopów taty';
+
             return (
               <div key={role} className="lp-timeline-track">
-                <div className="lp-timeline-track__label">{getShortParentRoleLabel(role)}</div>
-                <div className="lp-timeline-track__lane" aria-label={laneAriaLabel}>
-                  {rolePeriods.length === 0 ? (
-                    <span className="lp-timeline-track__empty">
-                      {role === 'father' && !hasFather
-                        ? 'Drugi rodzic nie jest uwzględniony w planie'
-                        : 'Brak zaplanowanych okresów'}
-                    </span>
+                <div className="lp-timeline-track__label">{getPlainParentLabel(role)}</div>
+                <div
+                  className="lp-timeline-track__lane"
+                  aria-label={laneAriaLabel}
+                  style={{ minHeight: `${rowCount * 3.5}rem` }}
+                >
+                  {positioned.length === 0 ? (
+                    <span className="lp-timeline-track__empty">Brak zaplanowanych okresów</span>
                   ) : (
-                    rolePeriods.map((period, idx) => {
+                    positioned.map(({ period, row }, idx) => {
                       const startOffset =
-                        ((toEpochDays(period.startDate) - minDay) / totalSpan) * 100;
+                        ((toEpochDays(period.start_date) - minDay) / totalSpan) * 100;
                       const rawWidth =
-                        ((toEpochDays(period.endDate) - toEpochDays(period.startDate) + 1) /
+                        ((toEpochDays(period.end_date) - toEpochDays(period.start_date) + 1) /
                           totalSpan) *
                         100;
-                      const widthPct = Math.min(100 - startOffset, Math.max(5, rawWidth));
-                      const label = getPeriodDisplayName(period);
+                      const widthPct = Math.min(100 - startOffset, Math.max(4, rawWidth));
+                      const shortTitle = getPeriodShortTitle(period);
+                      const fullName = benefitLabels[period.leave_type];
+                      const topPct = (row / rowCount) * 100;
+                      const heightPct = 100 / rowCount;
+
                       return (
                         <button
-                          key={`${period.leaveType}-${period.startDate}-${period.isWorkExtension ? 'ext' : 'base'}-${idx}`}
+                          key={`${period.parent_role}-${period.leave_type}-${period.start_date}-${idx}`}
                           type="button"
                           className={`lp-timeline-bar ${getPeriodKindClass(period)}`}
-                          style={{ left: `${startOffset}%`, width: `${widthPct}%` }}
-                          onClick={() => onSelectDate(period.startDate, true)}
-                          title={`${label} (${getParentRoleLabel(role)}): ${formatIsoPl(period.startDate)} – ${formatIsoPl(period.endDate)}, ${period.weeks} tyg. (${period.days} dni), stawka ${formatRate(period.rate)}`}
+                          style={{
+                            left: `${startOffset}%`,
+                            width: `${widthPct}%`,
+                            top: rowCount > 1 ? `calc(${topPct}% + 2px)` : undefined,
+                            height: rowCount > 1 ? `calc(${heightPct}% - 4px)` : undefined,
+                            bottom: rowCount > 1 ? 'auto' : undefined,
+                          }}
+                          onClick={() => onSelectDate(period.start_date, true)}
+                          title={`${fullName} (${parentLabels[role]}): ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${period.days} dni), stawka ${formatRatePercent(period.rate_percent)}`}
                         >
-                          <span className="lp-timeline-bar__title">{label}</span>
+                          <span className="lp-timeline-bar__title">{shortTitle}</span>
                           <span className="lp-timeline-bar__meta">
-                            {period.weeks} tyg. · {formatRate(period.rate)}
-                            {period.workTimeFraction ? ' · Praca' : ''}
-                            {period.isWorkExtension ? ' · Wydłużenie' : ''}
+                            {formatWeeksPl(period.weeks)} · {formatRatePercent(period.rate_percent)}
                           </span>
                         </button>
                       );
@@ -179,63 +173,74 @@ export function LeaveTimeline({
         </div>
       </div>
 
-      {/* Czytelna lista okresów ze stawkami i kwotami z API (podstawowy widok na mobile) */}
-      <ul className="lp-period-list" aria-label="Szczegółowa lista okresów urlopu">
-        {periods.map((period, idx) => (
-          <li
-            key={`${period.leaveType}-${period.parentRole}-${period.startDate}-${period.isWorkExtension ? 'ext' : 'base'}-${idx}`}
-          >
-            <button
-              type="button"
-              className={[
-                'lp-period-item',
-                period.workTimeFraction ? 'lp-period-item--with-work' : '',
-                period.isWorkExtension ? 'lp-period-item--extension' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => onSelectDate(period.startDate, true)}
-            >
-              <span
-                className={
-                  period.parentRole === 'father'
-                    ? 'lp-period-item__role lp-period-item__role--father'
-                    : 'lp-period-item__role'
-                }
-              >
-                {getShortParentRoleLabel(period.parentRole)}
-              </span>
-              <span className="lp-period-item__name">
-                {getLeaveTypeLabel(period.leaveType)}
-                {period.workTimeFraction && (
-                  <span className="lp-period-item__work-badge">
-                    + praca ({formatWorkFraction(period.workTimeFraction)})
-                  </span>
-                )}
-                {period.isWorkExtension && (
-                  <span className="lp-period-item__ext-badge">wydłużenie po pracy</span>
-                )}
-              </span>
-              <span className="lp-period-item__dates">
-                {formatIsoPl(period.startDate)} – {formatIsoPl(period.endDate)} ({period.weeks} tyg.
-                / {period.days} dni)
-              </span>
-              <span className="lp-period-item__rate">
-                Stawka: <strong>{formatRate(period.rate)}</strong>
-                {period.missingBase ? (
-                  <> · uzupełnij podstawę, aby wyliczyć kwotę</>
-                ) : (
-                  <>
-                    {' '}
-                    · {formatPlnAmount(period.monthlyAmount)}/mies. (łącznie{' '}
-                    {formatPlnAmount(period.totalAmount)})
-                  </>
-                )}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <details className="lp-details">
+        <summary className="lp-details__summary">Zobacz okresy i kwoty</summary>
+        <div className="lp-details__body">
+          <ul className="lp-period-list" aria-label="Szczegółowa lista okresów urlopu">
+            {periods.map((period, idx) => {
+              const isExtension = period.leave_type === 'PARENTAL_WORK_EXTENSION';
+              const hasWork = period.work_fraction > 0;
+              return (
+                <li key={`${period.leave_type}-${period.parent_role}-${period.start_date}-${idx}`}>
+                  <button
+                    type="button"
+                    className={[
+                      'lp-period-item',
+                      hasWork && !isExtension ? 'lp-period-item--with-work' : '',
+                      isExtension ? 'lp-period-item--extension' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => onSelectDate(period.start_date, true)}
+                  >
+                    <span
+                      className={
+                        period.parent_role === 'FATHER'
+                          ? 'lp-period-item__role lp-period-item__role--father'
+                          : 'lp-period-item__role'
+                      }
+                    >
+                      {parentLabels[period.parent_role]}
+                    </span>
+                    <span className="lp-period-item__name">
+                      {benefitLabels[period.leave_type]}
+                      {hasWork && !isExtension && (
+                        <span className="lp-period-item__work-badge">
+                          + praca ({formatWorkFraction(period.work_fraction)})
+                        </span>
+                      )}
+                      {isExtension && (
+                        <span className="lp-period-item__ext-badge">
+                          wydłużenie po pracy
+                          {hasWork ? ` (${formatWorkFraction(period.work_fraction)})` : ''}
+                        </span>
+                      )}
+                    </span>
+                    <span className="lp-period-item__dates">
+                      {formatPolishDate(period.start_date)} – {formatPolishDate(period.end_date)} (
+                      {formatWeeksPl(period.weeks)} / {period.days} dni)
+                    </span>
+                    <span className="lp-period-item__rate">
+                      Stawka: <strong>{formatRatePercent(period.rate_percent)}</strong>
+                      {period.monthly_amount_pln === null ? (
+                        <> · kwota po podaniu podstawy</>
+                      ) : (
+                        <>
+                          {' '}
+                          · {formatPln(period.monthly_amount_pln)}/30 dni
+                          {period.total_amount_pln !== null && (
+                            <> (łącznie {formatPln(period.total_amount_pln)})</>
+                          )}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </details>
     </section>
   );
 }

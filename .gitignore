@@ -3,6 +3,8 @@ node_modules/
 .next/
 dist/
 build/
+.vite/
+**/.vite/
 __pycache__/
 .venv/
 
@@ -16,3 +18,7 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+# Materiały konkursowe używane lokalnie
+docs/zus/
+data/cases-raw/
+*.[pP][dD][fF]

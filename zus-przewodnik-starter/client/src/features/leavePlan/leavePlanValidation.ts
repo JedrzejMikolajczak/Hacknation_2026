@@ -1,739 +1,447 @@
 import type {
+  ApplicantRole,
   BenefitParams,
+  CaseDocument,
+  CaseInputs,
+  CasePlan,
   IsoDate,
-  LeavePartRequest,
-  LeavePeriod,
-  MaternityCalculationResult,
-  ParentalWithWorkResult,
-  ParentRole,
-  ScenarioInput,
+  PlannedParentalPart,
 } from '@shared/types';
 import { formatRate } from '../../app/benefitParams';
+import { payerLabel } from '../plan/caseLabels';
 import {
   addDaysIso,
   addMonthsIso,
-  DAYS_IN_WEEK,
-  formatIsoPl,
-  getAnchorDate,
-  getAnchorEventLabel,
-  getParentalPoolSummary,
-  isSingleChildLoss,
+  diffDaysIso,
+  formatPolishDate,
+  formatWorkFraction,
+  getEventDate,
+  getEventLabel,
+  getParentAvailability,
+  getPartDays,
+  getPlainParentLabel,
+  getPreParentalEndDate,
 } from './leavePlanHelpers';
 
-export interface ValidationIssue {
+export interface LeaveValidationIssue {
   code: string;
   severity: 'error' | 'warning';
   message: string;
   legalBasis: string | null;
 }
 
-export interface MaternityPlanOptions {
-  weeksBeforeBirth: number;
-  transferToFather: boolean;
-  motherWeeksAfterBirth: number;
-  supplementaryParent: ParentRole;
-}
-
-export interface PaternityPartPlan {
-  startDate: IsoDate;
-  weeks: number;
-}
-
-export interface SupplementaryPlanCheck {
-  partsCount: number;
-  hasGapAfterMaternity: boolean;
-  usedByBothParents: boolean;
-}
-
-export interface TimelineMilestone {
+export interface CalendarMilestone {
   date: IsoDate;
   label: string;
   kind: 'event' | 'deadline';
   description: string;
   legalBasis: string | null;
   isPast: boolean;
-}
-
-/**
- * Maksymalny wiek dziecka przy urlopie na warunkach macierzyńskiego / rodzicielskim dla adopcji lub pieczy zastępczej.
- */
-export function getAdoptionMaxChildAgeYears(
-  scenario: ScenarioInput,
-  params: BenefitParams,
-): number {
-  if (scenario.adoptionType === 'fosterFamily') {
-    return scenario.schoolObligationDeferred
-      ? params.adoptionMaternityLeave.fosterFamilyMaxChildAgeYearsDeferredSchool
-      : params.adoptionMaternityLeave.fosterFamilyMaxChildAgeYears;
-  }
-  return params.adoptionMaternityLeave.adoptionMaxChildAgeYears;
-}
-
-/**
- * Graniczna data wykorzystania urlopu rodzicielskiego:
- * – przy urodzeniu: koniec roku kalendarzowego, w którym dziecko kończy `deadlineChildTurnsAgeYears` lat;
- * – przy adopcji / pieczy zastępczej: z uwzględnieniem maksymalnego wieku dziecka z `params.adoptionMaternityLeave`.
- */
-export function getParentalDeadlineDate(
-  scenario: ScenarioInput,
-  params: BenefitParams,
-): IsoDate | null {
-  const anchorDate = getAnchorDate(scenario);
-  if (!anchorDate) return null;
-
-  const anchorYear = Number(anchorDate.slice(0, 4));
-  if (scenario.situation === 'adoption') {
-    const maxAge = getAdoptionMaxChildAgeYears(scenario, params);
-    const currentAge = scenario.childAgeYears ?? 0;
-    const yearsLeft = Math.max(0, maxAge - currentAge);
-    return `${anchorYear + yearsLeft}-12-31`;
-  }
-
-  return `${anchorYear + params.parentalLeave.deadlineChildTurnsAgeYears}-12-31`;
+  parentRole?: ApplicantRole;
 }
 
 const MONTHS_IN_YEAR = 12;
 
-/**
- * Graniczna data wykorzystania urlopu ojcowskiego:
- * – przy urodzeniu: do ukończenia przez dziecko `deadlineChildAgeMonths` mies. życia;
- * – przy adopcji: w ciągu `adoptionDeadlineMonthsFromAdoption` mies. od przyjęcia, ale nie dłużej niż do `adoptionMaxChildAgeYears` r.ż.
- */
-export function getPaternityDeadlineDate(
-  scenario: ScenarioInput,
-  params: BenefitParams,
-): IsoDate | null {
-  const anchorDate = getAnchorDate(scenario);
-  if (!anchorDate) return null;
+export function getPaternityDeadline(input: CaseInputs, params: BenefitParams): IsoDate | null {
+  const event = getEventDate(input);
+  if (!event) return null;
 
-  if (scenario.situation === 'adoption') {
-    const monthsDeadline = addMonthsIso(
-      anchorDate,
-      params.paternityLeave.adoptionDeadlineMonthsFromAdoption,
+  if (input.stage === 'ADOPTION') {
+    const monthsDeadline = addDaysIso(
+      addMonthsIso(event, params.paternityLeave.adoptionDeadlineMonthsFromAdoption),
+      -1,
     );
-    if (scenario.childAgeYears !== null) {
-      const yearsUntilMax = Math.max(
-        0,
-        params.paternityLeave.adoptionMaxChildAgeYears - scenario.childAgeYears,
-      );
-      const ageDeadline = addMonthsIso(anchorDate, yearsUntilMax * MONTHS_IN_YEAR);
+    const childAge = input.special_circumstances.adopted_or_foster_child_age_years;
+    if (childAge !== null) {
+      const yearsLeft = Math.max(0, params.paternityLeave.adoptionMaxChildAgeYears - childAge);
+      const ageDeadline = addDaysIso(addMonthsIso(event, yearsLeft * MONTHS_IN_YEAR), -1);
       return monthsDeadline <= ageDeadline ? monthsDeadline : ageDeadline;
     }
     return monthsDeadline;
   }
 
-  return addMonthsIso(anchorDate, params.paternityLeave.deadlineChildAgeMonths);
+  return addDaysIso(addMonthsIso(event, params.paternityLeave.deadlineChildAgeMonths), -1);
+}
+
+function getParentEmploymentType(input: CaseInputs, role: ApplicantRole) {
+  return role === input.applicant_role
+    ? input.employment_type
+    : input.other_parent?.employment_type;
+}
+
+function extendedWorkDays(days: number, workFraction: number): number {
+  if (workFraction <= 0 || workFraction >= 1) return 0;
+  return Math.floor(days / (1 - workFraction)) - days;
 }
 
 /**
- * Walidacja limitów wieku dziecka w adopcji i rodzinie zastępczej niezawodowej.
+ * Waliduje plan urlopów na podstawie danych sprawy, wyniku silnika i parametrów z `params`.
+ * Zawsze widoczne ostrzeżenia przy naruszeniu reguł Kodeksu pracy (14 tyg. matki,
+ * 9 tyg. nieprzenoszalnych, maks. 5 części, granica roku 6. urodzin dziecka,
+ * ojcowski w 12 mies., praca ≤ 1/2 etatu) oraz błędy zwrócone przez silnik.
  */
-export function validateAdoptionAgeLimits(
-  scenario: ScenarioInput,
+export function validateLeavePlan(
+  input: CaseInputs,
+  plan: CasePlan,
+  parts: PlannedParentalPart[],
   params: BenefitParams,
-): ValidationIssue[] {
-  if (scenario.situation !== 'adoption') return [];
-  const issues: ValidationIssue[] = [];
+): LeaveValidationIssue[] {
+  const issues: LeaveValidationIssue[] = [];
+  const coveredEngineCodes = new Set<string>();
+  const eventDate = getEventDate(input);
+  const daysPerWeek = params.calendar.daysPerWeek;
+  const availability = getParentAvailability(input, plan);
 
-  if (scenario.childAgeYears === null) return issues;
-
-  const maxAge = getAdoptionMaxChildAgeYears(scenario, params);
-  if (scenario.childAgeYears >= maxAge) {
-    const roleDesc =
-      scenario.adoptionType === 'fosterFamily'
-        ? scenario.schoolObligationDeferred
-          ? `rodzinie zastępczej (przy odroczeniu obowiązku szkolnego: do ${maxAge} lat)`
-          : `rodzinie zastępczej niezawodowej (do ${maxAge} lat)`
-        : `przysposobieniu (do ${maxAge} lat)`;
-    issues.push({
-      code: 'ADOPTION_CHILD_AGE_EXCEEDED',
-      severity: 'error',
-      message: `Wiek dziecka (${scenario.childAgeYears} lat) osiąga lub przekracza limit ustawowy w ${roleDesc}. Urlop na warunkach urlopu macierzyńskiego i rodzicielski nie przysługują po ukończeniu tego wieku.`,
-      legalBasis: 'KP art. 183 § 1',
-    });
-  }
-
-  return issues;
-}
-
-/**
- * Walidacja zasad urlopu macierzyńskiego:
- * – do `maxWeeksBeforeBirth` tyg. przed przewidywaną datą porodu,
- * – pierwsze `motherMandatoryWeeksAfterBirth` tyg. po porodzie tylko dla matki
- *   (wcześniejsze przejęcie przez ojca dopuszczalne w sytuacjach szczególnych z `scenario.special`:
- *    hospitalizacja matki, niezdolność do samodzielnej egzystencji, zgon matki),
- * – martwe urodzenie / zgon dziecka → skrócony urlop wg wyniku silnika.
- */
-export function validateMaternityOptions(
-  scenario: ScenarioInput,
-  maternity: MaternityCalculationResult,
-  options: MaternityPlanOptions,
-  params: BenefitParams,
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  if (isSingleChildLoss(scenario)) {
-    const maternityPeriod = maternity.periods.find((p) => p.leaveType === 'maternityLeave');
-    issues.push({
-      code: 'CHILD_LOSS_SHORTENED_MATERNITY',
-      severity: 'warning',
-      message: maternityPeriod
-        ? `W tej sytuacji przysługuje skrócony urlop macierzyński (${maternityPeriod.days} dni: ${formatIsoPl(maternityPeriod.startDate)} – ${formatIsoPl(maternityPeriod.endDate)}). Urlop rodzicielski nie przysługuje.`
-        : `W przypadku martwego urodzenia lub zgonu dziecka przed upływem ${params.childDeath.thresholdWeeksOfLife}. tygodnia życia przysługuje ${params.childDeath.weeksAfterBirthIfBeforeThreshold} tyg. urlopu macierzyńskiego po porodzie (nie krócej niż ${params.childDeath.minDaysAfterDeath} dni od dnia zgonu), bez urlopu rodzicielskiego.`,
-      legalBasis: 'KP art. 180¹',
-    });
-    return issues;
-  }
-
-  if (scenario.situation !== 'adoption') {
-    if (options.weeksBeforeBirth < 0) {
+  // 1. Początek urlopu macierzyńskiego przed porodem (maks. 6 tyg.)
+  if (
+    eventDate &&
+    input.stage !== 'ADOPTION' &&
+    input.applicant_role === 'MOTHER' &&
+    input.maternity_leave_start_date &&
+    !input.parental_only
+  ) {
+    const start = input.maternity_leave_start_date;
+    if (start > eventDate) {
+      coveredEngineCodes.add('MATERNITY_START');
       issues.push({
-        code: 'MATERNITY_BEFORE_BIRTH_NEGATIVE',
+        code: 'MATERNITY_AFTER_BIRTH',
         severity: 'error',
-        message: 'Liczba tygodni urlopu macierzyńskiego przed porodem nie może być ujemna.',
+        message: `Urlop macierzyński nie może rozpocząć się po dacie porodu (${formatPolishDate(eventDate)}).`,
         legalBasis: 'KP art. 180 § 2',
-      });
-    } else if (options.weeksBeforeBirth > params.maternityLeave.maxWeeksBeforeBirth) {
-      issues.push({
-        code: 'MATERNITY_BEFORE_BIRTH_EXCEEDED',
-        severity: 'error',
-        message: `Przed przewidywaną datą porodu można wykorzystać maksymalnie ${params.maternityLeave.maxWeeksBeforeBirth} tyg. urlopu macierzyńskiego (wybrano ${options.weeksBeforeBirth} tyg.).`,
-        legalBasis: 'KP art. 180 § 2',
-      });
-    }
-  }
-
-  if (options.transferToFather && scenario.situation !== 'adoption') {
-    if (!scenario.father) {
-      issues.push({
-        code: 'MATERNITY_TRANSFER_NO_FATHER',
-        severity: 'error',
-        message:
-          'Aby ojciec mógł przejąć część urlopu macierzyńskiego, w planie musi być uwzględniony drugi rodzic.',
-        legalBasis: 'KP art. 180 § 4',
       });
     } else {
-      const mandatoryWeeks = params.maternityLeave.motherMandatoryWeeksAfterBirth;
-      const incapacityMinWeeks =
-        params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate;
-      const maternityPeriod = maternity.periods.find((p) => p.leaveType === 'maternityLeave');
-      const totalMaternityWeeks = maternityPeriod?.weeks ?? null;
-
-      if (scenario.special.motherDeceased) {
-        // Zgon matki – ojciec może przejąć całość pozostałego urlopu natychmiast
-      } else if (scenario.special.motherHospitalized) {
-        // Hospitalizacja matki – ojciec może przejąć urlop na okres pobytu matki w szpitalu
-        if (options.motherWeeksAfterBirth < mandatoryWeeks) {
-          issues.push({
-            code: 'MATERNITY_TRANSFER_HOSPITALIZED_INFO',
-            severity: 'warning',
-            message: `Ze względu na pobyt matki w szpitalu ojciec może przejąć część urlopu macierzyńskiego na czas tej hospitalizacji także wcześniej niż po ${mandatoryWeeks} tygodniach (po wykorzystaniu przez matkę ${incapacityMinWeeks} tygodni po porodzie lub na okres pobytu w szpitalu).`,
-            legalBasis: 'KP art. 180 § 10',
-          });
-        }
-      } else if (scenario.special.motherIncapableOfIndependentLiving) {
-        if (options.motherWeeksAfterBirth < incapacityMinWeeks) {
-          issues.push({
-            code: 'MATERNITY_TRANSFER_INCAPACITY_MIN',
-            severity: 'error',
-            message: `Przy orzeczeniu o niezdolności matki do samodzielnej egzystencji matka musi wykorzystać co najmniej ${incapacityMinWeeks} tyg. urlopu po porodzie, zanim ojciec przejmie pozostałą część.`,
-            legalBasis: 'KP art. 180 § 6',
-          });
-        }
-      } else if (options.motherWeeksAfterBirth < mandatoryWeeks) {
+      const daysBefore = diffDaysIso(start, eventDate);
+      const maxBeforeDays = params.maternityLeave.maxWeeksBeforeBirth * daysPerWeek;
+      if (daysBefore > maxBeforeDays) {
+        coveredEngineCodes.add('MATERNITY_START');
         issues.push({
-          code: 'MATERNITY_MOTHER_MANDATORY_14_WEEKS',
+          code: 'MATERNITY_BEFORE_BIRTH_EXCEEDED',
           severity: 'error',
-          message: `Pierwsze ${mandatoryWeeks} tygodni urlopu macierzyńskiego po porodzie musi wykorzystać osobiście matka (podano ${options.motherWeeksAfterBirth} tyg.). Wcześniejsze przejęcie przez ojca jest możliwe tylko w szczególnych sytuacjach (hospitalizacja matki, orzeczenie o niezdolności do samodzielnej egzystencji lub zgon matki).`,
-          legalBasis: 'KP art. 180 § 4',
-        });
-      }
-
-      if (totalMaternityWeeks !== null && options.motherWeeksAfterBirth >= totalMaternityWeeks) {
-        issues.push({
-          code: 'MATERNITY_TRANSFER_NOTHING_LEFT',
-          severity: 'warning',
-          message: `Matka wykorzystuje cały wymiar urlopu macierzyńskiego (${totalMaternityWeeks} tyg.), więc dla ojca nie pozostaje żadna część do przejęcia.`,
-          legalBasis: 'KP art. 180 § 4',
+          message: `Przed porodem można wykorzystać maksymalnie ${params.maternityLeave.maxWeeksBeforeBirth} tyg. urlopu macierzyńskiego.`,
+          legalBasis: 'KP art. 180 § 2',
         });
       }
     }
   }
 
-  return issues;
-}
-
-/**
- * Walidacja uzupełniającego urlopu macierzyńskiego:
- * – wyłącznie 1 część (bez możliwości dzielenia),
- * – bezpośrednio po urlopie macierzyńskim,
- * – dla matki ALBO ojca (nie jednocześnie dla obojga).
- */
-export function validateSupplementaryLeave(
-  check: SupplementaryPlanCheck,
-  scenario: ScenarioInput,
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  if (check.partsCount > 1) {
-    issues.push({
-      code: 'SUPPLEMENTARY_SINGLE_PART_ONLY',
-      severity: 'error',
-      message:
-        'Uzupełniający urlop macierzyński jest udzielany jednorazowo w jednej części – nie można go dzielić.',
-      legalBasis: 'KP art. 180² § 4',
-    });
-  }
-
-  if (check.hasGapAfterMaternity) {
-    issues.push({
-      code: 'SUPPLEMENTARY_MUST_FOLLOW_MATERNITY',
-      severity: 'error',
-      message:
-        'Uzupełniający urlop macierzyński musi rozpocząć się bezpośrednio po zakończeniu urlopu macierzyńskiego.',
-      legalBasis: 'KP art. 180² § 4',
-    });
-  }
-
-  if (check.usedByBothParents) {
-    issues.push({
-      code: 'SUPPLEMENTARY_ONE_PARENT_ONLY',
-      severity: 'error',
-      message:
-        'Z uzupełniającego urlopu macierzyńskiego może skorzystać tylko jedno z rodziców – matka albo ojciec.',
-      legalBasis: 'KP art. 180² § 1',
-    });
-  }
-
-  if (check.partsCount > 0 && !scenario.father && check.usedByBothParents) {
-    issues.push({
-      code: 'SUPPLEMENTARY_NO_FATHER',
-      severity: 'error',
-      message: 'Drugi rodzic nie jest uwzględniony w planie.',
-      legalBasis: 'KP art. 180² § 1',
-    });
-  }
-
-  return issues;
-}
-
-/**
- * Walidacja urlopu ojcowskiego:
- * – max `weeks` (2) tyg.,
- * – w całości albo w max `maxParts` (2) częściach po min. `minPartWeeks` (1) tyg.,
- * – do ukończenia `deadlineChildAgeMonths` (12) mies. życia dziecka
- *   (przy adopcji: w ciągu `adoptionDeadlineMonthsFromAdoption` mies. i przed ukończeniem `adoptionMaxChildAgeYears` lat).
- */
-export function validatePaternityPlan(
-  scenario: ScenarioInput,
-  paternityParts: PaternityPartPlan[],
-  params: BenefitParams,
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (paternityParts.length === 0) return issues;
-
-  if (!scenario.father) {
-    issues.push({
-      code: 'PATERNITY_NO_FATHER',
-      severity: 'error',
-      message: 'Urlop ojcowski jest wyłącznym prawem ojca dziecka.',
-      legalBasis: 'KP art. 182³ § 1',
-    });
-    return issues;
-  }
-
-  if (isSingleChildLoss(scenario)) {
-    issues.push({
-      code: 'PATERNITY_CHILD_LOSS',
-      severity: 'error',
-      message: 'W tej sytuacji urlop ojcowski nie przysługuje.',
-      legalBasis: 'KP art. 182³ § 1',
-    });
-    return issues;
-  }
-
+  // 2. Przejęcie części macierzyńskiego przez ojca – min. 14 tyg. matki (8 tyg. przy niezdolności)
   if (
-    scenario.situation === 'adoption' &&
-    scenario.childAgeYears !== null &&
-    scenario.childAgeYears >= params.paternityLeave.adoptionMaxChildAgeYears
+    eventDate &&
+    input.stage !== 'ADOPTION' &&
+    input.applicant_role === 'MOTHER' &&
+    input.father_takeover_date &&
+    !input.parental_only
   ) {
-    issues.push({
-      code: 'PATERNITY_ADOPTION_AGE_EXCEEDED',
-      severity: 'error',
-      message: `Przy adopcji urlop ojcowski przysługuje wyłącznie do ukończenia przez dziecko ${params.paternityLeave.adoptionMaxChildAgeYears} roku życia (wiek dziecka: ${scenario.childAgeYears} lat).`,
-      legalBasis: 'KP art. 182³ § 1 pkt 2',
-    });
-  }
+    const takeover = input.father_takeover_date;
+    const mandatoryWeeks = input.special_circumstances.mother_hospitalized_or_incapable
+      ? params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate
+      : params.maternityLeave.motherMandatoryWeeksAfterBirth;
+    const earliestTakeover = addDaysIso(eventDate, mandatoryWeeks * daysPerWeek);
 
-  if (paternityParts.length > params.paternityLeave.maxParts) {
-    issues.push({
-      code: 'PATERNITY_MAX_PARTS',
-      severity: 'error',
-      message: `Urlop ojcowski można wykorzystać w całości lub maksymalnie w ${params.paternityLeave.maxParts} częściach (zaplanowano ${paternityParts.length}).`,
-      legalBasis: 'KP art. 182³ § 1¹',
-    });
-  }
-
-  const totalWeeks = paternityParts.reduce((sum, part) => sum + part.weeks, 0);
-  if (totalWeeks > params.paternityLeave.weeks) {
-    issues.push({
-      code: 'PATERNITY_MAX_WEEKS',
-      severity: 'error',
-      message: `Wymiar urlopu ojcowskiego wynosi maksymalnie ${params.paternityLeave.weeks} tyg. (zaplanowano ${totalWeeks} tyg.).`,
-      legalBasis: 'KP art. 182³ § 1',
-    });
-  }
-
-  const anchorDate = getAnchorDate(scenario);
-  const deadline = getPaternityDeadlineDate(scenario, params);
-
-  for (const part of paternityParts) {
-    if (part.weeks < params.paternityLeave.minPartWeeks) {
+    if (takeover < earliestTakeover) {
+      coveredEngineCodes.add('FATHER_TAKEOVER');
       issues.push({
-        code: 'PATERNITY_MIN_PART_WEEKS',
+        code: 'MATERNITY_MOTHER_MANDATORY_WEEKS',
         severity: 'error',
-        message: `Żadna część urlopu ojcowskiego nie może być krótsza niż ${params.paternityLeave.minPartWeeks} tydzień.`,
-        legalBasis: 'KP art. 182³ § 1¹',
+        message: input.special_circumstances.mother_hospitalized_or_incapable
+          ? `Matka musi wykorzystać co najmniej ${mandatoryWeeks} tyg. urlopu macierzyńskiego po porodzie (przejęcie najwcześniej od ${formatPolishDate(earliestTakeover)}).`
+          : `Pierwsze ${mandatoryWeeks} tygodni urlopu macierzyńskiego po porodzie musi wykorzystać osobiście matka (przejęcie przez ojca najwcześniej od ${formatPolishDate(earliestTakeover)}).`,
+        legalBasis: input.special_circumstances.mother_hospitalized_or_incapable
+          ? 'KP art. 180 § 6'
+          : 'KP art. 180 § 4',
       });
     }
-
-    if (anchorDate && part.startDate < anchorDate) {
+    if (!availability.otherInsured) {
+      coveredEngineCodes.add('FATHER_TAKEOVER');
       issues.push({
-        code: 'PATERNITY_BEFORE_EVENT',
-        severity: 'error',
-        message: `Urlop ojcowski (${formatIsoPl(part.startDate)}) nie może rozpocząć się przed ${scenario.situation === 'adoption' ? 'datą przyjęcia dziecka' : 'datą porodu'} (${formatIsoPl(anchorDate)}).`,
-        legalBasis: 'KP art. 182³ § 1',
-      });
-    }
-
-    const endDate = addDaysIso(part.startDate, part.weeks * DAYS_IN_WEEK - 1);
-    if (deadline && endDate > deadline) {
-      issues.push({
-        code: 'PATERNITY_DEADLINE_EXCEEDED',
+        code: 'FATHER_TAKEOVER_UNINSURED',
         severity: 'error',
         message:
-          scenario.situation === 'adoption'
-            ? `Urlop ojcowski kończy się ${formatIsoPl(endDate)}, czyli po upływie ${params.paternityLeave.adoptionDeadlineMonthsFromAdoption} mies. od przyjęcia dziecka lub po ukończeniu przez dziecko ${params.paternityLeave.adoptionMaxChildAgeYears} lat (granica: ${formatIsoPl(deadline)}).`
-            : `Urlop ojcowski kończy się ${formatIsoPl(endDate)}, czyli po ukończeniu przez dziecko ${params.paternityLeave.deadlineChildAgeMonths} miesięcy życia (granica: ${formatIsoPl(deadline)}).`,
-        legalBasis: 'KP art. 182³ § 1',
+          'Aby ojciec mógł przejąć część urlopu macierzyńskiego, musi podlegać ubezpieczeniu chorobowemu.',
+        legalBasis: 'KP art. 180 § 4',
       });
     }
   }
 
-  return issues;
-}
+  // 3. Urlop rodzicielski: maks. 5 części, 9 tyg. nieprzenoszalnych, limit puli, granica 6 lat, praca ≤ 1/2
+  const poolWeeks = plan.outcome.parental_pool_weeks;
+  const individualLimitWeeks = plan.outcome.parental_applicant_limit_weeks;
+  const nonTransferable = params.parentalLeave.nonTransferableWeeksPerParent;
+  const parentalDeadline = plan.outcome.parental_deadline;
+  const preParentalEnd = getPreParentalEndDate(plan);
+  const earliestParental =
+    input.parental_only || input.applicant_role === 'FATHER'
+      ? eventDate
+      : preParentalEnd
+        ? addDaysIso(preParentalEnd, 1)
+        : eventDate;
 
-/**
- * Walidacja urlopu rodzicielskiego i łączenia go z pracą:
- * – brak urlopu rodzicielskiego po śmierci jedynego dziecka,
- * – pula 41/43 tyg. (65/67 z „Za życiem”),
- * – 9 tyg. nieprzenoszalnych na każdego rodzica,
- * – max 5 części,
- * – wykorzystanie do końca roku kalendarzowego, w którym dziecko kończy 6 lat (lub limit wieku adopcji),
- * – rodzice mogą korzystać jednocześnie lub naprzemiennie (nakładanie M + O jest dozwolone!),
- * – łączenie z pracą wyłącznie ≤ maxWorkTimeFraction (0,5 etatu).
- */
-export function validateParentalParts(
-  scenario: ScenarioInput,
-  parts: LeavePartRequest[],
-  workByPartIndex: Record<number, number>,
-  withWorkResults: Record<number, ParentalWithWorkResult>,
-  params: BenefitParams,
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  const parentalParts = parts.filter((part) => part.leaveType === 'parentalLeave');
-
-  if (isSingleChildLoss(scenario)) {
-    if (parentalParts.length > 0) {
-      issues.push({
-        code: 'PARENTAL_NOT_ALLOWED_CHILD_LOSS',
-        severity: 'error',
-        message:
-          'Po stracie jedynego dziecka urlop rodzicielski nie przysługuje. Przysługuje wyłącznie skrócony urlop macierzyński.',
-        legalBasis: 'KP art. 180¹',
-      });
-    }
-    return issues;
-  }
-
-  issues.push(...validateAdoptionAgeLimits(scenario, params));
-
-  const pool = getParentalPoolSummary(scenario, params);
-
-  if (parentalParts.length > params.parentalLeave.maxParts) {
+  if (parts.length > params.parentalLeave.maxParts) {
+    coveredEngineCodes.add('PARENTAL_PARTS');
     issues.push({
       code: 'PARENTAL_MAX_PARTS',
       severity: 'error',
-      message: `Urlop rodzicielski można podzielić maksymalnie na ${params.parentalLeave.maxParts} części (zaplanowano ${parentalParts.length}).`,
+      message: `Urlop rodzicielski można podzielić maksymalnie na ${params.parentalLeave.maxParts} części (zaplanowano ${parts.length}).`,
       legalBasis: 'KP art. 182¹c § 2',
     });
   }
 
-  const motherWeeks = parentalParts
-    .filter((p) => p.parentRole === 'mother')
-    .reduce((sum, p) => sum + p.weeks, 0);
-  const fatherWeeks = parentalParts
-    .filter((p) => p.parentRole === 'father')
-    .reduce((sum, p) => sum + p.weeks, 0);
-  const totalWeeks = motherWeeks + fatherWeeks;
+  const usedDays: Record<ApplicantRole, number> = { MOTHER: 0, FATHER: 0 };
+  const lastEndByRole: Partial<Record<ApplicantRole, IsoDate>> = {};
 
-  if (totalWeeks > pool.totalWeeks) {
-    issues.push({
-      code: 'PARENTAL_POOL_EXCEEDED',
-      severity: 'error',
-      message: `Łączny wymiar urlopu rodzicielskiego (${totalWeeks} tyg.) przekracza dostępną pulę ${pool.totalWeeks} tyg.`,
-      legalBasis: 'KP art. 182¹a § 1',
-    });
-  }
+  const sortedParts = [...parts].sort((a, b) => a.start_date.localeCompare(b.start_date));
 
-  if (motherWeeks > pool.maxSingleParentWeeks) {
-    issues.push({
-      code: 'PARENTAL_MOTHER_NON_TRANSFERABLE',
-      severity: 'error',
-      message: `Matka może wykorzystać maksymalnie ${pool.maxSingleParentWeeks} tyg. urlopu rodzicielskiego (${motherWeeks} tyg. zaplanowano). Pozostałe ${pool.nonTransferable} tyg. jest nieprzenoszalne dla drugiego rodzica.`,
-      legalBasis: 'KP art. 182¹a § 4',
-    });
-  }
+  for (const part of sortedParts) {
+    const role = part.parent_role ?? input.applicant_role;
+    const days = getPartDays(part);
+    const work = part.work_fraction ?? 0;
 
-  if (fatherWeeks > pool.maxSingleParentWeeks) {
-    issues.push({
-      code: 'PARENTAL_FATHER_NON_TRANSFERABLE',
-      severity: 'error',
-      message: `Ojciec może wykorzystać maksymalnie ${pool.maxSingleParentWeeks} tyg. urlopu rodzicielskiego (${fatherWeeks} tyg. zaplanowano). Pozostałe ${pool.nonTransferable} tyg. jest nieprzenoszalne dla matki.`,
-      legalBasis: 'KP art. 182¹a § 4',
-    });
-  }
-
-  const anchorDate = getAnchorDate(scenario);
-  const parentalDeadline = getParentalDeadlineDate(scenario, params);
-
-  parts.forEach((part, index) => {
-    if (part.leaveType !== 'parentalLeave') return;
-
-    if (part.weeks < 1) {
+    if (days <= 0) {
+      coveredEngineCodes.add('PARENTAL_DATES');
       issues.push({
-        code: 'PARENTAL_MIN_WEEKS',
+        code: 'PARENTAL_INVALID_RANGE',
         severity: 'error',
-        message: 'Każda część urlopu rodzicielskiego musi trwać co najmniej 1 tydzień.',
+        message: `Data końca części (${formatPolishDate(part.end_date)}) nie może być wcześniejsza niż początek (${formatPolishDate(part.start_date)}).`,
         legalBasis: 'KP art. 182¹c',
       });
+      continue;
     }
 
-    if (anchorDate && part.startDate < anchorDate) {
+    if (work < 0 || work > params.parentalLeave.maxWorkTimeFraction) {
+      coveredEngineCodes.add('PARENTAL_WORK');
       issues.push({
-        code: 'PARENTAL_BEFORE_EVENT',
+        code: 'PARENTAL_WORK_FRACTION_EXCEEDED',
         severity: 'error',
-        message: `Część urlopu rodzicielskiego (${formatIsoPl(part.startDate)}) nie może zaczynać się przed ${scenario.situation === 'adoption' ? 'datą przyjęcia dziecka' : 'datą porodu'} (${formatIsoPl(anchorDate)}).`,
-        legalBasis: 'KP art. 182¹a',
+        message: `Łączenie urlopu rodzicielskiego z pracą jest możliwe maksymalnie do ${formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)} (podano ${formatRate(work)} etatu).`,
+        legalBasis: 'KP art. 182¹e § 1',
       });
-    }
-
-    const workFraction = workByPartIndex[index];
-    if (workFraction !== undefined) {
-      if (workFraction <= 0 || workFraction > params.parentalLeave.maxWorkTimeFraction) {
+    } else if (work > 0) {
+      const empType = getParentEmploymentType(input, role);
+      if (empType && empType !== 'UOP') {
+        coveredEngineCodes.add('PARENTAL_WORK');
         issues.push({
-          code: 'PARENTAL_WORK_FRACTION_EXCEEDED',
+          code: 'PARENTAL_WORK_REQUIRES_UOP',
           severity: 'error',
-          message: `Łączenie urlopu rodzicielskiego z pracą jest możliwe maksymalnie do ${formatRate(params.parentalLeave.maxWorkTimeFraction)} etatu (podano ${formatRate(workFraction)}).`,
+          message: `Łączenie urlopu rodzicielskiego z pracą przysługuje wyłącznie pracownikowi na umowie o pracę (${getPlainParentLabel(role)}).`,
           legalBasis: 'KP art. 182¹e § 1',
         });
       }
     }
 
-    const workRes = withWorkResults[index];
-    const effectiveEndDate =
-      workRes && workRes.periods.length > 0
-        ? workRes.periods[workRes.periods.length - 1].endDate
-        : addDaysIso(part.startDate, part.weeks * DAYS_IN_WEEK - 1);
+    const extraDays =
+      work > 0 && work <= params.parentalLeave.maxWorkTimeFraction
+        ? extendedWorkDays(days, work)
+        : 0;
+    const effectiveEnd = addDaysIso(part.end_date, extraDays);
 
-    if (parentalDeadline && effectiveEndDate > parentalDeadline) {
+    if (earliestParental && part.start_date < earliestParental) {
+      coveredEngineCodes.add('PARENTAL_DATES');
+      issues.push({
+        code: 'PARENTAL_TOO_EARLY',
+        severity: 'error',
+        message: `Część urlopu rodzicielskiego (${formatPolishDate(part.start_date)}) nie może rozpocząć się przed ${formatPolishDate(earliestParental)}.`,
+        legalBasis: 'KP art. 182¹a',
+      });
+    }
+
+    if (parentalDeadline && effectiveEnd > parentalDeadline) {
+      coveredEngineCodes.add('PARENTAL_DATES');
+      coveredEngineCodes.add('PARENTAL_DEADLINE');
       issues.push({
         code: 'PARENTAL_DEADLINE_EXCEEDED',
         severity: 'error',
-        message:
-          scenario.situation === 'adoption'
-            ? `Część urlopu rodzicielskiego kończy się ${formatIsoPl(effectiveEndDate)}, co przekracza graniczną datę dla wieku dziecka (${formatIsoPl(parentalDeadline)}).`
-            : `Część urlopu rodzicielskiego kończy się ${formatIsoPl(effectiveEndDate)}, czyli po końcu roku kalendarzowego, w którym dziecko kończy ${params.parentalLeave.deadlineChildTurnsAgeYears} lat (granica: ${formatIsoPl(parentalDeadline)}).`,
+        message: `Część urlopu rodzicielskiego kończy się ${formatPolishDate(effectiveEnd)}, czyli po końcu roku kalendarzowego, w którym dziecko kończy ${params.parentalLeave.deadlineChildTurnsAgeYears} lat (granica: ${formatPolishDate(parentalDeadline)}).`,
         legalBasis: 'KP art. 182¹c § 1',
       });
     }
-  });
+
+    const prevEnd = lastEndByRole[role];
+    if (prevEnd && part.start_date <= prevEnd) {
+      coveredEngineCodes.add('PARENTAL_DATES');
+      issues.push({
+        code: 'PARENTAL_SAME_PARENT_OVERLAP',
+        severity: 'error',
+        message: `Części urlopu rodzicielskiego tego samego rodzica (${getPlainParentLabel(role)}) nie mogą się nakładać.`,
+        legalBasis: 'KP art. 182¹c',
+      });
+    }
+
+    lastEndByRole[role] = effectiveEnd;
+    usedDays[role] += days;
+  }
+
+  if (poolWeeks > 0) {
+    const limitDays = individualLimitWeeks * daysPerWeek;
+    const poolDays = poolWeeks * daysPerWeek;
+
+    if (usedDays.MOTHER > limitDays) {
+      coveredEngineCodes.add('PARENTAL_POOL');
+      const motherWeeks = Math.round((usedDays.MOTHER / daysPerWeek) * 10) / 10;
+      issues.push({
+        code: 'PARENTAL_MOTHER_NON_TRANSFERABLE',
+        severity: 'error',
+        message: `Matka może wykorzystać maksymalnie ${individualLimitWeeks} tyg. urlopu rodzicielskiego (zaplanowano ${motherWeeks} tyg.). Pozostałe ${nonTransferable} tyg. jest nieprzenoszalne dla drugiego rodzica.`,
+        legalBasis: 'KP art. 182¹a § 4',
+      });
+    }
+
+    if (usedDays.FATHER > limitDays) {
+      coveredEngineCodes.add('PARENTAL_POOL');
+      const fatherWeeks = Math.round((usedDays.FATHER / daysPerWeek) * 10) / 10;
+      issues.push({
+        code: 'PARENTAL_FATHER_NON_TRANSFERABLE',
+        severity: 'error',
+        message: `Ojciec może wykorzystać maksymalnie ${individualLimitWeeks} tyg. urlopu rodzicielskiego (zaplanowano ${fatherWeeks} tyg.). Pozostałe ${nonTransferable} tyg. jest nieprzenoszalne dla drugiego rodzica.`,
+        legalBasis: 'KP art. 182¹a § 4',
+      });
+    }
+
+    if (usedDays.MOTHER + usedDays.FATHER > poolDays) {
+      coveredEngineCodes.add('PARENTAL_POOL');
+      const totalWeeks = Math.round(((usedDays.MOTHER + usedDays.FATHER) / daysPerWeek) * 10) / 10;
+      issues.push({
+        code: 'PARENTAL_POOL_EXCEEDED',
+        severity: 'error',
+        message: `Łączny wymiar urlopu rodzicielskiego (${totalWeeks} tyg.) przekracza wspólną pulę ${poolWeeks} tyg.`,
+        legalBasis: 'KP art. 182¹a § 1',
+      });
+    }
+  }
+
+  // 4. Urlop ojcowski w ciągu 12 miesięcy od porodu / adopcji
+  if (input.paternity_leave_start_date) {
+    const patStart = input.paternity_leave_start_date;
+    const patEnd = addDaysIso(patStart, params.paternityLeave.weeks * daysPerWeek - 1);
+    const patDeadline = getPaternityDeadline(input, params);
+
+    if (eventDate && patStart < eventDate) {
+      coveredEngineCodes.add('PATERNITY_DATES');
+      issues.push({
+        code: 'PATERNITY_BEFORE_EVENT',
+        severity: 'error',
+        message: `Urlop ojcowski (${formatPolishDate(patStart)}) nie może rozpocząć się przed ${input.stage === 'ADOPTION' ? 'datą przyjęcia dziecka' : 'datą porodu'} (${formatPolishDate(eventDate)}).`,
+        legalBasis: 'KP art. 182³ § 1',
+      });
+    }
+
+    if (patDeadline && patEnd > patDeadline) {
+      coveredEngineCodes.add('PATERNITY_DATES');
+      issues.push({
+        code: 'PATERNITY_DEADLINE_EXCEEDED',
+        severity: 'error',
+        message:
+          input.stage === 'ADOPTION'
+            ? `Urlop ojcowski kończy się ${formatPolishDate(patEnd)}, czyli po upływie ${params.paternityLeave.adoptionDeadlineMonthsFromAdoption} mies. od przyjęcia dziecka lub po ukończeniu przez dziecko ${params.paternityLeave.adoptionMaxChildAgeYears} lat (granica: ${formatPolishDate(patDeadline)}).`
+            : `Urlop ojcowski kończy się ${formatPolishDate(patEnd)}, czyli po ukończeniu przez dziecko ${params.paternityLeave.deadlineChildAgeMonths} miesięcy życia (granica: ${formatPolishDate(patDeadline)}).`,
+        legalBasis: 'KP art. 182³ § 1',
+      });
+    }
+
+    if (!availability.fatherAvailable) {
+      coveredEngineCodes.add('PATERNITY_DATES');
+      issues.push({
+        code: 'PATERNITY_UNINSURED',
+        severity: 'error',
+        message:
+          'Urlop ojcowski przysługuje wyłącznie ojcu podlegającemu ubezpieczeniu chorobowemu.',
+        legalBasis: 'KP art. 182³ § 1',
+      });
+    }
+  }
+
+  // 5. Dołączenie pozostałych błędów zwróconych przez silnik (bez dublowania)
+  const seenMessages = new Set(issues.map((item) => item.message));
+  for (const engineError of plan.validation_errors) {
+    if (coveredEngineCodes.has(engineError.code)) continue;
+    if (seenMessages.has(engineError.message_pl)) continue;
+    seenMessages.add(engineError.message_pl);
+    issues.push({
+      code: engineError.code,
+      severity: 'error',
+      message: engineError.message_pl,
+      legalBasis: engineError.legal_basis,
+    });
+  }
 
   return issues;
 }
 
-/**
- * Buduje kamienie milowe i terminy złożenia wniosków na oś czasu oraz kalendarz miesięczny.
- * Każdy termin ma flagę `isPast` względem `scenario.referenceDate`.
- */
-export function buildMilestones(
-  scenario: ScenarioInput,
-  periods: LeavePeriod[],
-  maternityOptions: MaternityPlanOptions,
-  params: BenefitParams,
-): TimelineMilestone[] {
-  const anchorDate = getAnchorDate(scenario);
-  if (!anchorDate) return [];
+function buildDocumentMilestoneDescription(doc: CaseDocument): string {
+  const parts: string[] = [];
+  if (doc.start_date && doc.end_date) {
+    parts.push(`Okres: ${formatPolishDate(doc.start_date)}–${formatPolishDate(doc.end_date)}.`);
+  }
+  if (doc.submit_to) {
+    parts.push(`Złóż do: ${payerLabel(doc.submit_to)}.`);
+  }
+  return parts.join(' ') || doc.name_pl;
+}
 
-  const referenceDate = scenario.referenceDate;
-  const list: TimelineMilestone[] = [
-    {
-      date: anchorDate,
-      label: getAnchorEventLabel(scenario),
+export function buildCalendarMilestones(
+  input: CaseInputs,
+  plan: CasePlan,
+  returnDates: Record<ApplicantRole, IsoDate | null>,
+): CalendarMilestone[] {
+  const milestones: CalendarMilestone[] = [];
+  const eventDate = getEventDate(input);
+
+  if (eventDate) {
+    milestones.push({
+      date: eventDate,
+      label: getEventLabel(input),
       kind: 'event',
       description:
-        scenario.situation === 'adoption'
+        input.stage === 'ADOPTION'
           ? 'Początek uprawnień do urlopu na warunkach urlopu macierzyńskiego.'
           : 'Dzień porodu – początek urlopu macierzyńskiego po porodzie.',
-      legalBasis: scenario.situation === 'adoption' ? 'KP art. 183 § 1' : 'KP art. 180 § 1',
+      legalBasis: input.stage === 'ADOPTION' ? 'KP art. 183 § 1' : 'KP art. 180 § 1',
       isPast: false,
-    },
-  ];
+    });
+  }
 
   if (
-    scenario.situation !== 'adoption' &&
-    maternityOptions.weeksBeforeBirth > 0 &&
-    maternityOptions.weeksBeforeBirth <= params.maternityLeave.maxWeeksBeforeBirth
+    eventDate &&
+    input.stage !== 'ADOPTION' &&
+    input.maternity_leave_start_date &&
+    input.maternity_leave_start_date < eventDate
   ) {
-    const preBirthStart = addDaysIso(anchorDate, -maternityOptions.weeksBeforeBirth * DAYS_IN_WEEK);
-    list.push({
-      date: preBirthStart,
-      label: `Start urlopu macierzyńskiego przed porodem (${maternityOptions.weeksBeforeBirth} tyg.)`,
+    milestones.push({
+      date: input.maternity_leave_start_date,
+      label: 'Start urlopu macierzyńskiego przed porodem',
       kind: 'event',
-      description: `Planowane rozpoczęcie urlopu macierzyńskiego przed przewidywaną datą porodu (wymagane zaświadczenie lekarskie o przewidywanej dacie porodu; maks. ${params.maternityLeave.maxWeeksBeforeBirth} tyg.).`,
+      description: 'Rozpoczęcie urlopu macierzyńskiego przed przewidywaną datą porodu.',
       legalBasis: 'KP art. 180 § 2',
       isPast: false,
     });
   }
 
-  if (isSingleChildLoss(scenario)) {
-    return list.sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  // Termin wniosku o 81,5% (do 21 dni po porodzie / przyjęciu dziecka)
-  if (scenario.rateVariant === 'combined') {
-    const combinedDeadline = addDaysIso(anchorDate, params.combinedRateApplicationDeadlineDays);
-    list.push({
-      date: combinedDeadline,
-      label: `Wniosek o ${formatRate(params.rates.combined)} za cały okres (do ${params.combinedRateApplicationDeadlineDays} dni)`,
+  for (const doc of plan.documents) {
+    if (!doc.deadline) continue;
+    const roleTag = getPlainParentLabel(doc.parent_role);
+    milestones.push({
+      date: doc.deadline,
+      label: `${doc.name_pl} (${roleTag})`,
       kind: 'deadline',
-      description: `Ostatni dzień na złożenie wniosku (u pracodawcy albo do ZUS na druku ZAM) o jednolitą stawkę ${formatRate(params.rates.combined)}. Nieprzenoszalne ${params.parentalLeave.nonTransferableWeeksPerParent} tyg. drugiego rodzica zawsze wynosi ${formatRate(params.rates.secondParentNonTransferableInCombined)}.`,
-      legalBasis: 'Ustawa zasiłkowa art. 30a',
-      isPast: combinedDeadline < referenceDate,
+      description: buildDocumentMilestoneDescription(doc),
+      legalBasis: doc.legal_basis || null,
+      isPast: doc.is_overdue,
+      parentRole: doc.parent_role,
     });
   }
 
-  // Termin wniosku przy rodzinie zastępczej (7 dni od przyjęcia)
-  if (scenario.situation === 'adoption' && scenario.adoptionType === 'fosterFamily') {
-    const fosterDeadline = addDaysIso(
-      anchorDate,
-      params.applicationDeadlinesDays.fosterFamilyAfterAcceptance,
-    );
-    list.push({
-      date: fosterDeadline,
-      label: `Wniosek o urlop dla rodziny zastępczej (do ${params.applicationDeadlinesDays.fosterFamilyAfterAcceptance} dni od przyjęcia)`,
-      kind: 'deadline',
-      description: `Termin na złożenie wniosku o urlop na warunkach urlopu macierzyńskiego dla rodziny zastępczej niezawodowej.`,
-      legalBasis: 'KP art. 183',
-      isPast: fosterDeadline < referenceDate,
+  for (const role of ['MOTHER', 'FATHER'] as const) {
+    const returnDate = returnDates[role];
+    if (!returnDate) continue;
+    milestones.push({
+      date: returnDate,
+      label: `Powrót do pracy (${getPlainParentLabel(role)})`,
+      kind: 'event',
+      description: `Pierwszy dzień po zakończeniu zaplanowanych okresów urlopu (${getPlainParentLabel(role)}).`,
+      legalBasis: null,
+      isPast: false,
+      parentRole: role,
     });
   }
 
-  // Termin wniosku o uzupełniający urlop macierzyński (21 dni przed końcem macierzyńskiego)
-  const supplementaryPeriod = periods.find((p) => p.leaveType === 'supplementaryMaternityLeave');
-  if (supplementaryPeriod) {
-    const suppDeadline = addDaysIso(
-      supplementaryPeriod.startDate,
-      -params.applicationDeadlinesDays.supplementaryMaternityLeave,
-    );
-    list.push({
-      date: suppDeadline,
-      label: `Wniosek o uzupełniający urlop macierzyński (${params.applicationDeadlinesDays.supplementaryMaternityLeave} dni przed startem)`,
-      kind: 'deadline',
-      description:
-        'Najpóźniejszy termin na złożenie wniosku wraz z zaświadczeniem ze szpitala o okresie hospitalizacji, tygodniu ciąży i masie urodzeniowej dziecka.',
-      legalBasis: 'KP art. 180² § 5',
-      isPast: suppDeadline < referenceDate,
-    });
-  }
-
-  // Terminy przy przejęciu części macierzyńskiego przez ojca
-  if (maternityOptions.transferToFather && scenario.father && scenario.situation !== 'adoption') {
-    const takeoverStart = addDaysIso(
-      anchorDate,
-      maternityOptions.motherWeeksAfterBirth * DAYS_IN_WEEK,
-    );
-    const fatherAppDate = addDaysIso(
-      takeoverStart,
-      -params.applicationDeadlinesDays.fatherTakeoverPart,
-    );
-    const motherResignDate = addDaysIso(
-      takeoverStart,
-      -params.applicationDeadlinesDays.resignFromMaternityPart,
-    );
-    list.push({
-      date: fatherAppDate,
-      label: `Wniosek ojca o przejęcie części macierzyńskiego (${params.applicationDeadlinesDays.fatherTakeoverPart} dni przed)`,
-      kind: 'deadline',
-      description: `Ojciec składa wniosek o przejęcie pozostałej części urlopu macierzyńskiego najpóźniej ${params.applicationDeadlinesDays.fatherTakeoverPart} dni przed rozpoczęciem swojej części.`,
-      legalBasis: 'KP art. 180 § 9',
-      isPast: fatherAppDate < referenceDate,
-    });
-    list.push({
-      date: motherResignDate,
-      label: `Rezygnacja matki z pozostałej części macierzyńskiego (${params.applicationDeadlinesDays.resignFromMaternityPart} dni przed)`,
-      kind: 'deadline',
-      description: `Matka składa wniosek o rezygnację z pozostałej części urlopu macierzyńskiego najpóźniej ${params.applicationDeadlinesDays.resignFromMaternityPart} dni przed powrotem do pracy.`,
-      legalBasis: 'KP art. 180 § 4',
-      isPast: motherResignDate < referenceDate,
-    });
-  }
-
-  // Terminy wniosków o urlop rodzicielski (21 dni przed startem pierwszej części każdego rodzica)
-  const seenParentalStarts = new Set<string>();
-  periods
-    .filter((p) => p.leaveType === 'parentalLeave')
-    .forEach((period) => {
-      const key = `${period.parentRole}-${period.startDate}`;
-      if (seenParentalStarts.has(key)) return;
-      seenParentalStarts.add(key);
-
-      const deadlineDate = addDaysIso(
-        period.startDate,
-        -params.applicationDeadlinesDays.parentalLeave,
-      );
-      const roleShort = period.parentRole === 'mother' ? 'Matka' : 'Ojciec';
-      list.push({
-        date: deadlineDate,
-        label: `Wniosek o urlop rodzicielski – ${roleShort} (${params.applicationDeadlinesDays.parentalLeave} dni przed startem)`,
-        kind: 'deadline',
-        description: `Najpóźniejszy dzień na złożenie wniosku o tę część urlopu rodzicielskiego (start ${formatIsoPl(period.startDate)}). Wniosek składa się u pracodawcy albo do ZUS (ZAM).`,
-        legalBasis: 'KP art. 182¹d § 1',
-        isPast: deadlineDate < referenceDate,
-      });
-    });
-
-  // Terminy wniosków o urlop ojcowski (7 dni przed startem)
-  const seenPaternityStarts = new Set<string>();
-  periods
-    .filter((p) => p.leaveType === 'paternityLeave')
-    .forEach((period) => {
-      if (seenPaternityStarts.has(period.startDate)) return;
-      seenPaternityStarts.add(period.startDate);
-
-      const deadlineDate = addDaysIso(
-        period.startDate,
-        -params.applicationDeadlinesDays.paternityLeave,
-      );
-      list.push({
-        date: deadlineDate,
-        label: `Wniosek o urlop ojcowski (${params.applicationDeadlinesDays.paternityLeave} dni przed startem)`,
-        kind: 'deadline',
-        description: `Ostatni dzień na złożenie wniosku o urlop ojcowski rozpoczynający się ${formatIsoPl(period.startDate)} (u pracodawcy lub w ZUS na druku ZAM).`,
-        legalBasis: 'KP art. 182³ § 2',
-        isPast: deadlineDate < referenceDate,
-      });
-    });
-
-  return list.sort((a, b) => a.date.localeCompare(b.date));
+  return milestones.sort((a, b) => a.date.localeCompare(b.date));
 }

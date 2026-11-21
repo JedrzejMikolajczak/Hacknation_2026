@@ -1,0 +1,149 @@
+{
+  "case_id": "case-06",
+  "short_title": "Zasiłek macierzyński w stawce 70% za okres urlopu rodzicielskiego (2 części: 20.09.2026–31.12.2026, łącznie 103 dni) dla przedsiębiorczyni (B2B) na 3-letnie dziecko urodzone w 2023 r. (bez wcześniejszego urlopu macierzyńskiego).",
+  "scenario_category": "RODZICIELSKI",
+  "inputs": {
+    "applicant_role": "MOTHER",
+    "stage": "POST_BIRTH",
+    "co_parenting": true,
+    "other_parent_insured": null,
+    "employment_type": "B2B",
+    "contract_type": null,
+    "contract_end_date": null,
+    "payer_insured_count_nov_30": null,
+    "voluntary_sickness_insured": true,
+    "insurance_duration_days": 474,
+    "has_b2b_arrears": false,
+    "applicant_age_50_plus": false,
+    "benefit_base_amount_pln": null,
+    "due_or_birth_date": "2023-07-20",
+    "application_date": "2026-09-17",
+    "days_from_birth_to_application": 1155,
+    "children_count": 1,
+    "requested_payment_variant": "SPLIT_100_70",
+    "father_parental_weeks": 0,
+    "part_time_work_fraction": 0.0,
+    "special_circumstances": {
+      "has_code_b_on_ezla": null,
+      "premature_or_hospitalized_newborn": false,
+      "za_zyciem_certificate": false,
+      "stillbirth_or_child_death": "NONE",
+      "mother_hospitalized_or_incapable": false,
+      "employer_bankruptcy_or_liquidation": false,
+      "adopted_or_foster_child_age_years": null,
+      "is_professional_foster_family": false
+    },
+    "title_start_date": "2025-06-03",
+    "parental_only": true,
+    "monthly_bases": [
+      {
+        "month": "2025-09",
+        "amount_pln": 5203.8
+      },
+      {
+        "month": "2025-10",
+        "amount_pln": 5203.8
+      },
+      {
+        "month": "2025-11",
+        "amount_pln": 5203.8
+      },
+      {
+        "month": "2025-12",
+        "amount_pln": 5203.8
+      },
+      {
+        "month": "2026-01",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-02",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-03",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-04",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-05",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-06",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-07",
+        "amount_pln": 5652
+      },
+      {
+        "month": "2026-08",
+        "amount_pln": 5652
+      }
+    ],
+    "parental_leave_parts": [
+      {
+        "start_date": "2026-09-20",
+        "end_date": "2026-10-31"
+      },
+      {
+        "start_date": "2026-11-01",
+        "end_date": "2026-12-31"
+      }
+    ]
+  },
+  "ground_truth_outcome": {
+    "is_qualified": true,
+    "decision_summary_pl": "Przyznano wypłatę zasiłku macierzyńskiego za okres urlopu rodzicielskiego w stawce 70% w dwóch częściach z puli 32 tygodni: od 20.09.2026 do 31.10.2026 (42 dni) oraz od 01.11.2026 do 31.12.2026 (61 dni), łącznie 103 dni.",
+    "denial_or_reduction_reason_pl": "Stawka zasiłku wynosi 70% (zamiast 81,5%), ponieważ wniosek o urlop rodzicielski został złożony po upływie 21 dni od porodu (dziecko urodzone 20.07.2023 r., brak pobierania zasiłku macierzyńskiego bezpośrednio po porodzie).",
+    "who_pays": "ZUS",
+    "granted_rate_percent": 70.0,
+    "granted_duration_days": 103,
+    "granted_duration_weeks": null,
+    "calculated_amount_pln": null,
+    "mapped_forms_2026": ["ZAM", "POG"],
+    "legal_basis_cited": [
+      "art. 182(1a) Kodeksu pracy",
+      "art. 182(1c) Kodeksu pracy",
+      "art. 31 ust. 3 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa",
+      "art. 63 ustawy z dnia 25 czerwca 1999 r. o świadczeniach pieniężnych z ubezpieczenia społecznego w razie choroby i macierzyństwa",
+      "§ 22 ust. 1 rozporządzenia Ministra Rodziny, Pracy i Polityki Społecznej z dnia 8 grudnia 2015 r."
+    ],
+    "periods": [
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2026-09-20",
+        "end_date": "2026-10-31",
+        "days": 42,
+        "weeks": 6.0,
+        "rate_percent": 70,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 4748.19,
+        "daily_amount_pln": 110.79,
+        "monthly_amount_pln": 3323.73
+      },
+      {
+        "leave_type": "PARENTAL",
+        "parent_role": "MOTHER",
+        "start_date": "2026-11-01",
+        "end_date": "2026-12-31",
+        "days": 61,
+        "weeks": 8.714285714285714,
+        "rate_percent": 70,
+        "denied": false,
+        "work_fraction": 0,
+        "benefit_base_pln": 4748.19,
+        "daily_amount_pln": 110.79,
+        "monthly_amount_pln": 3323.73
+      }
+    ],
+    "benefit_base_pln": 4748.19
+  },
+  "edge_case_notes": "Ważne niuanse: (1) Odroczony urlop rodzicielski na dziecko urodzone 20.07.2023 r. (wykorzystywany w 2026 r., czyli przed końcem roku kalendarzowego, w którym dziecko kończy 6 lat – do 31.12.2029 r.) mimo braku pobierania zasiłku macierzyńskiego po porodzie (działalność B2B od 03.06.2025 r.). (2) Konieczność złożenia oświadczenia po wezwaniu ZUS, że świadczenie pobierane jest z puli 32 tygodni (a nie 9 tygodni nieprzenoszalnych) oraz że ojciec nie korzystał i nie będzie jednocześnie korzystał z urlopu rodzicielskiego. (3) Druga część wniosku złożona dokładnie 24.10.2026 r. na starych drukach ZUR i Z-3b – od 24.10.2026 r. oba formularze są zastąpione przez ZAM. (4) W 12-miesięcznej podstawie wymiaru (4 x 5203,80 zł + 8 x 5652,00 zł) występują 'wakacje składkowe' (11/2025 i 02/2026), które nie przerywają ubezpieczenia chorobowego."
+}

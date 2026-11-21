@@ -1,35 +1,18 @@
 import type {
+  ApplicantRole,
   BenefitParams,
+  CaseInputs,
+  CaseLeaveType,
+  CaseParentInsurance,
+  CasePeriod,
+  CasePlan,
   IsoDate,
-  LeavePartRequest,
-  LeavePeriod,
-  LeaveType,
-  MaternityCalculationResult,
-  ParentData,
-  ParentRole,
-  ScenarioInput,
+  PlannedParentalPart,
 } from '@shared/types';
 import { formatRate } from '../../app/benefitParams';
+import { addDaysIso, diffDaysIso, formatPln, formatPolishDate } from '../plan/planScenario';
 
-export const DAYS_IN_WEEK = 7;
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('pl-PL', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-const PLN_FORMATTER = new Intl.NumberFormat('pl-PL', {
-  style: 'currency',
-  currency: 'PLN',
-});
-
-export function addDaysIso(isoDate: IsoDate, days: number): IsoDate {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day + days));
-  return date.toISOString().slice(0, 10);
-}
+export { addDaysIso, diffDaysIso, formatPln, formatPolishDate };
 
 export function addMonthsIso(isoDate: IsoDate, months: number): IsoDate {
   const [year, month, day] = isoDate.split('-').map(Number);
@@ -41,48 +24,124 @@ export function addMonthsIso(isoDate: IsoDate, months: number): IsoDate {
   return new Date(Date.UTC(targetYear, targetMonthIndex, clampedDay)).toISOString().slice(0, 10);
 }
 
-export function diffDaysIso(fromIso: IsoDate, toIso: IsoDate): number {
-  const [fy, fm, fd] = fromIso.split('-').map(Number);
-  const [ty, tm, td] = toIso.split('-').map(Number);
-  const fromUtc = Date.UTC(fy, fm - 1, fd);
-  const toUtc = Date.UTC(ty, tm - 1, td);
-  return Math.round((toUtc - fromUtc) / 86_400_000);
+export function getEventDate(input: CaseInputs): IsoDate | null {
+  return input.stage === 'ADOPTION'
+    ? (input.adopted_or_foster_child_acceptance_date ?? null)
+    : input.due_or_birth_date;
 }
 
-export function formatIsoPl(isoDate: IsoDate | null | undefined): string {
-  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return 'Brak daty';
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return DATE_FORMATTER.format(new Date(Date.UTC(year, month - 1, day)));
+export function getEventLabel(input: CaseInputs): string {
+  if (input.stage === 'ADOPTION') return 'Data przyjęcia dziecka na wychowanie';
+  if (input.stage === 'POST_BIRTH') return 'Data porodu';
+  return 'Przewidywana data porodu';
 }
 
-export function formatPlnAmount(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined || Number.isNaN(amount)) {
-    return 'Brak danych';
+export function getEventJumpLabel(input: CaseInputs): string {
+  if (input.stage === 'ADOPTION') return 'Przyjęcie dziecka';
+  if (input.stage === 'POST_BIRTH') return 'Poród';
+  return 'Planowany poród';
+}
+
+export function isParentInsured(parent: CaseParentInsurance | null | undefined): boolean {
+  if (!parent) return false;
+  if (parent.employment_type === 'UOP') return true;
+  if (parent.employment_type === 'NONE') return false;
+  return parent.voluntary_sickness_insured === true;
+}
+
+export interface ParentAvailability {
+  motherAvailable: boolean;
+  fatherAvailable: boolean;
+  otherInsured: boolean;
+}
+
+export function getParentAvailability(input: CaseInputs, plan: CasePlan): ParentAvailability {
+  const applicantInsured = isParentInsured(input);
+  const otherInsured = input.co_parenting
+    ? input.other_parent
+      ? isParentInsured(input.other_parent)
+      : input.other_parent_insured === true
+    : false;
+  const leavePeriods = getLeavePeriods(plan);
+  const hasMotherPeriods = leavePeriods.some((p) => p.parent_role === 'MOTHER');
+  const hasFatherPeriods = leavePeriods.some((p) => p.parent_role === 'FATHER');
+
+  if (input.applicant_role === 'MOTHER') {
+    return {
+      motherAvailable: applicantInsured || hasMotherPeriods,
+      fatherAvailable: otherInsured || hasFatherPeriods,
+      otherInsured,
+    };
   }
-  return PLN_FORMATTER.format(amount);
+
+  return {
+    motherAvailable: otherInsured || hasMotherPeriods,
+    fatherAvailable: applicantInsured || hasFatherPeriods,
+    otherInsured,
+  };
 }
 
-export function getLeaveTypeLabel(leaveType: LeaveType): string {
+export function isSensitiveSituation(input: CaseInputs): boolean {
+  return Boolean(
+    input.special_circumstances.stillbirth_or_child_death !== 'NONE' ||
+    input.special_circumstances.mother_hospitalized_or_incapable,
+  );
+}
+
+export function isChildLossNoParental(input: CaseInputs, plan: CasePlan): boolean {
+  return (
+    input.special_circumstances.stillbirth_or_child_death !== 'NONE' &&
+    plan.outcome.parental_pool_weeks === 0
+  );
+}
+
+export function getLeavePeriods(plan: CasePlan): CasePeriod[] {
+  return plan.outcome.periods.filter(
+    (period) => !period.denied && period.leave_type !== 'SICKNESS',
+  );
+}
+
+export function getEditableParentalParts(input: CaseInputs, plan: CasePlan): PlannedParentalPart[] {
+  if (input.parental_leave_parts !== undefined) {
+    return input.parental_leave_parts;
+  }
+  return plan.outcome.periods
+    .filter(
+      (period) =>
+        !period.denied &&
+        (period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION'),
+    )
+    .map(({ start_date, end_date, parent_role, work_fraction }) => ({
+      start_date,
+      end_date,
+      parent_role,
+      work_fraction,
+    }));
+}
+
+export function getPlainParentLabel(role: ApplicantRole): string {
+  return role === 'MOTHER' ? 'Mama' : 'Tata';
+}
+
+export function getShortLeaveLabel(leaveType: CaseLeaveType): string {
   switch (leaveType) {
-    case 'maternityLeave':
-      return 'Urlop macierzyński';
-    case 'adoptionMaternityLeave':
-      return 'Urlop na warunkach urlopu macierzyńskiego';
-    case 'supplementaryMaternityLeave':
-      return 'Uzupełniający urlop macierzyński';
-    case 'parentalLeave':
-      return 'Urlop rodzicielski';
-    case 'paternityLeave':
-      return 'Urlop ojcowski';
+    case 'MATERNITY':
+      return 'Macierzyński';
+    case 'ADOPTION_MATERNITY':
+      return 'Na warunkach macierzyńskiego';
+    case 'SUPPLEMENTARY_MATERNITY':
+      return 'Uzupełniający';
+    case 'PARENTAL':
+      return 'Rodzicielski';
+    case 'PARENTAL_ZA_ZYCIEM_EXTENSION':
+      return 'Rodzicielski (Za życiem)';
+    case 'PARENTAL_WORK_EXTENSION':
+      return 'Rodzicielski (wydłużenie)';
+    case 'PATERNITY':
+      return 'Ojcowski';
+    case 'SICKNESS':
+      return 'Chorobowy';
   }
-}
-
-export function getParentRoleLabel(role: ParentRole): string {
-  return role === 'mother' ? 'Matka' : 'Ojciec / drugi rodzic';
-}
-
-export function getShortParentRoleLabel(role: ParentRole): string {
-  return role === 'mother' ? 'Matka' : 'Ojciec';
 }
 
 export function formatWorkFraction(fraction: number): string {
@@ -92,208 +151,129 @@ export function formatWorkFraction(fraction: number): string {
   return `${formatRate(fraction)} etatu`;
 }
 
-export function getWorkFractionOptions(params: BenefitParams): { value: number; label: string }[] {
+export function formatWeeksPl(weeks: number): string {
+  const formatted = weeks.toLocaleString('pl-PL', { maximumFractionDigits: 1 });
+  return `${formatted} tyg.`;
+}
+
+export function formatRatePercent(ratePercent: number | null): string {
+  if (ratePercent === null) return '—';
+  return `${ratePercent.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%`;
+}
+
+export function getWorkFractionQuickOptions(
+  params: BenefitParams,
+): { value: number; label: string }[] {
   const max = params.parentalLeave.maxWorkTimeFraction;
-  const halfOfMax = Math.round((max / 2) * 100) / 100;
-  const options: { value: number; label: string }[] = [];
-
-  if (halfOfMax > 0 && halfOfMax < max) {
-    options.push({
-      value: halfOfMax,
-      label: `Praca ${formatWorkFraction(halfOfMax)} (${halfOfMax.toLocaleString('pl-PL')} etatu)`,
-    });
+  const half = Math.round((max / 2) * 100) / 100;
+  const options: { value: number; label: string }[] = [{ value: 0, label: 'Bez pracy (0)' }];
+  if (half > 0 && half < max) {
+    options.push({ value: half, label: formatWorkFraction(half) });
   }
-  options.push({
-    value: max,
-    label: `Praca ${formatWorkFraction(max)} (${max.toLocaleString('pl-PL')} – maksimum ustawowe)`,
-  });
-
+  options.push({ value: max, label: `${formatWorkFraction(max)} (maks.)` });
   return options;
 }
 
-export function getAnchorDate(scenario: ScenarioInput): IsoDate | null {
-  if (scenario.situation === 'adoption') {
-    return scenario.childAcceptanceDate;
-  }
-  if (scenario.situation === 'afterBirth') {
-    return scenario.birthDate;
-  }
-  return scenario.expectedBirthDate;
-}
-
-export function getAnchorEventLabel(scenario: ScenarioInput): string {
-  if (scenario.situation === 'adoption') {
-    return 'Data przyjęcia dziecka na wychowanie';
-  }
-  if (scenario.situation === 'afterBirth') {
-    return 'Data porodu';
-  }
-  return 'Przewidywana data porodu';
-}
-
-export function getAnchorJumpLabel(scenario: ScenarioInput): string {
-  if (scenario.situation === 'adoption') return 'Przyjęcie dziecka';
-  if (scenario.situation === 'afterBirth') return 'Poród';
-  return 'Planowany poród';
-}
-
-export function isSingleChildLoss(scenario: ScenarioInput): boolean {
-  return (
-    (scenario.special.stillbirth || scenario.special.childDeathDate !== null) &&
-    scenario.childrenCount <= 1
-  );
-}
-
-export function isSensitiveSituation(scenario: ScenarioInput): boolean {
-  return Boolean(
-    scenario.special.stillbirth ||
-    scenario.special.childDeathDate !== null ||
-    scenario.special.motherDeceased ||
-    scenario.special.motherIncapableOfIndependentLiving,
-  );
-}
-
-export function isParentInsured(parent: Partial<ParentData> | null | undefined): boolean {
-  return Boolean(
-    parent &&
-    parent.insuranceTitle &&
-    parent.insuranceTitle !== 'none' &&
-    parent.sicknessInsurance &&
-    parent.sicknessInsurance !== 'none',
-  );
-}
-
-export function hasFatherInPlan(scenario: ScenarioInput): boolean {
-  return Boolean(scenario.father && scenario.father.wantsLeave);
-}
-
-export interface ScenarioDataIssues {
-  missingAnchorDate: boolean;
-  missingMotherBase: boolean;
-  missingFatherBase: boolean;
-  missingAdoptionAge: boolean;
-  neitherParentInsured: boolean;
-  blockingMessages: string[];
-  warningMessages: string[];
-}
-
-export function getScenarioDataIssues(scenario: ScenarioInput): ScenarioDataIssues {
-  const anchorDate = getAnchorDate(scenario);
-  const missingAnchorDate = anchorDate === null;
-  const motherInsured = isParentInsured(scenario.mother);
-  const fatherInsured = isParentInsured(scenario.father);
-  const neitherParentInsured = !motherInsured && !fatherInsured;
-
-  const missingMotherBase = motherInsured && scenario.mother.benefitBase === null;
-  const missingFatherBase = Boolean(
-    scenario.father?.wantsLeave && fatherInsured && scenario.father.benefitBase === null,
-  );
-  const missingAdoptionAge = scenario.situation === 'adoption' && scenario.childAgeYears === null;
-
-  const blockingMessages: string[] = [];
-  const warningMessages: string[] = [];
-
-  if (missingAnchorDate) {
-    blockingMessages.push(
-      scenario.situation === 'adoption'
-        ? 'Brak daty przyjęcia dziecka na wychowanie. Uzupełnij ją, aby zaplanować urlopy w kalendarzu.'
-        : scenario.situation === 'afterBirth'
-          ? 'Brak daty porodu. Uzupełnij ją, aby przygotować oś czasu i kalendarz urlopów.'
-          : 'Brak przewidywanej daty porodu. Uzupełnij ją, aby zaplanować urlopy w kalendarzu.',
-    );
-  }
-
-  if (neitherParentInsured) {
-    blockingMessages.push(
-      'Żaden z rodziców nie podlega ubezpieczeniu chorobowemu, dlatego zasiłek macierzyński z ZUS nie przysługuje (możesz sprawdzić świadczenie rodzicielskie „Kosiniakowe” w urzędzie gminy albo uzupełnić dane o ubezpieczeniu w kreatorze).',
-    );
-  }
-
-  if (!neitherParentInsured) {
-    if (missingMotherBase) {
-      warningMessages.push(
-        'Brak podstawy wymiaru zasiłku dla Matki – okresy w kalendarzu są widoczne, ale kwoty zasiłku wymagają uzupełnienia podstawy.',
-      );
-    }
-    if (missingFatherBase) {
-      warningMessages.push(
-        'Brak podstawy wymiaru zasiłku dla Ojca – kwoty dla części Ojca wymagają uzupełnienia podstawy.',
-      );
-    }
-    if (missingAdoptionAge) {
-      warningMessages.push(
-        'Brak wieku dziecka przy przyjęciu na wychowanie – uzupełnij go, aby zweryfikować limity wieku dla urlopu na warunkach macierzyńskiego i rodzicielskiego.',
-      );
-    }
-  }
-
-  return {
-    missingAnchorDate,
-    missingMotherBase,
-    missingFatherBase,
-    missingAdoptionAge,
-    neitherParentInsured,
-    blockingMessages,
-    warningMessages,
-  };
-}
-
-export interface ParentalPoolSummary {
-  totalWeeks: number;
-  nonTransferable: number;
-  maxSingleParentWeeks: number;
-}
-
-export function getParentalPoolSummary(
-  scenario: ScenarioInput,
-  params: BenefitParams,
-): ParentalPoolSummary {
-  const multiple = scenario.childrenCount > 1;
-  const totalWeeks = scenario.special.zaZyciemCertificate
-    ? multiple
-      ? params.parentalLeave.weeksMultipleChildrenZaZyciem
-      : params.parentalLeave.weeksSingleChildZaZyciem
-    : multiple
-      ? params.parentalLeave.weeksMultipleChildren
-      : params.parentalLeave.weeksSingleChild;
-  const nonTransferable = params.parentalLeave.nonTransferableWeeksPerParent;
-  return {
-    totalWeeks,
-    nonTransferable,
-    maxSingleParentWeeks: Math.max(0, totalWeeks - nonTransferable),
-  };
-}
-
-export function getMaternityBlockEndDate(
-  scenario: ScenarioInput,
-  maternity: MaternityCalculationResult,
-): IsoDate | null {
-  const preParentalPeriods = maternity.periods.filter(
+export function getPreParentalEndDate(plan: CasePlan): IsoDate | null {
+  const preParental = plan.outcome.periods.filter(
     (period) =>
-      period.leaveType === 'maternityLeave' ||
-      period.leaveType === 'adoptionMaternityLeave' ||
-      period.leaveType === 'supplementaryMaternityLeave',
+      !period.denied &&
+      (period.leave_type === 'MATERNITY' ||
+        period.leave_type === 'ADOPTION_MATERNITY' ||
+        period.leave_type === 'SUPPLEMENTARY_MATERNITY'),
   );
-  if (preParentalPeriods.length > 0) {
-    return (
-      preParentalPeriods
-        .map((period) => period.endDate)
-        .sort()
-        .at(-1) ?? null
-    );
-  }
-  return null;
+  if (!preParental.length) return null;
+  return (
+    preParental
+      .map((period) => period.end_date)
+      .sort()
+      .at(-1) ?? null
+  );
 }
 
-export function getDefaultParentalStartDate(
-  scenario: ScenarioInput,
-  maternity: MaternityCalculationResult,
-): IsoDate | null {
-  const preParentalEnd = getMaternityBlockEndDate(scenario, maternity);
-  if (preParentalEnd) {
-    return addDaysIso(preParentalEnd, 1);
+export function getParentalStartDate(input: CaseInputs, plan: CasePlan): IsoDate | null {
+  const preEnd = getPreParentalEndDate(plan);
+  if (preEnd) return addDaysIso(preEnd, 1);
+
+  const eventDate = getEventDate(input);
+  if (input.parental_only) {
+    const earliestExisting = [...(input.parental_leave_parts ?? [])]
+      .map((part) => part.start_date)
+      .sort()[0];
+    if (earliestExisting) return earliestExisting;
+    if (input.reference_date && (!eventDate || input.reference_date >= eventDate)) {
+      return input.reference_date;
+    }
   }
-  return getAnchorDate(scenario);
+  return eventDate;
+}
+
+export function getPartDays(part: PlannedParentalPart): number {
+  if (!part.start_date || !part.end_date) return 0;
+  return diffDaysIso(part.start_date, part.end_date) + 1;
+}
+
+export interface ParentalUsageSummary {
+  poolWeeks: number;
+  individualLimitWeeks: number;
+  nonTransferableWeeks: number;
+  motherDays: number;
+  fatherDays: number;
+  motherWeeks: number;
+  fatherWeeks: number;
+  totalWeeks: number;
+  remainingTotalWeeks: number;
+  remainingByRole: Record<ApplicantRole, number>;
+}
+
+export function computeParentalUsage(
+  parts: PlannedParentalPart[],
+  input: CaseInputs,
+  plan: CasePlan,
+  params: BenefitParams,
+): ParentalUsageSummary {
+  const daysPerWeek = params.calendar.daysPerWeek;
+  const poolWeeks = plan.outcome.parental_pool_weeks;
+  const individualLimitWeeks = plan.outcome.parental_applicant_limit_weeks;
+  const nonTransferableWeeks = params.parentalLeave.nonTransferableWeeksPerParent;
+
+  let motherDays = 0;
+  let fatherDays = 0;
+
+  for (const part of parts) {
+    const days = Math.max(0, getPartDays(part));
+    const role = part.parent_role ?? input.applicant_role;
+    if (role === 'MOTHER') motherDays += days;
+    else fatherDays += days;
+  }
+
+  const motherWeeks = Math.round((motherDays / daysPerWeek) * 10) / 10;
+  const fatherWeeks = Math.round((fatherDays / daysPerWeek) * 10) / 10;
+  const totalDays = motherDays + fatherDays;
+  const totalWeeks = Math.round((totalDays / daysPerWeek) * 10) / 10;
+
+  const poolDays = poolWeeks * daysPerWeek;
+  const limitDays = individualLimitWeeks * daysPerWeek;
+
+  const remainingTotalDays = Math.max(0, poolDays - totalDays);
+  const remainingMotherDays = Math.min(remainingTotalDays, Math.max(0, limitDays - motherDays));
+  const remainingFatherDays = Math.min(remainingTotalDays, Math.max(0, limitDays - fatherDays));
+
+  return {
+    poolWeeks,
+    individualLimitWeeks,
+    nonTransferableWeeks,
+    motherDays,
+    fatherDays,
+    motherWeeks,
+    fatherWeeks,
+    totalWeeks,
+    remainingTotalWeeks: Math.floor(remainingTotalDays / daysPerWeek),
+    remainingByRole: {
+      MOTHER: Math.floor(remainingMotherDays / daysPerWeek),
+      FATHER: Math.floor(remainingFatherDays / daysPerWeek),
+    },
+  };
 }
 
 export type LeavePlanPresetId = 'classic' | 'equal' | 'simultaneous' | 'onlyMother' | 'onlyFather';
@@ -302,6 +282,7 @@ export interface LeavePlanPreset {
   id: LeavePlanPresetId;
   title: string;
   description: string;
+  requiresMother: boolean;
   requiresFather: boolean;
 }
 
@@ -310,249 +291,221 @@ export function getLeavePlanPresets(params: BenefitParams): LeavePlanPreset[] {
   return [
     {
       id: 'classic',
-      title: 'Najpierw Mama, potem Tata',
-      description: `Mama wykorzystuje maksymalną część dla jednego rodzica, a Tata swoje ${nonTransferable} tyg. bezpośrednio po niej.`,
+      title: 'Najpierw mama, potem tata',
+      description: `Mama bierze maksimum dla jednego rodzica, a tata swoje ${nonTransferable} tyg. zaraz po niej.`,
+      requiresMother: true,
       requiresFather: true,
     },
     {
       id: 'equal',
-      title: 'Po połowie (naprzemiennie)',
+      title: 'Po połowie',
       description: 'Rodzice dzielą wspólną pulę urlopu rodzicielskiego równo między siebie.',
+      requiresMother: true,
       requiresFather: true,
     },
     {
       id: 'simultaneous',
-      title: 'Jednocześnie (wspólna opieka)',
-      description: `Mama i Tata rozpoczynają urlop rodzicielski w tym samym dniu (Tata bierze ${nonTransferable} tyg. równolegle z Mamą).`,
+      title: 'Jednocześnie',
+      description: `Mama i tata zaczynają w tym samym dniu (tata bierze ${nonTransferable} tyg. równolegle z mamą).`,
+      requiresMother: true,
       requiresFather: true,
     },
     {
       id: 'onlyMother',
-      title: 'Tylko Mama',
-      description: `Mama wykorzystuje maksimum dla jednego rodzica (${nonTransferable} tyg. drugiego rodzica pozostaje niewykorzystane).`,
+      title: 'Tylko mama',
+      description: `Mama wykorzystuje maksimum dla jednego rodzica (${nonTransferable} tyg. taty pozostaje niewykorzystane).`,
+      requiresMother: true,
       requiresFather: false,
     },
     {
       id: 'onlyFather',
-      title: 'Tylko Tata',
-      description: `Tata wykorzystuje maksimum dla jednego rodzica (${nonTransferable} tyg. Matki pozostaje niewykorzystane).`,
+      title: 'Tylko tata',
+      description: `Tata wykorzystuje maksimum dla jednego rodzica (${nonTransferable} tyg. mamy pozostaje niewykorzystane).`,
+      requiresMother: false,
       requiresFather: true,
     },
   ];
 }
 
-/**
- * Buduje wyłącznie części urlopu rodzicielskiego (bez duplikowania macierzyńskiego i ojcowskiego).
- */
 export function buildPresetParentalParts(
   presetId: LeavePlanPresetId,
-  scenario: ScenarioInput,
-  maternity: MaternityCalculationResult,
+  input: CaseInputs,
+  plan: CasePlan,
   params: BenefitParams,
-): LeavePartRequest[] {
-  if (isSingleChildLoss(scenario)) {
+): PlannedParentalPart[] {
+  const pool = plan.outcome.parental_pool_weeks;
+  const maxSingle = plan.outcome.parental_applicant_limit_weeks;
+  const nonTransferable = params.parentalLeave.nonTransferableWeeksPerParent;
+  const daysPerWeek = params.calendar.daysPerWeek;
+  const parentalStart = getParentalStartDate(input, plan);
+
+  if (!parentalStart || pool <= 0 || maxSingle <= 0) {
     return [];
   }
 
-  const parentalStart = getDefaultParentalStartDate(scenario, maternity);
-  if (!parentalStart) {
-    return [];
+  const makePart = (
+    parent_role: ApplicantRole,
+    start_date: IsoDate,
+    weeks: number,
+  ): PlannedParentalPart => ({
+    parent_role,
+    start_date,
+    end_date: addDaysIso(start_date, weeks * daysPerWeek - 1),
+    work_fraction: 0,
+  });
+
+  if (presetId === 'onlyMother') {
+    return [makePart('MOTHER', parentalStart, maxSingle)];
   }
 
-  const pool = getParentalPoolSummary(scenario, params);
-  const fatherAvailable = hasFatherInPlan(scenario) && isParentInsured(scenario.father);
-  const motherAvailable = isParentInsured(scenario.mother) && !scenario.special.motherDeceased;
+  if (presetId === 'onlyFather') {
+    return [makePart('FATHER', parentalStart, maxSingle)];
+  }
 
-  if (!motherAvailable && fatherAvailable) {
+  if (presetId === 'equal') {
+    const motherWeeks = Math.min(maxSingle, Math.ceil(pool / 2));
+    const fatherWeeks = Math.min(maxSingle, pool - motherWeeks);
+    const fatherStart = addDaysIso(parentalStart, motherWeeks * daysPerWeek);
     return [
-      {
-        parentRole: 'father',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: pool.maxSingleParentWeeks,
-      },
+      makePart('MOTHER', parentalStart, motherWeeks),
+      makePart('FATHER', fatherStart, fatherWeeks),
     ];
   }
 
-  if (!motherAvailable && !fatherAvailable) {
-    return [];
-  }
-
-  const effectivePreset: LeavePlanPresetId =
-    !fatherAvailable && presetId !== 'onlyMother' ? 'onlyMother' : presetId;
-
-  if (effectivePreset === 'onlyMother') {
+  if (presetId === 'simultaneous') {
+    const fatherWeeks = Math.min(maxSingle, nonTransferable);
     return [
-      {
-        parentRole: 'mother',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: pool.maxSingleParentWeeks,
-      },
+      makePart('MOTHER', parentalStart, maxSingle),
+      makePart('FATHER', parentalStart, fatherWeeks),
     ];
   }
 
-  if (effectivePreset === 'onlyFather') {
-    return [
-      {
-        parentRole: 'father',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: pool.maxSingleParentWeeks,
-      },
-    ];
-  }
-
-  if (effectivePreset === 'equal') {
-    const motherWeeks = Math.ceil(pool.totalWeeks / 2);
-    const fatherWeeks = pool.totalWeeks - motherWeeks;
-    const fatherStart = addDaysIso(parentalStart, motherWeeks * DAYS_IN_WEEK);
-    return [
-      {
-        parentRole: 'mother',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: motherWeeks,
-      },
-      {
-        parentRole: 'father',
-        leaveType: 'parentalLeave',
-        startDate: fatherStart,
-        weeks: fatherWeeks,
-      },
-    ];
-  }
-
-  if (effectivePreset === 'simultaneous') {
-    return [
-      {
-        parentRole: 'mother',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: pool.maxSingleParentWeeks,
-      },
-      {
-        parentRole: 'father',
-        leaveType: 'parentalLeave',
-        startDate: parentalStart,
-        weeks: pool.nonTransferable,
-      },
-    ];
-  }
-
-  // 'classic': najpierw Mama, potem Tata
-  const motherWeeks = pool.maxSingleParentWeeks;
-  const fatherStart = addDaysIso(parentalStart, motherWeeks * DAYS_IN_WEEK);
+  // 'classic': Najpierw mama, potem tata
+  const fatherWeeks = Math.min(maxSingle, nonTransferable);
+  const fatherStart = addDaysIso(parentalStart, maxSingle * daysPerWeek);
   return [
-    {
-      parentRole: 'mother',
-      leaveType: 'parentalLeave',
-      startDate: parentalStart,
-      weeks: motherWeeks,
-    },
-    {
-      parentRole: 'father',
-      leaveType: 'parentalLeave',
-      startDate: fatherStart,
-      weeks: pool.nonTransferable,
-    },
+    makePart('MOTHER', parentalStart, maxSingle),
+    makePart('FATHER', fatherStart, fatherWeeks),
   ];
 }
 
-export interface PartLimitInfo {
-  maxWeeks: number;
-  maxPartsReached: boolean;
-  limitReason: string | null;
+function normalizePartsForCompare(
+  parts: PlannedParentalPart[],
+  fallbackRole: ApplicantRole,
+): string {
+  return [...parts]
+    .map((part) => ({
+      role: part.parent_role ?? fallbackRole,
+      start: part.start_date,
+      end: part.end_date,
+      work: part.work_fraction ?? 0,
+    }))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.role.localeCompare(b.role))
+    .map((p) => `${p.role}:${p.start}:${p.end}:${p.work}`)
+    .join('|');
 }
 
-export function getPartLimitInfo(
-  parts: LeavePartRequest[],
-  targetRole: ParentRole,
-  scenario: ScenarioInput,
+export function detectActivePreset(
+  parts: PlannedParentalPart[],
+  input: CaseInputs,
+  plan: CasePlan,
   params: BenefitParams,
-  editingIndex: number | null = null,
-): PartLimitInfo {
-  const otherParts = parts.filter((_, idx) => idx !== editingIndex);
-  const pool = getParentalPoolSummary(scenario, params);
-  const otherParentalParts = otherParts.filter((p) => p.leaveType === 'parentalLeave');
-  const maxPartsReached =
-    editingIndex === null && otherParentalParts.length >= params.parentalLeave.maxParts;
-
-  const totalUsed = otherParentalParts.reduce((sum, p) => sum + p.weeks, 0);
-  const sameParentUsed = otherParentalParts
-    .filter((p) => p.parentRole === targetRole)
-    .reduce((sum, p) => sum + p.weeks, 0);
-
-  const remainingTotal = Math.max(0, pool.totalWeeks - totalUsed);
-  const remainingForParent = Math.max(0, pool.maxSingleParentWeeks - sameParentUsed);
-  const maxWeeks = Math.min(remainingTotal, remainingForParent);
-  const otherRoleLabel = targetRole === 'mother' ? 'Ojca' : 'Matki';
-  const roleLabel = targetRole === 'mother' ? 'Matki' : 'Ojca';
-
-  let limitReason: string | null = null;
-  if (maxPartsReached) {
-    limitReason = `Osiągnięto limit ${params.parentalLeave.maxParts} części urlopu rodzicielskiego.`;
-  } else if (remainingTotal === 0) {
-    limitReason = `Wykorzystano całą wspólną pulę ${pool.totalWeeks} tyg. urlopu rodzicielskiego.`;
-  } else if (remainingForParent === 0) {
-    limitReason = `Osiągnięto limit dla ${roleLabel} (${pool.maxSingleParentWeeks} tyg.) – pozostałe ${pool.nonTransferable} tyg. jest nieprzenoszalne dla ${otherRoleLabel}.`;
-  } else if (remainingForParent < remainingTotal) {
-    limitReason = `Dla ${roleLabel} możesz dodać maksymalnie ${maxWeeks} tyg. (${pool.nonTransferable} tyg. jest zarezerwowane wyłącznie dla ${otherRoleLabel}).`;
-  } else {
-    limitReason = `Pozostało jeszcze ${maxWeeks} tyg. ze wspólnej puli ${pool.totalWeeks} tyg.`;
-  }
-
-  return { maxWeeks, maxPartsReached, limitReason };
-}
-
-export function sortPartsWithWork(
-  rawParts: LeavePartRequest[],
-  rawWorkMap: Record<number, number>,
-): { sortedParts: LeavePartRequest[]; sortedWorkMap: Record<number, number> } {
-  const tagged = rawParts.map((part, oldIndex) => ({
-    part,
-    workFraction: rawWorkMap[oldIndex],
-  }));
-
-  tagged.sort((a, b) => {
-    const dateCmp = a.part.startDate.localeCompare(b.part.startDate);
-    if (dateCmp !== 0) return dateCmp;
-    return a.part.parentRole.localeCompare(b.part.parentRole);
-  });
-
-  const sortedWorkMap: Record<number, number> = {};
-  tagged.forEach((entry, newIndex) => {
-    if (entry.workFraction !== undefined && entry.part.leaveType === 'parentalLeave') {
-      sortedWorkMap[newIndex] = entry.workFraction;
+): LeavePlanPresetId | null {
+  if (!parts.length) return null;
+  const currentKey = normalizePartsForCompare(parts, input.applicant_role);
+  const presets = getLeavePlanPresets(params);
+  for (const preset of presets) {
+    const candidate = buildPresetParentalParts(preset.id, input, plan, params);
+    if (
+      candidate.length > 0 &&
+      normalizePartsForCompare(candidate, input.applicant_role) === currentKey
+    ) {
+      return preset.id;
     }
-  });
-
-  return {
-    sortedParts: tagged.map((entry) => entry.part),
-    sortedWorkMap,
-  };
+  }
+  return null;
 }
 
-export interface ReturnToWorkDates {
-  mother: IsoDate | null;
-  father: IsoDate | null;
-}
-
-export function computeReturnToWorkDates(periods: LeavePeriod[]): ReturnToWorkDates {
+export function computeReturnToWorkDates(
+  periods: CasePeriod[],
+): Record<ApplicantRole, IsoDate | null> {
   const motherEnds = periods
-    .filter((p) => p.parentRole === 'mother')
-    .map((p) => p.endDate)
+    .filter((p) => p.parent_role === 'MOTHER')
+    .map((p) => p.end_date)
     .sort();
   const fatherEnds = periods
-    .filter((p) => p.parentRole === 'father')
-    .map((p) => p.endDate)
+    .filter((p) => p.parent_role === 'FATHER')
+    .map((p) => p.end_date)
     .sort();
 
   const lastMotherEnd = motherEnds.at(-1) ?? null;
   const lastFatherEnd = fatherEnds.at(-1) ?? null;
 
   return {
-    mother: lastMotherEnd ? addDaysIso(lastMotherEnd, 1) : null,
-    father: lastFatherEnd ? addDaysIso(lastFatherEnd, 1) : null,
+    MOTHER: lastMotherEnd ? addDaysIso(lastMotherEnd, 1) : null,
+    FATHER: lastFatherEnd ? addDaysIso(lastFatherEnd, 1) : null,
   };
+}
+
+export interface MergedDateRange {
+  startDate: IsoDate;
+  endDate: IsoDate;
+}
+
+export function mergeParentLeaveRanges(
+  periods: CasePeriod[],
+  role: ApplicantRole,
+): MergedDateRange[] {
+  const sorted = periods
+    .filter((p) => p.parent_role === role)
+    .map((p) => ({ startDate: p.start_date, endDate: p.end_date }))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+  const merged: MergedDateRange[] = [];
+  for (const range of sorted) {
+    const last = merged.at(-1);
+    if (!last || diffDaysIso(last.endDate, range.startDate) > 1) {
+      merged.push({ ...range });
+    } else if (range.endDate > last.endDate) {
+      last.endDate = range.endDate;
+    }
+  }
+  return merged;
+}
+
+export function formatParentLeaveSummary(
+  role: ApplicantRole,
+  periods: CasePeriod[],
+  returnDate: IsoDate | null,
+  remainingParentalWeeks: number | null,
+): string | null {
+  const name = getPlainParentLabel(role);
+  const ranges = mergeParentLeaveRanges(periods, role);
+
+  if (ranges.length === 0) {
+    if (remainingParentalWeeks !== null && remainingParentalWeeks > 0) {
+      return `${name}: brak zaplanowanego urlopu (zostało ${remainingParentalWeeks} tyg. rodzicielskiego).`;
+    }
+    return null;
+  }
+
+  const formattedRanges = ranges.map(
+    (range) => `od ${formatPolishDate(range.startDate)} do ${formatPolishDate(range.endDate)}`,
+  );
+  let rangeText: string;
+  if (formattedRanges.length === 1) {
+    rangeText = formattedRanges[0];
+  } else if (formattedRanges.length === 2) {
+    rangeText = `${formattedRanges[0]} oraz ${formattedRanges[1]}`;
+  } else {
+    rangeText = `${formattedRanges.slice(0, -1).join(', ')} oraz ${formattedRanges.at(-1)}`;
+  }
+
+  return `${name}: urlop ${rangeText}${returnDate ? `, powrót do pracy ${formatPolishDate(returnDate)}` : ''}.`;
+}
+
+export function formatShortDeadlineLabel(label: string): string {
+  const trimmed = label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (!trimmed) return label;
+  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
 }

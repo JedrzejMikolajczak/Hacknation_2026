@@ -1,14 +1,12 @@
-import type { IsoDate } from '@shared/types';
-import { formatRate } from '../../app/benefitParams';
+import type { CasePeriod, IsoDate } from '@shared/types';
+import { benefitLabels, parentLabels } from '../plan/caseLabels';
 import {
-  formatIsoPl,
-  formatPlnAmount,
+  formatPln,
+  formatPolishDate,
+  formatRatePercent,
   formatWorkFraction,
-  getLeaveTypeLabel,
-  getParentRoleLabel,
 } from './leavePlanHelpers';
-import type { TimelineLeavePeriod } from './LeaveTimeline';
-import type { TimelineMilestone } from './leavePlanValidation';
+import type { CalendarMilestone } from './leavePlanValidation';
 
 export interface CalendarQuickJump {
   label: string;
@@ -16,14 +14,15 @@ export interface CalendarQuickJump {
 }
 
 interface MonthlyCalendarProps {
-  periods: TimelineLeavePeriod[];
-  milestones: TimelineMilestone[];
+  periods: CasePeriod[];
+  milestones: CalendarMilestone[];
   quickJumps: CalendarQuickJump[];
   focusedMonth: string; // 'YYYY-MM'
   selectedDay: string | null; // 'YYYY-MM-DD'
-  referenceDate: IsoDate;
+  referenceDate: IsoDate | null;
   onSelectDay: (isoDate: string | null) => void;
   onChangeMonth: (monthIso: string) => void;
+  onSelectMilestoneDate?: (isoDate: string) => void;
 }
 
 const WEEKDAYS_PL = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'];
@@ -52,7 +51,7 @@ function getDaysInMonth(year: number, month: number): number {
 }
 
 function getMondayBasedWeekday(year: number, month: number, day: number): number {
-  const jsDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=Sun..6=Sat
+  const jsDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
   return jsDay === 0 ? 6 : jsDay - 1;
 }
 
@@ -65,6 +64,7 @@ export function MonthlyCalendar({
   referenceDate,
   onSelectDay,
   onChangeMonth,
+  onSelectMilestoneDate,
 }: MonthlyCalendarProps) {
   const [year, month] = focusedMonth.split('-').map(Number);
   const daysCount = getDaysInMonth(year, month);
@@ -85,11 +85,11 @@ export function MonthlyCalendar({
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  function getActivePeriods(isoDate: string): TimelineLeavePeriod[] {
-    return periods.filter((p) => isoDate >= p.startDate && isoDate <= p.endDate);
+  function getActivePeriods(isoDate: string): CasePeriod[] {
+    return periods.filter((p) => isoDate >= p.start_date && isoDate <= p.end_date);
   }
 
-  function getMilestonesForDay(isoDate: string): TimelineMilestone[] {
+  function getMilestonesForDay(isoDate: string): CalendarMilestone[] {
     return milestones.filter((m) => m.date === isoDate);
   }
 
@@ -97,15 +97,15 @@ export function MonthlyCalendar({
   const activeDayMilestones = selectedDay ? getMilestonesForDay(selectedDay) : [];
 
   return (
-    <section className="lp-card" aria-labelledby="monthly-calendar-heading">
+    <div className="lp-calendar-inner" aria-labelledby="monthly-calendar-heading">
       <div className="lp-calendar-header">
         <div>
-          <h2 id="monthly-calendar-heading" className="lp-card__title">
+          <h4 id="monthly-calendar-heading" className="lp-calendar-inner__title">
             Kalendarz miesięczny
-          </h2>
+          </h4>
           <p className="lp-card__lead">
-            Wybierz dzień, aby sprawdzić przysługujące świadczenia, stawkę oraz terminy złożenia
-            wniosków.
+            Wybierz dzień, aby sprawdzić świadczenia, stawkę i terminy wniosków
+            {referenceDate ? ` (stan na ${formatPolishDate(referenceDate)})` : ''}.
           </p>
         </div>
 
@@ -170,9 +170,9 @@ export function MonthlyCalendar({
             const isoDate = getIsoForDay(day);
             const dayPeriods = getActivePeriods(isoDate);
             const dayMilestones = getMilestonesForDay(isoDate);
-            const hasMother = dayPeriods.some((p) => p.parentRole === 'mother');
-            const hasFather = dayPeriods.some((p) => p.parentRole === 'father');
-            const hasWork = dayPeriods.some((p) => Boolean(p.workTimeFraction));
+            const hasMother = dayPeriods.some((p) => p.parent_role === 'MOTHER');
+            const hasFather = dayPeriods.some((p) => p.parent_role === 'FATHER');
+            const hasWork = dayPeriods.some((p) => p.work_fraction > 0);
             const hasDeadline = dayMilestones.some((m) => m.kind === 'deadline');
             const hasPastDeadline = dayMilestones.some((m) => m.kind === 'deadline' && m.isPast);
             const isSelected = selectedDay === isoDate;
@@ -201,9 +201,8 @@ export function MonthlyCalendar({
               ariaParts.push(
                 dayPeriods
                   .map((p) => {
-                    const base = `${getLeaveTypeLabel(p.leaveType)} (${getParentRoleLabel(p.parentRole)})`;
-                    if (p.workTimeFraction) return `${base} + praca`;
-                    if (p.isWorkExtension) return `${base} (wydłużenie)`;
+                    const base = `${benefitLabels[p.leave_type]} (${parentLabels[p.parent_role]})`;
+                    if (p.work_fraction > 0) return `${base} + praca`;
                     return base;
                   })
                   .join(', '),
@@ -235,7 +234,7 @@ export function MonthlyCalendar({
                   {roleBadge && <span className="lp-calendar-day__role">{roleBadge}</span>}
                   {hasWork && <span className="lp-calendar-day__work">+P</span>}
                   {hasPastDeadline ? (
-                    <span className="lp-calendar-day__past-badge">!</span>
+                    <span className="lp-calendar-day__past-badge">Min.</span>
                   ) : hasDeadline ? (
                     <span className="lp-calendar-day__deadline-badge">Wn.</span>
                   ) : (
@@ -253,13 +252,13 @@ export function MonthlyCalendar({
           <span className="lp-legend-swatch lp-legend-swatch--mother" aria-hidden="true">
             M
           </span>
-          Urlop Matki
+          Urlop mamy
         </span>
         <span className="lp-legend-item">
           <span className="lp-legend-swatch lp-legend-swatch--father" aria-hidden="true">
             O
           </span>
-          Urlop Ojca
+          Urlop taty
         </span>
         <span className="lp-legend-item">
           <span className="lp-legend-swatch lp-legend-swatch--work" aria-hidden="true">
@@ -271,20 +270,20 @@ export function MonthlyCalendar({
           <span className="lp-legend-swatch lp-legend-swatch--deadline" aria-hidden="true">
             Wn.
           </span>
-          Termin złożenia wniosku
+          Termin wniosku
         </span>
         <span className="lp-legend-item">
           <span className="lp-legend-swatch lp-legend-swatch--past" aria-hidden="true">
-            !
+            Min.
           </span>
-          Termin już minął
+          Termin minął
         </span>
       </div>
 
       {selectedDay && (
         <div className="lp-calendar-day-details" aria-live="polite">
           <div className="lp-calendar-day-details__header">
-            <h3 className="lp-calendar-day-details__title">
+            <h4 className="lp-calendar-day-details__title">
               Szczegóły dla dnia:{' '}
               {fullDateFormatter.format(
                 new Date(
@@ -295,7 +294,7 @@ export function MonthlyCalendar({
                   ),
                 ),
               )}
-            </h3>
+            </h4>
             <button
               type="button"
               className="lp-calendar-day-details__close"
@@ -307,9 +306,9 @@ export function MonthlyCalendar({
 
           {activeDayMilestones.length > 0 && (
             <div className="lp-calendar-day-details__milestones">
-              {activeDayMilestones.map((m) => (
+              {activeDayMilestones.map((m, idx) => (
                 <div
-                  key={`${m.date}-${m.label}`}
+                  key={`${m.date}-${m.label}-${idx}`}
                   className={[
                     'lp-deadline-callout',
                     m.kind === 'event' ? 'lp-deadline-callout--event' : '',
@@ -326,10 +325,10 @@ export function MonthlyCalendar({
                         : 'Wydarzenie: '}
                     {m.label}
                   </strong>
-                  {m.isPast && (
+                  {m.isPast && referenceDate && (
                     <p className="lp-deadline-callout__past-note">
-                      Ten termin ({formatIsoPl(m.date)}) przypadł przed datą odniesienia (
-                      {formatIsoPl(referenceDate)}).
+                      Ten termin ({formatPolishDate(m.date)}) przypadł przed datą odniesienia (
+                      {formatPolishDate(referenceDate)}).
                     </p>
                   )}
                   <p className="lp-deadline-callout__desc">
@@ -344,18 +343,13 @@ export function MonthlyCalendar({
           {activeDayPeriods.length > 0 ? (
             <ul className="lp-calendar-day-details__list">
               {activeDayPeriods.map((p, idx) => (
-                <li key={`${p.leaveType}-${p.parentRole}-${idx}`}>
-                  <strong>{getParentRoleLabel(p.parentRole)}</strong> –{' '}
-                  {getLeaveTypeLabel(p.leaveType)} (stawka {formatRate(p.rate)}
-                  {p.missingBase
-                    ? ', uzupełnij podstawę dla kwoty'
-                    : `, ${formatPlnAmount(p.monthlyAmount)}/mies.`}
-                  )
-                  {p.workTimeFraction
-                    ? ` · praca ${formatWorkFraction(p.workTimeFraction)}`
-                    : p.isWorkExtension
-                      ? ' · wydłużenie po pracy'
-                      : ''}
+                <li key={`${p.leave_type}-${p.parent_role}-${idx}`}>
+                  <strong>{parentLabels[p.parent_role]}</strong> – {benefitLabels[p.leave_type]}{' '}
+                  (stawka {formatRatePercent(p.rate_percent)}
+                  {p.monthly_amount_pln === null
+                    ? ', kwota po podaniu podstawy'
+                    : `, ${formatPln(p.monthly_amount_pln)}/30 dni`}
+                  ){p.work_fraction > 0 ? ` · praca ${formatWorkFraction(p.work_fraction)}` : ''}
                 </li>
               ))}
             </ul>
@@ -364,6 +358,39 @@ export function MonthlyCalendar({
           )}
         </div>
       )}
-    </section>
+
+      {milestones.length > 0 && onSelectMilestoneDate && (
+        <div className="lp-calendar-milestones" aria-label="Wszystkie terminy i ważne daty">
+          <h4 className="lp-calendar-milestones__title">Wszystkie terminy i ważne daty</h4>
+          <div className="lp-milestones">
+            {milestones.map((milestone, idx) => (
+              <button
+                key={`${milestone.date}-${milestone.label}-${idx}`}
+                type="button"
+                className={[
+                  'lp-milestone-chip',
+                  milestone.kind === 'deadline' ? 'lp-milestone-chip--deadline' : '',
+                  milestone.isPast ? 'lp-milestone-chip--past' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                title={milestone.description}
+                onClick={() => onSelectMilestoneDate(milestone.date)}
+              >
+                {milestone.isPast ? (
+                  <span className="lp-milestone-chip__past">Termin minął</span>
+                ) : (
+                  milestone.kind === 'deadline' && (
+                    <span className="lp-milestone-chip__kind">Termin</span>
+                  )
+                )}
+                <span className="lp-milestone-chip__date">{formatPolishDate(milestone.date)}</span>
+                <span className="lp-milestone-chip__text">{milestone.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

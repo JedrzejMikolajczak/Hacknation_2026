@@ -9,19 +9,19 @@ export interface SituationOption {
 const SITUATION_TEXTS: Record<SituationType, Omit<SituationOption, 'value'>> = {
   planning: {
     title: 'Planuję dziecko',
-    description: 'Co zrobić wcześniej, żeby nie stracić prawa do zasiłku',
+    description: 'Jak zadbać o prawo do zasiłku przed ciążą',
   },
   pregnant: {
     title: 'Jestem w ciąży',
-    description: 'Zasiłek chorobowy w ciąży i przygotowanie do urlopu macierzyńskiego',
+    description: 'Zasiłek chorobowy i przygotowanie do macierzyńskiego',
   },
   afterBirth: {
     title: 'Urodziło się dziecko',
-    description: 'Urlop macierzyński, rodzicielski, ojcowski i wysokość zasiłku',
+    description: 'Urlopy rodzicielskie i wysokość zasiłku',
   },
   adoption: {
     title: 'Adopcja lub rodzina zastępcza',
-    description: 'Urlop na warunkach urlopu macierzyńskiego i rodzicielski',
+    description: 'Urlop na warunkach macierzyńskiego i rodzicielski',
   },
 };
 

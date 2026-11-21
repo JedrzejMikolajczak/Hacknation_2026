@@ -3,14 +3,14 @@ import type {
   IsoDate,
   ParentData,
   ParentRole,
-  ScenarioInput,
+  WizardScenario,
   SituationType,
   SpecialCircumstances,
 } from '@shared/types';
 
 /** Dane kreatora mogą być niepełne. Brakujący rodzic nie jest osobą bez ubezpieczenia. */
 export type ScenarioDraft = Partial<
-  Omit<ScenarioInput, 'situation' | 'mother' | 'father' | 'special'>
+  Omit<WizardScenario, 'situation' | 'mother' | 'father' | 'special'>
 > & {
   situation: SituationType | null;
   mother?: Partial<ParentData> | null;
@@ -25,6 +25,8 @@ export type ScenarioDraft = Partial<
   pregnancySickLeave?: PregnancySickLeave | null;
   /** Dane do podstawy zasiłku chorobowego w ciąży – prawo powstaje w dniu rozpoczęcia zwolnienia. */
   sicknessBenefitBaseInput?: BenefitBaseInput;
+  motherDeathDate?: IsoDate | null;
+  motherAbandonmentDate?: IsoDate | null;
 };
 
 export interface PregnancySickLeave {
