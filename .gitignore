@@ -1,4 +1,18 @@
-.env
+# Zależności i buildy
 node_modules/
+.next/
+dist/
+build/
 __pycache__/
-venv/
+.venv/
+
+# Zmienne środowiskowe i klucze API
+.env
+.env.local
+.env.*.local
+
+# Pliki systemowe i edytorów
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
