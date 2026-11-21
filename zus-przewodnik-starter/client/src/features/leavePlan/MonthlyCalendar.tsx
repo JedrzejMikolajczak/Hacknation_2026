@@ -24,6 +24,7 @@ interface MonthlyCalendarProps {
   referenceDate: IsoDate;
   onSelectDay: (isoDate: string | null) => void;
   onChangeMonth: (monthIso: string) => void;
+  onSelectMilestoneDate?: (isoDate: string) => void;
 }
 
 const WEEKDAYS_PL = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'];
@@ -65,6 +66,7 @@ export function MonthlyCalendar({
   referenceDate,
   onSelectDay,
   onChangeMonth,
+  onSelectMilestoneDate,
 }: MonthlyCalendarProps) {
   const [year, month] = focusedMonth.split('-').map(Number);
   const daysCount = getDaysInMonth(year, month);
@@ -97,15 +99,15 @@ export function MonthlyCalendar({
   const activeDayMilestones = selectedDay ? getMilestonesForDay(selectedDay) : [];
 
   return (
-    <section className="lp-card" aria-labelledby="monthly-calendar-heading">
+    <div className="lp-calendar-inner" aria-labelledby="monthly-calendar-heading">
       <div className="lp-calendar-header">
         <div>
-          <h2 id="monthly-calendar-heading" className="lp-card__title">
+          <h3 id="monthly-calendar-heading" className="lp-calendar-inner__title">
             Kalendarz miesięczny
-          </h2>
+          </h3>
           <p className="lp-card__lead">
-            Wybierz dzień, aby sprawdzić przysługujące świadczenia, stawkę oraz terminy złożenia
-            wniosków.
+            Wybierz dzień, aby sprawdzić świadczenia, stawkę i terminy wniosków (stan na{' '}
+            {formatIsoPl(referenceDate)}).
           </p>
         </div>
 
@@ -235,7 +237,7 @@ export function MonthlyCalendar({
                   {roleBadge && <span className="lp-calendar-day__role">{roleBadge}</span>}
                   {hasWork && <span className="lp-calendar-day__work">+P</span>}
                   {hasPastDeadline ? (
-                    <span className="lp-calendar-day__past-badge">!</span>
+                    <span className="lp-calendar-day__past-badge">Min.</span>
                   ) : hasDeadline ? (
                     <span className="lp-calendar-day__deadline-badge">Wn.</span>
                   ) : (
@@ -275,7 +277,7 @@ export function MonthlyCalendar({
         </span>
         <span className="lp-legend-item">
           <span className="lp-legend-swatch lp-legend-swatch--past" aria-hidden="true">
-            !
+            Min.
           </span>
           Termin już minął
         </span>
@@ -284,7 +286,7 @@ export function MonthlyCalendar({
       {selectedDay && (
         <div className="lp-calendar-day-details" aria-live="polite">
           <div className="lp-calendar-day-details__header">
-            <h3 className="lp-calendar-day-details__title">
+            <h4 className="lp-calendar-day-details__title">
               Szczegóły dla dnia:{' '}
               {fullDateFormatter.format(
                 new Date(
@@ -295,7 +297,7 @@ export function MonthlyCalendar({
                   ),
                 ),
               )}
-            </h3>
+            </h4>
             <button
               type="button"
               className="lp-calendar-day-details__close"
@@ -364,6 +366,39 @@ export function MonthlyCalendar({
           )}
         </div>
       )}
-    </section>
+
+      {milestones.length > 0 && onSelectMilestoneDate && (
+        <div className="lp-calendar-milestones" aria-label="Wszystkie terminy i ważne daty">
+          <h4 className="lp-calendar-milestones__title">Wszystkie terminy i ważne daty</h4>
+          <div className="lp-milestones">
+            {milestones.map((milestone) => (
+              <button
+                key={`${milestone.date}-${milestone.label}`}
+                type="button"
+                className={[
+                  'lp-milestone-chip',
+                  milestone.kind === 'deadline' ? 'lp-milestone-chip--deadline' : '',
+                  milestone.isPast ? 'lp-milestone-chip--past' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                title={milestone.description}
+                onClick={() => onSelectMilestoneDate(milestone.date)}
+              >
+                {milestone.isPast ? (
+                  <span className="lp-milestone-chip__past">Termin minął</span>
+                ) : (
+                  milestone.kind === 'deadline' && (
+                    <span className="lp-milestone-chip__kind">Termin</span>
+                  )
+                )}
+                <span className="lp-milestone-chip__date">{formatIsoPl(milestone.date)}</span>
+                <span className="lp-milestone-chip__text">{milestone.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
