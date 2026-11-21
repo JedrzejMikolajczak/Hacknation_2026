@@ -10,7 +10,8 @@
   font-size: var(--font-size-3xl);
 }
 
-.cases-list {
+.cases-list,
+.cases-upload-block {
   display: grid;
   gap: var(--space-3);
   list-style: none;
@@ -23,9 +24,10 @@
   border: var(--border-width) solid var(--color-border);
   border-inline-start: var(--accent-bar-width) solid var(--color-primary);
   border-radius: var(--radius-md);
+  background: var(--color-surface);
 }
 
-.cases-panel button {
+.cases-panel .cases-cta {
   justify-self: start;
   min-height: var(--tap-target-min);
   padding: var(--space-2) var(--space-4);
@@ -33,6 +35,73 @@
   border-radius: var(--radius-sm);
   background: var(--color-cta);
   color: var(--color-on-cta);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.cases-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.cases-secondary:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+.cases-upload-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cases-upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.cases-upload-input {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.cases-upload-label:focus-within,
+.cases-upload-input:focus-visible,
+.cases-cta:focus-visible,
+.cases-secondary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.cases-muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.cases-error {
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: var(--accent-bar-width) solid var(--color-error);
+  background: var(--color-error-soft);
+  color: var(--color-error);
   font-weight: var(--font-weight-bold);
 }
 

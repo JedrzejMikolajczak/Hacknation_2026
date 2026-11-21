@@ -13,12 +13,12 @@
 | Kod (zmienne, funkcje, typy, pola JSON, endpointy) | **angielski** | `maternityLeave`, `benefitBase` |
 | Teksty widoczne dla użytkownika | **polski** | „Zasiłek macierzyński” |
 | Komentarze w kodzie | polski lub angielski, krótko | |
-| Zmienne, funkcje, pola JSON | `camelCase` | `birthDate`, `calculateMaternityBenefit()` |
+| Zmienne, funkcje, pola JSON | `camelCase` | `birthDate`, `caseId`, `calculateMaternityBenefit()` |
 | Typy, interfejsy, komponenty React | `PascalCase` | `MaternityCalculationResult`, `WizardStep` |
 | Stałe | `UPPER_SNAKE_CASE` | `API_BASE_URL` |
 | Pliki TS (nie komponenty) | `camelCase.ts` | `benefitBase.ts` |
 | Pliki komponentów | `PascalCase.tsx` | `LeaveTimeline.tsx` |
-| Wartości enumów (string unions) | `camelCase` | `'selfEmployed'` |
+| Wartości enumów (string unions) | `camelCase` (wyjątek: kody maszynowe `ApiErrorCode` i `Warning['code']` → `UPPER_SNAKE_CASE`) | `'selfEmployed'`, `'VALIDATION_ERROR'` |
 | Ścieżki URL API | `kebab-case`, `/api/v1/...` | `/api/v1/calculate/benefit-base` |
 
 ## 2. Słownik domeny (PL → kod). UŻYWAJ DOKŁADNIE TYCH NAZW
@@ -114,6 +114,7 @@ Kody błędów: `VALIDATION_ERROR` (422), `NOT_FOUND` (404), `UNAUTHORIZED` (401
 | POST | `/api/v1/documents` | `ScenarioInput` → `DocumentChecklist` | Osoba 4 (treść: 1) |
 | GET | `/api/v1/cases` | → `ZusCaseSummary[]` | Osoba 6 |
 | GET | `/api/v1/cases/:caseId` | → `ZusCase` | Osoba 6 |
+| POST | `/api/v1/cases/evaluate` | `ZusCase` → `CaseEvaluationResult` (wgrana sprawa JSON) | Osoba 6 |
 | POST | `/api/v1/cases/:caseId/evaluate` | → `CaseEvaluationResult` | Osoba 6 |
 | GET | `/api/v1/mock/profiles` | → `MockProfileSummary[]` | Osoba 3 |
 | POST | `/api/v1/mock/login` | `{ profileId }` → `{ sessionToken, profile: UserProfile }` | Osoba 3 |
@@ -190,3 +191,4 @@ Aplikacja ma wyglądać jak część serwisu ZUS, żeby jury i użytkownik od ra
 | 2026-11-21 | Wersja początkowa | zespół |
 | 2026-11-21 | Dodano GET /api/v1/health – endpoint techniczny | JedrzejMikolajczak |
 | 2026-11-21 | Dodano §7.1 Wygląd: zgodność z www.zus.pl (tokeny w `client/src/styles/tokens.css`) | JedrzejMikolajczak |
+| 2026-11-21 | Doprecyzowano §1 (pola/enumy `camelCase`, w tym `caseId`; wyjątek `UPPER_SNAKE_CASE` dla kodów `ApiErrorCode` i `Warning['code']`) oraz dodano `POST /api/v1/cases/evaluate` w §6 | zespół |

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app';
+import employed from '../../../data/cases/etat-po-porodzie.json';
 
 describe('Przykładowe sprawy', () => {
   const app = request(createApp());
@@ -25,6 +26,34 @@ describe('Przykładowe sprawy', () => {
       calculation: { totalAmount: expected },
     });
     expect(response.body.data.benefitBase?.benefitBase ?? null).toBe(base);
+  });
+
+  it('przelicza wgraną sprawę JSON bez expectedDays i z null w kwocie oczekiwanej', async () => {
+    const uploaded = {
+      ...employed,
+      caseId: 'wgrana-sprawa',
+      expectedDays: undefined,
+      zusDecision: {
+        ...employed.zusDecision,
+        amount: null,
+      },
+    };
+    const response = await app.post('/api/v1/cases/evaluate').send(uploaded).expect(200);
+    expect(response.body.data).toMatchObject({
+      caseId: 'wgrana-sprawa',
+      matchesZusDecision: true,
+      differences: [],
+      calculation: { totalAmount: 85368.36 },
+    });
+    expect(response.body.data.benefitBase?.benefitBase ?? null).toBe(8629);
+  });
+
+  it('zwraca 422 VALIDATION_ERROR dla niepoprawnej wgranej sprawy JSON', async () => {
+    const response = await app
+      .post('/api/v1/cases/evaluate')
+      .send({ caseId: '', title: 'Brak scenariusza' })
+      .expect(422);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('zwraca 404 dla nieznanej sprawy', async () => {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { CaseEvaluationResult, ZusCase, ZusCaseSummary } from '@shared/types';
 import { apiGet, apiPost } from '../../api/client';
 import './CasesPage.css';
 
-type CaseDetails = ZusCase & { source: 'synthetic'; expectedDays: number };
+type CaseDetails = ZusCase & { source?: 'synthetic' | string; expectedDays?: number | null };
 const formatMoney = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' });
 const money = (amount: number | null) =>
   amount === null ? 'Nie dotyczy' : formatMoney.format(amount);
@@ -12,12 +12,39 @@ const right = (granted: boolean) => (granted ? 'Przysługuje' : 'Nie przysługuj
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Spróbuj ponownie.';
 
+function readFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') {
+    return file.text();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error ?? new Error('Błąd odczytu pliku.'));
+    reader.readAsText(file);
+  });
+}
+
+function formatScenarioMeta(item: CaseDetails): string {
+  const dateLabel = item.scenario.birthDate
+    ? `Data porodu: ${item.scenario.birthDate}`
+    : item.scenario.expectedBirthDate
+      ? `Przewidywana data porodu: ${item.scenario.expectedBirthDate}`
+      : item.scenario.childAcceptanceDate
+        ? `Data przyjęcia dziecka: ${item.scenario.childAcceptanceDate}`
+        : `Data odniesienia: ${item.scenario.referenceDate}`;
+  const variantLabel =
+    item.scenario.rateVariant === 'combined'
+      ? 'Wariant łączony (81,5%)'
+      : 'Wariant standardowy (100% i 70%)';
+  return `${dateLabel} · ${variantLabel}`;
+}
+
 function CaseComparison({ item, result }: { item: CaseDetails; result: CaseEvaluationResult }) {
   const expected = item.zusDecision;
   const entitlement = result.eligibility.entitlements.find(
     (entry) => entry.parentRole === 'mother' && entry.benefit === 'maternityBenefit',
   );
-  const rows = [
+  const rows: [string, string | number, string | number][] = [
     ['Prawo do świadczenia', right(expected.granted), right(entitlement?.entitled ?? false)],
     [
       'Podstawa wymiaru',
@@ -26,7 +53,7 @@ function CaseComparison({ item, result }: { item: CaseDetails; result: CaseEvalu
     ],
     [
       'Liczba dni',
-      item.expectedDays,
+      typeof item.expectedDays === 'number' ? item.expectedDays : 'Nie podano',
       result.calculation?.periods.reduce((sum, period) => sum + period.days, 0) ?? 0,
     ],
     ['Kwota brutto', money(expected.amount), money(result.calculation?.totalAmount ?? null)],
@@ -62,6 +89,47 @@ function CaseComparison({ item, result }: { item: CaseDetails; result: CaseEvalu
       {entitlement?.reason.legalBasis && (
         <p>
           <small>{entitlement.reason.legalBasis}</small>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function CaseSummaryCard({
+  item,
+  pending,
+  evaluationError,
+  buttonLabel,
+  onEvaluate,
+}: {
+  item: CaseDetails;
+  pending: boolean;
+  evaluationError?: string;
+  buttonLabel: string;
+  onEvaluate: () => void;
+}) {
+  const income = item.benefitBaseInput?.incomes[0];
+  return (
+    <section className="cases-panel">
+      <h2>{item.title}</h2>
+      <p>{formatScenarioMeta(item)}</p>
+      {income && (
+        <p>
+          Wynagrodzenie za miesiąc {income.month}: {money(income.grossAmount)} brutto.
+        </p>
+      )}
+      {item.zusDecision.note && (
+        <details>
+          <summary>Jak ustalono wynik oczekiwany</summary>
+          <p>{item.zusDecision.note}</p>
+        </details>
+      )}
+      <button type="button" className="cases-cta" disabled={pending} onClick={onEvaluate}>
+        {pending ? 'Obliczanie…' : buttonLabel}
+      </button>
+      {evaluationError && (
+        <p className="cases-error" role="alert">
+          {evaluationError}
         </p>
       )}
     </section>
@@ -104,30 +172,144 @@ function CaseDetail({ caseId }: { caseId: string }) {
     }
   }
 
-  if (loadError) return <p role="alert">{loadError}</p>;
+  if (loadError) {
+    return (
+      <p className="cases-error" role="alert">
+        {loadError}
+      </p>
+    );
+  }
   if (!item) return <p role="status">Wczytywanie sprawy…</p>;
-  const income = item.benefitBaseInput?.incomes[0];
   return (
     <>
-      <section className="cases-panel">
-        <h2>{item.title}</h2>
-        <p>Data porodu: {item.scenario.birthDate} · Wariant standardowy (100% i 70%)</p>
-        {income && (
-          <p>
-            Wynagrodzenie za miesiąc {income.month}: {money(income.grossAmount)} brutto.
-          </p>
-        )}
-        <details>
-          <summary>Jak ustalono wynik oczekiwany</summary>
-          <p>{item.zusDecision.note}</p>
-        </details>
-        <button type="button" disabled={pending} onClick={() => void evaluate()}>
-          {pending ? 'Obliczanie…' : 'Uruchom kalkulator dla tej sprawy'}
-        </button>
-        {evaluationError && <p role="alert">{evaluationError}</p>}
-      </section>
+      <CaseSummaryCard
+        item={item}
+        pending={pending}
+        evaluationError={evaluationError}
+        buttonLabel="Uruchom kalkulator dla tej sprawy"
+        onEvaluate={() => void evaluate()}
+      />
       {result && <CaseComparison item={item} result={result} />}
     </>
+  );
+}
+
+function CaseUploadSection() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string>();
+  const [uploadedCase, setUploadedCase] = useState<CaseDetails>();
+  const [result, setResult] = useState<CaseEvaluationResult>();
+  const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
+
+  async function evaluateUploaded(payload: CaseDetails) {
+    setPending(true);
+    setError(undefined);
+    setResult(undefined);
+    try {
+      const evaluated = await apiPost<CaseEvaluationResult>('/cases/evaluate', payload);
+      setResult(evaluated);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError(undefined);
+    setResult(undefined);
+    setUploadedCase(undefined);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await readFileText(file));
+    } catch {
+      setError('Nie udało się odczytać pliku JSON. Sprawdź poprawność składni.');
+      return;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setError('Plik musi zawierać pojedynczy obiekt sprawy ZUS w formacie JSON.');
+      return;
+    }
+
+    const candidate = parsed as CaseDetails;
+    if (
+      typeof candidate.caseId !== 'string' ||
+      typeof candidate.title !== 'string' ||
+      typeof candidate.scenario !== 'object' ||
+      candidate.scenario === null ||
+      typeof candidate.zusDecision !== 'object' ||
+      candidate.zusDecision === null
+    ) {
+      setError(
+        'Niekompletny plik sprawy. Wymagane pola: caseId, title, scenario oraz zusDecision.',
+      );
+      return;
+    }
+
+    setUploadedCase(candidate);
+    await evaluateUploaded(candidate);
+  }
+
+  function clearUpload() {
+    setFileName(undefined);
+    setUploadedCase(undefined);
+    setResult(undefined);
+    setError(undefined);
+    if (inputRef.current) {
+      inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <section className="cases-upload-block" aria-labelledby="cases-upload-heading">
+      <div className="cases-panel">
+        <h2 id="cases-upload-heading">Wgraj własną sprawę lub wniosek (JSON)</h2>
+        <p className="cases-muted">
+          Wybierz plik JSON w formacie sprawy ZUS (<code>ZusCase</code>), aby przeliczyć ją przez
+          kalkulator i porównać wynik z decyzją ZUS.
+        </p>
+        <div className="cases-upload-controls">
+          <label className="cases-upload-label" htmlFor="case-upload-input">
+            Wybierz plik JSON
+          </label>
+          <input
+            ref={inputRef}
+            id="case-upload-input"
+            className="cases-upload-input"
+            type="file"
+            accept=".json,application/json"
+            onChange={(event) => void handleFileChange(event)}
+          />
+          {fileName && <span className="cases-muted">Plik: {fileName}</span>}
+          {(uploadedCase || error) && (
+            <button type="button" className="cases-secondary" onClick={clearUpload}>
+              Wyczyść wgraną sprawę
+            </button>
+          )}
+        </div>
+        {error && (
+          <p className="cases-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {uploadedCase && (
+        <CaseSummaryCard
+          item={uploadedCase}
+          pending={pending}
+          buttonLabel="Przelicz ponownie wgraną sprawę"
+          onEvaluate={() => void evaluateUploaded(uploadedCase)}
+        />
+      )}
+      {uploadedCase && result && <CaseComparison item={uploadedCase} result={result} />}
+    </section>
   );
 }
 
@@ -148,7 +330,13 @@ function CasesList() {
       active = false;
     };
   }, []);
-  if (error) return <p role="alert">{error}</p>;
+  if (error) {
+    return (
+      <p className="cases-error" role="alert">
+        {error}
+      </p>
+    );
+  }
   if (!items) return <p role="status">Wczytywanie spraw…</p>;
   return (
     <ul className="cases-list">
@@ -170,7 +358,14 @@ export function CasesPage() {
       <Link to={caseId ? '/cases' : '/'}>{caseId ? 'Wszystkie sprawy' : 'Strona główna'}</Link>
       <h1>Przykładowe sprawy</h1>
       <p>Przykłady syntetyczne. Wyniki oczekiwane wyliczono ręcznie na potrzeby demonstracji.</p>
-      {caseId ? <CaseDetail key={caseId} caseId={caseId} /> : <CasesList />}
+      {caseId ? (
+        <CaseDetail key={caseId} caseId={caseId} />
+      ) : (
+        <>
+          <CaseUploadSection />
+          <CasesList />
+        </>
+      )}
     </main>
   );
 }
