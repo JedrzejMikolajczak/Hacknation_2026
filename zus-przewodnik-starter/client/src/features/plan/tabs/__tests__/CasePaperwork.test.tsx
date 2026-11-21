@@ -164,6 +164,180 @@ describe('CaseDocuments', () => {
     expect(screen.getByRole('link', { name: 'Uzupełnij dane ›' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dalej: Wnioski ›' })).toBeInTheDocument();
   });
+
+  it('dla umowy zlecenia > 20 wskazuje zleceniodawcę jako płatnika i miejsce złożenia ZAM (bez Z-3a)', () => {
+    const mandateOver20Docs: CaseDocument[] = [
+      {
+        id: 'ZAM',
+        name_pl: 'ZAM – wniosek o zasiłek macierzyński (do płatnika składek – zleceniodawcy)',
+        parent_role: 'MOTHER',
+        submit_to: 'EMPLOYER',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+      {
+        id: 'BIRTH_CERTIFICATE',
+        name_pl: 'Skrócony odpis aktu urodzenia dziecka',
+        parent_role: 'MOTHER',
+        submit_to: 'EMPLOYER',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+    ];
+
+    renderWithRouter(<CaseDocuments documents={mandateOver20Docs} effectiveDate="2026-10-24" />);
+
+    expect(
+      screen.getByText(/U zleceniodawcy \(> 20 ubezpieczonych – wypłaca zleceniodawca\)/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Bezpośrednio w ZUS/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Zleceniodawca').length).toBeGreaterThan(0);
+    expect(screen.getByText(/u zleceniodawcy\./)).toBeInTheDocument();
+  });
+
+  it('dla umowy zlecenia ≤ 20 pokazuje złożenie w ZUS i przekazanie Z-3a przez zleceniodawcę', () => {
+    const mandateSmallDocs: CaseDocument[] = [
+      {
+        id: 'ZAM',
+        name_pl: 'ZAM – wniosek o zasiłek macierzyński',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+      {
+        id: 'Z-3a',
+        name_pl: 'Z-3a – zaświadczenie płatnika składek przekazywane przez zleceniodawcę',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+    ];
+
+    renderWithRouter(<CaseDocuments documents={mandateSmallDocs} effectiveDate="2026-10-24" />);
+
+    expect(
+      screen.getByText(
+        /W ZUS \(PUE\/eZUS\) – zleceniodawca przekazuje Z-3a do ZUS \(wypłaca ZUS\)/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Z-3a – zaświadczenie płatnika składek przekazywane przez zleceniodawcę'),
+    ).toBeInTheDocument();
+  });
+
+  it('dla martwego urodzenia wyświetla odrębny dokument ze spokojnym, empatycznym opisem bez wykrzykników', () => {
+    const stillbirthDocs: CaseDocument[] = [
+      {
+        id: 'ZAM',
+        name_pl: 'ZAM – wniosek o zasiłek macierzyński',
+        parent_role: 'MOTHER',
+        submit_to: 'EMPLOYER',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 29–29a i 61',
+      },
+      {
+        id: 'STILLBIRTH_CERTIFICATE',
+        name_pl:
+          'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu lub zaświadczenie o martwym urodzeniu',
+        parent_role: 'MOTHER',
+        submit_to: 'EMPLOYER',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Kodeks pracy, art. 180 i 180¹',
+      },
+    ];
+
+    const { container } = renderWithRouter(
+      <CaseDocuments documents={stillbirthDocs} effectiveDate="2026-10-24" />,
+    );
+
+    expect(
+      screen.getByText(
+        'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu lub zaświadczenie o martwym urodzeniu',
+      ),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toContain('!');
+    expect(container.textContent).not.toMatch(/gratulacj/i);
+  });
+
+  it('w ciąży bez daty zwolnienia oraz przy wcześniejszym macierzyńskim pokazuje właściwe dokumenty', () => {
+    const pregnancyAndEarlyDocs: CaseDocument[] = [
+      {
+        id: 'e-ZLA',
+        name_pl: 'e-ZLA (kod „B”) – elektroniczne zaświadczenie lekarskie w ciąży',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 4, 8 i 11',
+      },
+      {
+        id: 'ZAS-53',
+        name_pl: 'ZAS-53 – wniosek o zasiłek chorobowy',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Ustawa zasiłkowa, art. 4, 8 i 11',
+      },
+      {
+        id: 'EXPECTED_BIRTH_CERTIFICATE',
+        name_pl: 'Zaświadczenie lekarskie o przewidywanej dacie porodu',
+        parent_role: 'MOTHER',
+        submit_to: 'ZUS',
+        leave_type: null,
+        start_date: null,
+        end_date: null,
+        deadline: null,
+        is_overdue: false,
+        legal_basis: 'Kodeks pracy, art. 180 i 180¹',
+      },
+    ];
+
+    renderWithRouter(
+      <CaseDocuments documents={pregnancyAndEarlyDocs} effectiveDate="2026-10-24" />,
+    );
+
+    expect(screen.getByText(/Bezpośrednio w ZUS/)).toBeInTheDocument();
+    expect(screen.getByText('ZAS-53 – wniosek o zasiłek chorobowy')).toBeInTheDocument();
+    expect(
+      screen.getByText('Zaświadczenie lekarskie o przewidywanej dacie porodu'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/maksymalnie 6 tygodni przed przewidywaną datą porodu/),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('CaseApplications', () => {
