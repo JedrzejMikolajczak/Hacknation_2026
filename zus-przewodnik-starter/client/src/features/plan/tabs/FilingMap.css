@@ -1,0 +1,378 @@
+/*
+ * Mapa składania dokumentów. Laptop: oś po lewej + panel po prawej (li = display: contents,
+ * więc przycisk-węzeł i panel są komórkami jednej siatki). Telefon: oś pionowa, panel pod krokiem.
+ */
+
+.fmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fmap__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.fmap__progress {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fmap__hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.fmap__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fmap__step {
+  position: relative;
+  animation: fmap-in 0.6s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  animation-delay: calc(var(--i, 0) * 0.07s);
+}
+
+@keyframes fmap-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 1rem, 0);
+  }
+}
+
+/* Linia łącząca kroki */
+.fmap__step::before {
+  content: '';
+  position: absolute;
+  top: 2.75rem;
+  bottom: -0.25rem;
+  left: 1.3125rem;
+  width: 2px;
+  background: var(--color-border);
+}
+.fmap__step:last-child::before {
+  display: none;
+}
+.fmap__step--done::before {
+  background: var(--color-primary);
+}
+
+.fmap__node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.3s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.fmap__node:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  transform: translate3d(2px, 0, 0);
+}
+
+.fmap__step--active > .fmap__node {
+  border-color: #cfe6d8;
+  background: var(--color-surface);
+  box-shadow: 0 14px 30px -20px rgb(0 70 30 / 0.5);
+}
+
+.fmap__dot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 2px solid var(--color-border-control);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fmap__step--active .fmap__dot {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.fmap__step--done .fmap__dot {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+}
+.fmap__step--overdue .fmap__dot {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+.fmap__step--auto .fmap__dot {
+  border-style: dashed;
+  color: var(--color-text-muted);
+}
+
+.fmap__node-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fmap__node-kind {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fmap__node-title {
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  text-wrap: pretty;
+}
+
+.fmap__node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.fmap__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+.fmap__chip--soft {
+  background: #eceff0;
+  color: #3d4a44;
+}
+.fmap__chip--date {
+  background: #fff3de;
+  color: #7a4d00;
+}
+.fmap__chip--alert {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+/* ───────── Panel szczegółów ───────── */
+.fmap__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-1) 0 var(--space-3) var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid #cfe6d8;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(0 120 52 / 0.08), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f1f9f4 100%);
+  animation: fmap-detail 0.45s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@keyframes fmap-detail {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.5rem, 0);
+  }
+}
+
+.fmap__detail-kicker {
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fmap__detail-title {
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.fmap__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.fmap__facts > div {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid #dcebe2;
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.85);
+}
+
+.fmap__facts dt {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fmap__facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+.fmap__overdue {
+  color: var(--color-error);
+}
+
+.fmap__todo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: fmap-todo;
+}
+
+.fmap__todo > li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-left: var(--space-6);
+  counter-increment: fmap-todo;
+}
+
+.fmap__todo > li::before {
+  content: counter(fmap-todo);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.fmap__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fmap__cta {
+  text-decoration: none;
+}
+
+.fmap__alt {
+  color: var(--color-text-muted);
+}
+
+.fmap__auto {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-info-soft);
+}
+
+.fmap__done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.fmap__done input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-primary);
+}
+
+/* ───────── Laptop: oś po lewej, panel po prawej ───────── */
+@media (min-width: 1024px) {
+  .fmap__list {
+    display: grid;
+    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+    grid-template-rows: repeat(var(--n), auto) 1fr;
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .fmap__step {
+    display: contents;
+  }
+
+  /* li ma display: contents – animację i linię przenosimy na węzeł */
+  .fmap__node {
+    grid-column: 1;
+    animation: fmap-in 0.6s var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+  }
+
+  .fmap__node::after {
+    content: '';
+    position: absolute;
+    top: 3.5rem;
+    bottom: -0.5rem;
+    left: 2.3125rem;
+    width: 2px;
+    background: var(--color-border);
+  }
+  .fmap__step:last-child .fmap__node::after {
+    display: none;
+  }
+  .fmap__step--done .fmap__node::after {
+    background: var(--color-primary);
+  }
+  .fmap__step::before {
+    display: none;
+  }
+
+  .fmap__detail {
+    position: sticky;
+    top: var(--space-4);
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin: 0;
+    padding: var(--space-5);
+  }
+}

@@ -83,7 +83,33 @@
   }
 }
 
+
+.application-preview__delivery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #cfe6d8;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+}
+
+.application-preview__delivery h3 {
+  font-size: var(--font-size-md);
+}
+
+.application-preview__delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 @media print {
+  .application-preview__delivery {
+    display: none;
+  }
+
   body:has(> .application-preview[open]) > :not(.application-preview) {
     display: none !important;
   }
