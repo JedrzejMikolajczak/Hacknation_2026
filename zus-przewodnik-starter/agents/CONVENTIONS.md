@@ -104,6 +104,7 @@ Kody błędów: `VALIDATION_ERROR` (422), `NOT_FOUND` (404), `UNAUTHORIZED` (401
 
 | Metoda | Ścieżka | Body → `data` | Właściciel |
 |---|---|---|---|
+| GET | `/api/v1/health` | → `{ status: 'ok' }` (endpoint techniczny) | Osoba 4 |
 | POST | `/api/v1/eligibility` | `ScenarioInput` → `EligibilityResult` | Osoba 4 (engine: 3/5) |
 | POST | `/api/v1/calculate/maternity` | `ScenarioInput` → `MaternityCalculationResult` | Osoba 4 (engine: 5) |
 | POST | `/api/v1/calculate/benefit-base` | `BenefitBaseInput` → `BenefitBaseResult` | Osoba 4 (engine: 6) |
@@ -156,3 +157,4 @@ Frontend woła API **tylko** przez `client/src/api/client.ts` (jedno miejsce z `
 | Data | Zmiana | Autor |
 |---|---|---|
 | 2026-11-21 | Wersja początkowa | zespół |
+| 2026-11-21 | Dodano GET /api/v1/health – endpoint techniczny | JedrzejMikolajczak |
