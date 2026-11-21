@@ -81,9 +81,7 @@ function QuestionField({
           min={question.type === 'number' ? question.min : undefined}
           max={question.type === 'number' ? question.max : undefined}
           step={question.step}
-          inputMode={
-            question.type === 'date' || question.step === '1' ? 'numeric' : 'decimal'
-          }
+          inputMode={question.type === 'date' || question.step === '1' ? 'numeric' : 'decimal'}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
           onChange={(event) => {

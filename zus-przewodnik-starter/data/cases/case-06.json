@@ -105,10 +105,7 @@
     "granted_duration_days": 103,
     "granted_duration_weeks": null,
     "calculated_amount_pln": null,
-    "mapped_forms_2026": [
-      "ZAM",
-      "POG"
-    ],
+    "mapped_forms_2026": ["ZAM", "POG"],
     "legal_basis_cited": [
       "art. 182(1a) Kodeksu pracy",
       "art. 182(1c) Kodeksu pracy",

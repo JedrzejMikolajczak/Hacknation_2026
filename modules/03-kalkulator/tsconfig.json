@@ -1,8 +1,0 @@
-{
-  "compilerOptions": {
-    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
-    "strict": true, "noEmit": true, "allowImportingTsExtensions": true,
-    "skipLibCheck": true, "resolveJsonModule": true
-  },
-  "include": ["index.ts", "core.ts", "benefitBase.ts", "eligibility.ts", "maternity.ts"]
-}
