@@ -17,6 +17,11 @@ import {
 } from './wizardModel';
 import './WizardPage.css';
 
+function formatDateInput(value: string): string {
+  const digits = displayDate(value).replace(/\D/g, '');
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
+}
+
 function QuestionField({
   question,
   value,
@@ -77,15 +82,26 @@ function QuestionField({
           max={question.type === 'number' ? question.max : undefined}
           step={question.step}
           inputMode={
-            question.type === 'number' ? (question.step === '1' ? 'numeric' : 'decimal') : undefined
+            question.type === 'date' || question.step === '1' ? 'numeric' : 'decimal'
           }
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
-          onChange={(event) =>
-            onChange(
-              question.type === 'date' ? dateInputToIso(event.target.value) : event.target.value,
-            )
-          }
+          onChange={(event) => {
+            const input = event.currentTarget;
+            if (question.type !== 'date') {
+              onChange(input.value);
+              return;
+            }
+
+            const formatted = formatDateInput(input.value);
+            if (formatted !== input.value) {
+              const prefix = input.value.slice(0, input.selectionStart ?? input.value.length);
+              const position = formatDateInput(prefix).length;
+              input.value = formatted;
+              input.setSelectionRange(position, position);
+            }
+            onChange(dateInputToIso(formatted));
+          }}
         />
       </label>
       {question.unknownLabel && (
