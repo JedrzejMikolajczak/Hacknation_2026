@@ -33,9 +33,21 @@ export function diffDaysIso(from: IsoDate, to: IsoDate): number {
   return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
 }
 
+export function livingChildren(input: CaseInputs): number {
+  if (input.deceased_children_count !== undefined) {
+    return input.children_count - input.deceased_children_count;
+  }
+  return input.living_children_count ??
+    (input.special_circumstances.stillbirth_or_child_death === 'NONE'
+      ? input.children_count
+      : Math.max(0, input.children_count - 1));
+}
+
 export function combinedRateUnavailable(input: CaseInputs, params: BenefitParams): boolean {
   if (
     input.special_circumstances.mother_deceased ||
+    Boolean(input.mother_abandonment_date) ||
+    livingChildren(input) === 0 ||
     (input.applicant_role === 'FATHER' && input.stage !== 'ADOPTION')
   )
     return true;

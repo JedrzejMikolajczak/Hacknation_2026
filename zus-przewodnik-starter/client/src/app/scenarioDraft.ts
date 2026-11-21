@@ -27,6 +27,16 @@ export type ScenarioDraft = Partial<
   sicknessBenefitBaseInput?: BenefitBaseInput;
   motherDeathDate?: IsoDate | null;
   motherAbandonmentDate?: IsoDate | null;
+  motherWasInsuredAtAbandonment?: boolean;
+  motherMaternityDaysUsed?: number;
+  fatherStopsGainfulActivity?: boolean;
+  unlawfulTerminationConfirmedByCourt?: boolean;
+  deceasedChildrenCount?: number;
+  additionalInsurance?: {
+    parent: Partial<ParentData>;
+    sicknessInsured: boolean | null;
+    baseInput?: BenefitBaseInput;
+  };
 };
 
 export interface PregnancySickLeave {

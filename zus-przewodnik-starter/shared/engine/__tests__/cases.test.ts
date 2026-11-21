@@ -709,6 +709,8 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
         benefit_base_amount_pln: 5000,
         father_parental_weeks: 0,
         father_takeover_date: '2026-12-01',
+        mother_abandonment_date: '2026-11-30',
+        mother_was_insured_at_abandonment: false,
         special_circumstances: {
           ...baseTwoParentInput().special_circumstances,
           mother_abandoned_child: true,
@@ -726,7 +728,7 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
       true,
     );
 
-    // 2. Bezprawne zwolnienie potwierdzone wyrokiem sądu (art. 30 ust. 3) – ZUS wypłaca zasiłek mimo końca umowy przed porodem
+    // 2. Bezprawne zwolnienie potwierdzone wyrokiem sądu (art. 30 ust. 1 pkt 2) – ZUS wypłaca zasiłek mimo końca umowy przed porodem
     const unlawful = calculateCasePlan(
       baseTwoParentInput({
         stage: 'PREGNANCY',
@@ -742,11 +744,15 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
     );
     expect(unlawful.outcome.is_qualified).toBe(true);
     expect(
-      unlawful.entitlements.find((e) => e.benefit_type === 'MATERNITY_EQUIVALENT'),
+      unlawful.entitlements.find((e) => e.benefit_type === 'MATERNITY'),
     ).toMatchObject({ is_qualified: true, who_pays: 'ZUS' });
-    expect(unlawful.documents.some((d) => d.id === 'COURT_JUDGMENT' && d.submit_to === 'ZUS')).toBe(
-      true,
-    );
+    expect(
+      unlawful.entitlements.find((e) => e.benefit_type === 'MATERNITY_EQUIVALENT')?.is_qualified,
+    ).not.toBe(true);
+    expect(unlawful.documents).toContainEqual(expect.objectContaining({
+      id: 'COURT_RULING_UNLAWFUL_TERMINATION',
+      submit_to: 'ZUS',
+    }));
 
     // 3. Dwa tytuły ubezpieczenia naraz (UoP + dobrowolne JDG)
     const dual = calculateCasePlan(
@@ -757,8 +763,12 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
       params,
     );
     expect(dual.outcome.warnings.some((w) => w.code === 'MULTIPLE_INSURANCE_TITLES')).toBe(true);
-    expect(dual.documents.some((d) => d.id === 'SECONDARY_TITLE_ZAM' && d.submit_to === 'ZUS')).toBe(
-      true,
+    expect(dual.additional_title_outcomes?.[0]).toMatchObject({
+      employment_type: 'B2B',
+      outcome: { is_qualified: true, who_pays: 'ZUS', calculated_amount_pln: null },
+    });
+    expect(dual.additional_title_outcomes?.[0].documents).toContainEqual(
+      expect.objectContaining({ id: 'ZAM', submit_to: 'ZUS' }),
     );
 
     // 4. Poród mnogi (trojaczki) z liczbą zmarłych dzieci = 2 → zostaje 1 żywe dziecko (20 tyg. macierzyńskiego, 41 tyg. rodzicielskiego)

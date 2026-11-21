@@ -12,7 +12,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { benefitLabels, parentLabels, payerLabel, percent, roles } from '../caseLabels';
-import { combinedRateUnavailable, formatPln, formatPolishDate } from '../planScenario';
+import { combinedRateUnavailable, formatPln, formatPolishDate, livingChildren } from '../planScenario';
 import './CaseResults.css';
 
 const PARENT_GROUP_LABELS: Record<ApplicantRole, string> = {
@@ -528,10 +528,10 @@ export function CaseCalculator({
   update: (patch: Partial<CaseInputs>) => void;
 }) {
   const { search } = useLocation();
-  const { outcome } = plan;
+  const { outcome, additional_title_outcomes: additionalTitles } = plan;
 
   const difficult = input.special_circumstances.stillbirth_or_child_death !== 'NONE';
-  const living = input.living_children_count ?? input.children_count;
+  const living = livingChildren(input);
   const childLostAll = difficult && living <= 0;
 
   const activePeriods = outcome.periods.filter((period) => !period.denied);
@@ -598,7 +598,9 @@ export function CaseCalculator({
         {displayPeriods.length === 0 ? (
           <>
             <p className="results-answer__headline">
-              Dla podanych danych świadczenie nie przysługuje.
+              {additionalTitles?.length
+                ? 'Z tytułu głównego świadczenie nie przysługuje.'
+                : 'Dla podanych danych świadczenie nie przysługuje.'}
             </p>
             <p className="results-answer__sub">
               {outcome.denial_or_reduction_reason_pl ??
@@ -626,7 +628,8 @@ export function CaseCalculator({
 
             {primarySummary.totalAmount !== null ? (
               <p className="results-answer__total">
-                Łącznie: <strong>{formatPln(allParentsTotal)}</strong>
+                {additionalTitles?.length ? 'Łącznie w planie głównym:' : 'Łącznie:'}{' '}
+                <strong>{formatPln(allParentsTotal)}</strong>
                 {outcome.benefit_base_pln !== null && (
                   <span className="results-answer__sub">
                     {' '}
@@ -687,6 +690,45 @@ export function CaseCalculator({
           </>
         )}
       </section>
+
+      {additionalTitles?.map(({ employment_type: title, outcome: result, documents }, index) => {
+        const titleLabel = { UOP: 'Umowa o pracę', ZLECENIE: 'Umowa zlecenie', B2B: 'JDG' }[title];
+        const periods = [...result.periods, ...result.employer_sick_pay];
+        const payer = title === 'ZLECENIE' && result.who_pays === 'EMPLOYER'
+          ? 'wypłaca zleceniodawca'
+          : formatPayerClause(result.who_pays);
+        return (
+          <section className="results-answer results-answer--info" key={index}>
+            <h2 className="results-answer__title">Dodatkowy tytuł {index + 1} · {titleLabel}</h2>
+            {result.is_qualified ? (
+              <p className="results-answer__sub">
+                Łącznie {formatPln(result.calculated_amount_pln)} · podstawa{' '}
+                {formatPln(result.benefit_base_pln)} · {payer}
+              </p>
+            ) : (
+              <p className="results-answer__sub">{result.decision_summary_pl}</p>
+            )}
+            {periods.length > 0 && (
+              <details className="results-details">
+                <summary className="results-details__summary">Okresy i kwoty z tego tytułu</summary>
+                <div className="results-details__body">
+                  <PeriodCards periods={periods} showAmounts />
+                </div>
+              </details>
+            )}
+            {documents.length > 0 && (
+              <details className="results-details">
+                <summary className="results-details__summary">Dokumenty z tego tytułu</summary>
+                <ul className="results-details__body">
+                  {documents.map((document, documentIndex) => (
+                    <li key={`${document.id}-${documentIndex}`}>{document.name_pl}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+        );
+      })}
 
       {outcome.warnings.length > 0 && (
         <section aria-label="Ostrzeżenia kalkulatora">

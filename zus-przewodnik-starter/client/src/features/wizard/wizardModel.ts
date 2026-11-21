@@ -39,6 +39,7 @@ export interface WizardQuestion {
   min?: number | string;
   max?: number | string;
   step?: string;
+  optional?: boolean;
 }
 
 const YES_NO: QuestionOption[] = [
@@ -84,10 +85,29 @@ function applicableParents(
 ): ParentRole[] {
   const roles = parentRoles(answers);
   return situation === 'afterBirth' &&
-    (answers.motherSituation === 'deceased' || answers.motherSituation === 'abandoned') &&
+    ['deceased', 'abandoned'].includes(answers.motherSituation) &&
     roles.includes('father')
     ? roles.filter((role) => role !== 'mother')
     : roles;
+}
+
+function migrateContractAnswers(situation: SituationType, answers: Record<string, string>) {
+  const next = { ...answers };
+  const applicant = applicableParents(situation, answers)[0];
+  if (applicant && answers[`${applicant}.hasSecondaryTitle`] === 'yes' &&
+    next['additionalInsurance.insuranceTitle'] === undefined) {
+    const oldTitle = answers[`${applicant}.secondaryInsuranceTitle`];
+    if (oldTitle) {
+      next['additionalInsurance.insuranceTitle'] = oldTitle;
+      next['additionalInsurance.sicknessInsured'] =
+        answers[`${applicant}.secondarySicknessInsurance`] ?? 'unknown';
+    }
+  }
+  if (next.employerBankruptcyOrLiquidation === undefined &&
+      answers.unlawfulTerminationConfirmedByCourt === 'yes') {
+    next.employerBankruptcyOrLiquidation = 'unlawful';
+  }
+  return next;
 }
 
 export function getQuestions(
@@ -105,7 +125,6 @@ export function getQuestions(
     situation === 'afterBirth' &&
     answers.motherSituation === 'abandoned' &&
     roles.includes('father');
-  const motherUnavailable = motherDeceased || motherAbandoned;
   const questions: WizardQuestion[] = [
     {
       id: 'family',
@@ -237,13 +256,11 @@ export function getQuestions(
   const childLost =
     situation === 'afterBirth' &&
     (answers.birthOutcome === 'stillbirth' || answers.birthOutcome === 'childDeath');
-  const parsedChildrenCount = Number(answers.childrenCount);
-  const multipleBirth = Number.isInteger(parsedChildrenCount) && parsedChildrenCount > 1;
-  const parsedDeceasedCount = Number(answers.deceasedChildrenCount);
+
+  const childrenCount = numberOrNull(answers.childrenCount);
+  const multipleChildren = childrenCount !== null && childrenCount > 1;
   const allChildrenLost =
-    childLost &&
-    (!multipleBirth ||
-      (Number.isInteger(parsedDeceasedCount) && parsedDeceasedCount >= parsedChildrenCount));
+    childLost && (!multipleChildren || numberOrNull(answers.deceasedChildrenCount) === childrenCount);
 
   // Dane faktycznego porodu są dostępne wyłącznie na ścieżce po narodzinach.
   if (situation === 'afterBirth') {
@@ -260,17 +277,17 @@ export function getQuestions(
         { value: 'childDeath', label: 'Dziecko zmarło po porodzie' },
       ],
     });
-    if (childLost && multipleBirth) {
+    if (childLost && multipleChildren) {
       questions.push({
         id: 'deceasedChildrenCount',
         stage: 1,
         type: 'number',
-        title: 'Ile dzieci z tego porodu nie przeżyło?',
-        label: 'Liczba zmarłych dzieci',
+        title: 'Ilu dzieci dotyczy strata?',
+        label: 'Liczba zmarłych lub martwo urodzonych dzieci',
         min: 1,
-        max: parsedChildrenCount,
+        max: childrenCount,
         step: '1',
-        hint: 'Przy porodzie mnogim wymiar urlopu ustala się stosownie do liczby dzieci pozostałych przy życiu (KP art. 180¹).',
+        optional: true,
       });
     }
     if (answers.birthOutcome === 'childDeath') {
@@ -278,15 +295,15 @@ export function getQuestions(
         id: 'childDeathDate',
         stage: 1,
         type: 'date',
-        title: 'Kiedy zmarło dziecko?',
-        label: 'Data śmierci dziecka',
+        title: multipleChildren ? 'Kiedy zmarło ostatnie z tych dzieci?' : 'Kiedy zmarło dziecko?',
+        label: multipleChildren ? 'Data śmierci ostatniego z tych dzieci' : 'Data śmierci dziecka',
         min: answers.birthDate && answers.birthDate !== 'unknown' ? answers.birthDate : undefined,
         max: todayLocal(),
       });
     }
   }
 
-  if (situation === 'afterBirth' && !allChildrenLost) {
+  if (situation === 'afterBirth' && !allChildrenLost && (!childLost || answers.deceasedChildrenCount)) {
     questions.push({
       id: 'hospitalization',
       stage: 1,
@@ -334,7 +351,7 @@ export function getQuestions(
   }
 
   // Zaświadczenie „Za życiem” wydaje się także w czasie ciąży – wydłuża urlop rodzicielski.
-  if (situation === 'pregnant' || (situation === 'afterBirth' && !allChildrenLost)) {
+  if (situation === 'pregnant' || (situation === 'afterBirth' && !allChildrenLost && (!childLost || answers.deceasedChildrenCount))) {
     questions.push({
       id: 'zaZyciemCertificate',
       stage: 1,
@@ -373,6 +390,39 @@ export function getQuestions(
           : []),
       ],
     });
+    if (motherAbandoned) {
+      questions.push(
+        {
+          id: 'motherAbandonmentDate',
+          stage: 1,
+          type: 'date',
+          title: 'Kiedy mama porzuciła dziecko?',
+          label: 'Data porzucenia dziecka',
+          min: answers.birthDate,
+          max: today,
+        },
+        {
+          id: 'motherWasInsuredAtAbandonment',
+          stage: 1,
+          type: 'choice',
+          title: 'Czy mama podlegała ubezpieczeniu chorobowemu z tytułu urodzenia dziecka?',
+          label: 'Ubezpieczenie mamy w sprawie przejęcia zasiłku',
+          options: YES_NO,
+        },
+      );
+      if (answers.motherWasInsuredAtAbandonment === 'yes') {
+        questions.push({
+          id: 'motherMaternityDaysUsed',
+          stage: 1,
+          type: 'number',
+          title: 'Ile dni zasiłku macierzyńskiego mama wykorzystała po porodzie?',
+          label: 'Dni zasiłku wykorzystane przez mamę po porodzie',
+          min: 0,
+          step: '1',
+          unknownLabel: 'Nie znam tej liczby',
+        });
+      }
+    }
     if (motherDeceased) {
       questions.push({
         id: 'motherDeathDate',
@@ -383,18 +433,6 @@ export function getQuestions(
         min: answers.birthDate,
         max: today,
         hint: 'Ta data jest potrzebna do ustalenia początku urlopu taty.',
-      });
-    }
-    if (motherAbandoned) {
-      questions.push({
-        id: 'motherAbandonmentDate',
-        stage: 1,
-        type: 'date',
-        title: 'Kiedy mama porzuciła dziecko?',
-        label: 'Data porzucenia dziecka przez matkę',
-        min: answers.birthDate,
-        max: today,
-        hint: 'Ta data jest potrzebna do ustalenia początku przejęcia urlopu przez tatę (KP art. 180 § 13).',
       });
     }
   }
@@ -420,6 +458,17 @@ export function getQuestions(
         label: `Składka chorobowa ${person}`,
         options: YES_NO,
         hint: 'Jeśli nie macie pewności, możecie uzupełnić tę informację później.',
+      });
+    }
+    if (role === 'father' && motherAbandoned &&
+        (title === 'mandateContract' || title === 'selfEmployed')) {
+      questions.push({
+        id: 'fatherStopsGainfulActivity',
+        stage: 2,
+        type: 'choice',
+        title: 'Czy tata przerwie działalność zarobkową, by osobiście opiekować się dzieckiem?',
+        label: 'Przerwa w działalności zarobkowej taty',
+        options: YES_NO,
       });
     }
     if (title === 'employment' || answers[`${role}.sicknessInsurance`] === 'yes') {
@@ -480,28 +529,31 @@ export function getQuestions(
       title === 'employment' &&
       (situation === 'pregnant' || situation === 'afterBirth')
     ) {
-      questions.push(
-        {
-          id: 'employerBankruptcyOrLiquidation',
+      questions.push({
+        id: 'employerBankruptcyOrLiquidation',
+        stage: 2,
+        type: 'choice',
+        title:
+          'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
+        label: 'Szczególny powód rozwiązania umowy',
+        hint: 'Wybierz także prawomocny wyrok, jeśli sąd potwierdził bezprawne rozwiązanie umowy w ciąży.',
+        options: [
+          ...YES_NO,
+          { value: 'unlawful', label: 'Umowę rozwiązano w ciąży z naruszeniem prawa, co potwierdził prawomocny wyrok' },
+        ],
+      });
+      if (answers.employerBankruptcyOrLiquidation === 'unlawful' &&
+          !dateOrNull(answers['mother.insuranceEndDate'])) {
+        questions.push({
+          id: 'unlawfulTerminationDate',
           stage: 2,
-          type: 'choice',
-          title:
-            'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
-          label: 'Upadłość lub likwidacja pracodawcy',
-          hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
-          options: YES_NO,
-        },
-        {
-          id: 'unlawfulTerminationConfirmedByCourt',
-          stage: 2,
-          type: 'choice',
-          title:
-            'Czy umowa mamy została rozwiązana z naruszeniem prawa i potwierdził to prawomocny wyrok sądu?',
-          label: 'Bezprawne zwolnienie potwierdzone wyrokiem',
-          hint: 'Zgodnie z art. 30 ust. 3 ustawy zasiłkowej ZUS wypłaca wówczas zasiłek w wysokości zasiłku macierzyńskiego do dnia porodu.',
-          options: YES_NO,
-        },
-      );
+          type: 'date',
+          title: 'Kiedy ustało zatrudnienie mamy?',
+          label: 'Data ustania zatrudnienia',
+          min: dateOrNull(answers['mother.insuredSince']) ?? undefined,
+          max: answers.birthDate && answers.birthDate < today ? answers.birthDate : today,
+        });
+      }
     }
     const motherSicknessInsured =
       title === 'employment' || answers['mother.sicknessInsurance'] === 'yes';
@@ -579,38 +631,6 @@ export function getQuestions(
         unknownLabel: 'Sprawdzimy to później',
       });
     }
-    if (title === 'employment' || title === 'mandateContract' || title === 'selfEmployed') {
-      questions.push({
-        id: `${role}.hasSecondaryTitle`,
-        stage: 2,
-        type: 'choice',
-        title: `Czy ${role === 'mother' ? 'mama' : 'tata'} ma jednocześnie drugi tytuł ubezpieczenia (np. dodatkowy etat, zlecenie lub JDG)?`,
-        label: `Drugi tytuł ubezpieczenia ${person}`,
-        hint: 'Przy dwóch równoległych tytułach zasiłek ustala się odrębnie dla każdego tytułu objętego składką chorobową.',
-        options: YES_NO,
-      });
-      if (answers[`${role}.hasSecondaryTitle`] === 'yes') {
-        const secondaryTitle = answers[`${role}.secondaryInsuranceTitle`];
-        questions.push({
-          id: `${role}.secondaryInsuranceTitle`,
-          stage: 2,
-          type: 'choice',
-          title: `Jaki jest drugi tytuł ubezpieczenia ${person}?`,
-          label: `Rodzaj drugiego tytułu ${person}`,
-          options: INSURANCE_OPTIONS.filter((option) => option.value !== 'none'),
-        });
-        if (secondaryTitle === 'mandateContract' || secondaryTitle === 'selfEmployed') {
-          questions.push({
-            id: `${role}.secondarySicknessInsurance`,
-            stage: 2,
-            type: 'choice',
-            title: `Czy z drugiego tytułu za ${person === 'mamy' ? 'mamę' : 'tatę'} jest opłacana dobrowolna składka chorobowa?`,
-            label: `Składka chorobowa z drugiego tytułu ${person}`,
-            options: YES_NO,
-          });
-        }
-      }
-    }
   }
 
   for (const role of roles) {
@@ -683,9 +703,114 @@ export function getQuestions(
     }
   }
 
+  const applicantTitle = roles[0] && answers[`${roles[0]}.insuranceTitle`];
+  if (['employment', 'mandateContract', 'selfEmployed'].includes(applicantTitle)) {
+    const title = answers['additionalInsurance.insuranceTitle'];
+    questions.push({
+      id: 'additionalInsurance.insuranceTitle',
+      stage: 3,
+      type: 'choice',
+      title: 'Czy wnioskodawca ma równocześnie drugi tytuł do ubezpieczeń?',
+      label: 'Drugi tytuł do ubezpieczeń',
+      options: INSURANCE_OPTIONS,
+      optional: true,
+    });
+    if (['employment', 'mandateContract', 'selfEmployed'].includes(title)) {
+      questions.push({
+        id: 'additionalInsurance.sicknessInsured',
+        stage: 3,
+        type: 'choice',
+        title: 'Czy wnioskodawca podlega ubezpieczeniu chorobowemu także z drugiego tytułu?',
+        label: 'Ubezpieczenie chorobowe z drugiego tytułu',
+        options: YES_NO,
+      });
+      if (answers['additionalInsurance.sicknessInsured'] === 'yes') {
+        questions.push(
+          {
+            id: 'additionalInsurance.insuredSince',
+            stage: 3,
+            type: 'date',
+            title: 'Od kiedy trwa ubezpieczenie chorobowe z drugiego tytułu?',
+            label: 'Początek drugiego ubezpieczenia',
+            max: today,
+            unknownLabel: 'Nie znam daty',
+          },
+          {
+            id: 'additionalInsurance.insuranceEndDate',
+            stage: 3,
+            type: 'date',
+            title: 'Kiedy kończy się ubezpieczenie z drugiego tytułu?',
+            label: 'Koniec drugiego ubezpieczenia',
+            min: dateOrNull(answers['additionalInsurance.insuredSince']) ?? undefined,
+            unknownLabel: 'Trwa bezterminowo albo nie znam daty',
+          },
+        );
+        questions.push(
+          title === 'selfEmployed'
+            ? {
+                id: 'additionalInsurance.contributionDebt',
+                stage: 3,
+                type: 'number',
+                title: 'Ile wynosi zadłużenie składkowe w drugiej działalności?',
+                label: 'Zaległość składkowa z drugiego tytułu (zł)',
+                min: 0,
+                step: '0.01',
+                unknownLabel: 'Nie znam kwoty',
+              }
+            : {
+                id: 'additionalInsurance.employerInsuredCount',
+                stage: 3,
+                type: 'number',
+                title: 'Ile osób drugi płatnik zgłasza do ubezpieczenia chorobowego?',
+                label: 'Liczba osób zgłoszonych przez drugiego płatnika',
+                min: 1,
+                step: '1',
+                unknownLabel: 'Nie znam liczby',
+              },
+          {
+            id: 'additionalInsurance.benefitBase',
+            stage: 3,
+            type: 'number',
+            title: 'Ile wynosi podstawa wymiaru zasiłku z drugiego tytułu?',
+            label: 'Podstawa wymiaru zasiłku z drugiego tytułu (zł)',
+            min: 0,
+            step: '0.01',
+            unknownLabel: 'Nie znam podstawy wymiaru',
+          },
+        );
+        if (answers['additionalInsurance.benefitBase'] === 'unknown') {
+          questions.push(
+            title === 'selfEmployed'
+              ? {
+                  id: 'additionalInsurance.declaredContributionBase',
+                  stage: 3,
+                  type: 'number',
+                  title: 'Od jakiej miesięcznej kwoty opłacana jest składka chorobowa z drugiego tytułu?',
+                  label: 'Zadeklarowana podstawa składki z drugiego tytułu (zł)',
+                  min: 0,
+                  step: '0.01',
+                  unknownLabel: 'Nie znam kwoty',
+                }
+              : {
+                  id: 'additionalInsurance.averageGross',
+                  stage: 3,
+                  type: 'number',
+                  title: 'Ile wynosi przeciętne miesięczne wynagrodzenie brutto z drugiego tytułu?',
+                  label: 'Przeciętne wynagrodzenie brutto z drugiego tytułu (zł)',
+                  min: 0,
+                  step: '0.01',
+                  unknownLabel: 'Nie znam kwoty',
+                },
+          );
+        }
+      }
+    }
+  }
+
   if (
-    !allChildrenLost &&
-    !motherUnavailable &&
+    !childLost &&
+    !motherDeceased &&
+    !motherAbandoned &&
     roles.length > 0 &&
     (roles.includes('mother') || situation === 'adoption')
   ) {
@@ -745,7 +870,7 @@ export function selectedMotherSituations(value: string): string[] {
 }
 
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
-  if (!value) return 'Odpowiedz na pytanie, aby przejść dalej.';
+  if (!value) return question.optional ? null : 'Odpowiedz na pytanie, aby przejść dalej.';
   if (question.type === 'choice') {
     return question.options?.some((option) => option.value === value)
       ? null
@@ -758,8 +883,7 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
     );
     return valid &&
       new Set(selected).size === selected.length &&
-      (selected.length === 1 ||
-        !selected.some((entry) => entry === 'none' || entry === 'deceased' || entry === 'abandoned'))
+      (selected.length === 1 || !selected.some((entry) => ['none', 'deceased', 'abandoned'].includes(entry)))
       ? null
       : 'Wybierz sytuacje, które mają zastosowanie.';
   }
@@ -795,8 +919,13 @@ export function changeAnswer(
   id: string,
   value: string,
 ): Record<string, string> {
-  const next = { ...answers, [id]: value };
+  const next = { ...migrateContractAnswers(situation, answers), [id]: value };
   if (id === 'adoptionStage' && answers[id] !== value) delete next.childAcceptanceDate;
+  if (applicableParents(situation, answers)[0] !== applicableParents(situation, next)[0]) {
+    for (const key of Object.keys(next)) {
+      if (key.startsWith('additionalInsurance.')) delete next[key];
+    }
+  }
   if (id.endsWith('.insuranceTitle') && answers[id] !== value) {
     const prefix = id.split('.')[0] + '.';
     for (const key of Object.keys(next)) {
@@ -843,7 +972,7 @@ function addDays(date: IsoDate, days: number): IsoDate {
 function buildBenefitBaseInput(
   parent: Partial<ParentData>,
   values: Record<string, string>,
-  role: ParentRole,
+  role: ParentRole | 'additionalInsurance',
   params: BenefitParams,
   rightArisesOn: IsoDate,
   previousBenefitEndDate: IsoDate | null,
@@ -889,11 +1018,12 @@ export function buildScenario(
   answers: Record<string, string>,
   params: BenefitParams = DEFAULT_PARAMS,
 ): ScenarioDraft {
-  const active = getQuestions(situation, answers, params);
+  const migrated = migrateContractAnswers(situation, answers);
+  const active = getQuestions(situation, migrated, params);
   const values = Object.fromEntries(
     active
-      .filter((question) => validateAnswer(question, answers[question.id]) === null)
-      .map((question) => [question.id, answers[question.id]]),
+      .filter((question) => validateAnswer(question, migrated[question.id]) === null)
+      .map((question) => [question.id, migrated[question.id]]),
   );
   const scenario: ScenarioDraft = {
     situation,
@@ -948,24 +1078,13 @@ export function buildScenario(
     const voluntary = knownBoolean(values[`${role}.sicknessInsurance`]);
     if (voluntary !== undefined) parent.sicknessInsurance = voluntary ? 'voluntary' : 'none';
     parent.insuredSince = dateOrNull(values[`${role}.insuredSince`]);
-    parent.insuranceEndDate = dateOrNull(values[`${role}.insuranceEndDate`]);
+    parent.insuranceEndDate =
+      dateOrNull(values[`${role}.insuranceEndDate`]) ??
+      (role === 'mother' ? dateOrNull(values.unlawfulTerminationDate) : null);
     parent.benefitBase = numberOrNull(values[`${role}.benefitBase`]);
     parent.contributionDebt = numberOrNull(values[`${role}.contributionDebt`]);
     parent.employerInsuredCount = numberOrNull(values[`${role}.employerInsuredCount`]);
     if (role === 'mother') parent.age = numberOrNull(values['mother.age']);
-    if (values[`${role}.hasSecondaryTitle`] === 'yes') {
-      const secondaryTitle = values[`${role}.secondaryInsuranceTitle`];
-      if (secondaryTitle && secondaryTitle !== 'unknown') {
-        parent.secondaryInsuranceTitle = secondaryTitle as InsuranceTitle;
-        if (secondaryTitle === 'employment') parent.secondarySicknessInsurance = 'mandatory';
-        else {
-          const secondaryVoluntary = knownBoolean(values[`${role}.secondarySicknessInsurance`]);
-          if (secondaryVoluntary !== undefined) {
-            parent.secondarySicknessInsurance = secondaryVoluntary ? 'voluntary' : 'none';
-          }
-        }
-      }
-    }
     const wantsLeave = knownBoolean(values[`${role}.wantsLeave`]);
     if (wantsLeave !== undefined) parent.wantsLeave = wantsLeave;
     scenario[role] = parent;
@@ -997,19 +1116,37 @@ export function buildScenario(
       if (sicknessInput) scenario.sicknessBenefitBaseInput = sicknessInput;
     }
   }
+  const additionalTitle = values['additionalInsurance.insuranceTitle'];
+  if (additionalTitle === 'employment' || additionalTitle === 'mandateContract' || additionalTitle === 'selfEmployed') {
+    const sicknessInsured = knownBoolean(values['additionalInsurance.sicknessInsured']) ?? null;
+    const parent: Partial<ParentData> = {
+      insuranceTitle: additionalTitle,
+      insuredSince: dateOrNull(values['additionalInsurance.insuredSince']),
+      insuranceEndDate: dateOrNull(values['additionalInsurance.insuranceEndDate']),
+      employerInsuredCount: numberOrNull(values['additionalInsurance.employerInsuredCount']),
+      contributionDebt: numberOrNull(values['additionalInsurance.contributionDebt']),
+      benefitBase: numberOrNull(values['additionalInsurance.benefitBase']),
+    };
+    if (sicknessInsured !== null)
+      parent.sicknessInsurance = sicknessInsured
+        ? additionalTitle === 'employment' ? 'mandatory' : 'voluntary'
+        : 'none';
+    const baseInput = buildBenefitBaseInput(
+      parent, values, 'additionalInsurance', params, maternityRightArisesOn, null,
+    );
+    scenario.additionalInsurance = { parent, sicknessInsured, baseInput: baseInput ?? undefined };
+  }
+
   const special: NonNullable<ScenarioDraft['special']> = {};
   if (situation === 'afterBirth') {
     const lost = values.birthOutcome === 'stillbirth' || values.birthOutcome === 'childDeath';
-    const deceasedCount = numberOrNull(values.deceasedChildrenCount);
-    const allLost =
-      lost && ((childrenCount ?? 1) <= 1 || (deceasedCount !== null && deceasedCount >= (childrenCount ?? 1)));
     if (values.birthOutcome) {
       special.stillbirth = values.birthOutcome === 'stillbirth';
       special.childDeathDate =
         values.birthOutcome === 'childDeath' ? dateOrNull(values.childDeathDate) : null;
-      if (lost && deceasedCount !== null) special.deceasedChildrenCount = deceasedCount;
     }
-    if (!allLost) {
+    const lossCount = numberOrNull(values.deceasedChildrenCount);
+    if (!lost || (childrenCount !== null && lossCount !== null && lossCount < childrenCount)) {
       special.pregnancyWeekAtBirth = numberOrNull(values.pregnancyWeekAtBirth);
       special.birthWeightGrams = numberOrNull(values.birthWeightGrams);
       special.hospitalizationDays =
@@ -1023,15 +1160,26 @@ export function buildScenario(
     special.motherHospitalized = situations.includes('hospitalized');
     special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
-    special.motherAbandonedChild = values.motherSituation === 'abandoned';
     if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
-    if (special.motherAbandonedChild)
+    if (situations.includes('abandoned')) {
+      special.motherAbandonedChild = true;
       scenario.motherAbandonmentDate = dateOrNull(values.motherAbandonmentDate);
+      scenario.motherWasInsuredAtAbandonment = knownBoolean(values.motherWasInsuredAtAbandonment);
+      scenario.motherMaternityDaysUsed = numberOrNull(values.motherMaternityDaysUsed) ?? undefined;
+      scenario.fatherStopsGainfulActivity = knownBoolean(values.fatherStopsGainfulActivity);
+    }
+  }
+  const deceasedChildrenCount = numberOrNull(values.deceasedChildrenCount);
+  if (deceasedChildrenCount !== null) {
+    scenario.deceasedChildrenCount = deceasedChildrenCount;
+    special.deceasedChildrenCount = deceasedChildrenCount;
+  }
+  if (values.employerBankruptcyOrLiquidation === 'unlawful') {
+    scenario.unlawfulTerminationConfirmedByCourt = true;
+    special.unlawfulTerminationConfirmedByCourt = true;
   }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
-  const unlawful = knownBoolean(values.unlawfulTerminationConfirmedByCourt);
-  if (unlawful !== undefined) special.unlawfulTerminationConfirmedByCourt = unlawful;
   scenario.special = special;
   return scenario;
 }
