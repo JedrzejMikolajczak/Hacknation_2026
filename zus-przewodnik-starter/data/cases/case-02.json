@@ -44,10 +44,7 @@
     "granted_duration_days": 1001,
     "granted_duration_weeks": 143,
     "calculated_amount_pln": null,
-    "mapped_forms_2026": [
-      "ZAM",
-      "Z-3"
-    ],
+    "mapped_forms_2026": ["ZAM", "Z-3"],
     "legal_basis_cited": [
       "art. 180 § 1 pkt 2 Kodeksu pracy",
       "art. 180(1) § 1-2 Kodeksu pracy",

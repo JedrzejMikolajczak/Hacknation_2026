@@ -6,3 +6,5 @@ docs/
 README.md
 package-lock.json
 **/dist/
+**/.vite/
+client/.vite/
