@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { BenefitParams, IsoDate, RequiredDocument, ScenarioInput } from '@shared/types';
 import { formatPolishDate } from '../plan/planScenario';
 import {
@@ -9,6 +10,7 @@ import {
 
 interface DocumentChecklistSectionProps {
   documents: RequiredDocument[];
+  zamPreviewHref?: string;
   checkedMap: Record<string, boolean>;
   onToggleDocument: (id: string) => void;
   onResetChecked: () => void;
@@ -26,6 +28,7 @@ function getBadgeClassName(doc: RequiredDocument): string {
 
 export function DocumentChecklistSection({
   documents,
+  zamPreviewHref,
   checkedMap,
   onToggleDocument,
   onResetChecked,
@@ -118,6 +121,11 @@ export function DocumentChecklistSection({
                         </span>
                       </span>
                     </label>
+                    {doc.id === 'formZAM' && zamPreviewHref && (
+                      <Link className="plan-btn plan-btn--secondary" to={zamPreviewHref}>
+                        Otwórz podgląd ZUS ZAM
+                      </Link>
+                    )}
 
                     {doc.note && (
                       <div className="docs-compact-item__details-wrap">

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from '../../../app/App';
 import { ScenarioProvider, type ScenarioDraft } from '../../../app/ScenarioContext';
 
@@ -620,6 +620,24 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
 
     const backLink = screen.getByRole('link', { name: /Wróć do planu/i });
     expect(backLink).toHaveAttribute('href', '/plan?situation=afterBirth');
+  });
+  it('otwiera z checklisty podgląd ZAM z danymi planu i pozwala go wydrukować', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    try {
+      const { user } = renderPlan(
+        '/plan/documents?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
+      );
+      await user.click(await screen.findByRole('link', { name: 'Otwórz podgląd ZUS ZAM' }));
+      const dialog = screen.getByRole('dialog', { name: /Wniosek o zasiłek macierzyński/ });
+      expect(within(dialog).getByText(/Podgląd demonstracyjny/)).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
+      expect(print).toHaveBeenCalledOnce();
+      await user.click(within(dialog).getByRole('button', { name: 'Zamknij podgląd' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByTestId('loc')).toHaveTextContent('podstawa=6000');
+    } finally {
+      print.mockRestore();
+    }
   });
 
   it('w zakładce Wsparcie przy braku danych pokazuje stan Uzupełnij dane z linkiem do kreatora', () => {

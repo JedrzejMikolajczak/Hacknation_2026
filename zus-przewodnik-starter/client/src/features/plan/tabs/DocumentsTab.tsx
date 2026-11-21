@@ -39,6 +39,8 @@ export function DocumentsTab({
   wizardHref = '/wizard',
 }: DocumentsTabProps) {
   const { search } = useLocation();
+  const zamPreviewParams = new URLSearchParams(search);
+  zamPreviewParams.set('podglad', 'zus-zam');
   const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>(loadCheckedIds);
 
   useEffect(() => {
@@ -172,6 +174,7 @@ export function DocumentsTab({
 
       <DocumentChecklistSection
         documents={checklist.documents}
+        zamPreviewHref={'/plan/applications?' + zamPreviewParams.toString()}
         checkedMap={checkedMap}
         onToggleDocument={toggleDocument}
         onResetChecked={handleResetChecked}
