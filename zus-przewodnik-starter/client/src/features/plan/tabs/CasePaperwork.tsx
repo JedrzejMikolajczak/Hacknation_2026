@@ -14,8 +14,15 @@ import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
 import { SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { parentLabels, roles } from '../caseLabels';
-import { addDaysIso, diffDaysIso, formatPolishDate, livingChildren, todayIsoDate } from '../planScenario';
+import {
+  addDaysIso,
+  diffDaysIso,
+  formatPolishDate,
+  livingChildren,
+  todayIsoDate,
+} from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
+import type { ApplicationPdfData, ZamLeave, ZamPeriod } from './pdf/types';
 import { leaveApplication } from './leaveApplication';
 import { documentKey } from './documentKey';
 import { FilingMap, type FilingStep } from './FilingMap';
@@ -402,9 +409,13 @@ function selectNextStep(
 export function CaseDocuments({
   documents,
   effectiveDate,
+  input = null,
+  plan = null,
 }: {
   documents: CaseDocument[];
   effectiveDate: string;
+  input?: CaseInputs | null;
+  plan?: CasePlan | null;
 }) {
   const { search } = useLocation();
   const { scenario, authSession } = useScenario();
@@ -450,14 +461,17 @@ export function CaseDocuments({
   const parentsFiling = resolveParentsFiling(documents, params);
   const hasPregnancySickness = documents.some((doc) => PREGNANCY_SICKNESS_IDS.has(doc.id));
   const activeRoles = roles.filter((role) => documents.some((doc) => doc.parent_role === role));
+  // Tytuły na mapie są te same co w zakładce Wnioski – jedno źródło nazw dokumentów.
+  const applicationItems = buildApplications(documents, input, plan, params);
   const filingSteps: FilingStep[] = documents.map((doc) => {
+    const applicationItem = applicationItems.find((item) => item.doc === doc);
     const isApplication = isActionableApplication(doc);
     const mandateEntitled = isMandateEntitledRole(documents, doc.parent_role);
     const openParams = new URLSearchParams(search);
     openParams.set('open', documentKey(doc));
     return {
       doc,
-      title: doc.name_pl,
+      title: applicationItem ? applicationTitle(applicationItem, params) : doc.name_pl,
       who: activeRoles.length > 1 ? parentLabels[doc.parent_role] : null,
       kind: filingKind(doc, isApplication),
       guide: deliveryGuide(doc, mandateEntitled),
@@ -740,6 +754,16 @@ const PERSONAL_FIELD_LABELS: Record<PersonalFieldKey, string> = {
   birthDate: 'Data urodzenia',
   bank: 'Numer rachunku',
 };
+
+/** Cyfry z pola: ignoruje spacje, myślniki i prefiks „PL” (numery rachunków zwykle są zapisywane z odstępami). */
+const digitsOnly = (value: string) => value.replace(/^\s*PL/i, '').replace(/[\s-]/g, '');
+
+function isPersonalValueValid(field: PersonalFieldKey, rawValue: string): boolean {
+  const value = rawValue.trim();
+  if (field === 'pesel') return /^\d{11}$/.test(digitsOnly(value));
+  if (field === 'bank') return /^\d{26}$/.test(digitsOnly(value));
+  return !!value;
+}
 
 const APPLICATION_IDS = new Set([
   'ZAM',
@@ -1110,13 +1134,13 @@ function applicationTitle(item: ApplicationItem, params: BenefitParams): string 
     if (doc.id === 'PARENTAL_REQUEST') {
       const extSuffix =
         doc.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION' ? ' – przedłużenie „Za życiem”' : '';
-      return `ZAM – zasiłek za okres odpowiadający urlopowi rodzicielskiemu${partSuffix}${extSuffix}`;
+      return `ZAM – wniosek o zasiłek macierzyński za okres urlopu rodzicielskiego${partSuffix}${extSuffix}`;
     }
     if (doc.id === 'SUPPLEMENTARY_REQUEST') {
-      return 'ZAM – zasiłek za okres odpowiadający uzupełniającemu urlopowi macierzyńskiemu';
+      return 'ZAM – wniosek o zasiłek macierzyński za okres uzupełniającego urlopu macierzyńskiego';
     }
     if (doc.id === 'PATERNITY_REQUEST') {
-      return 'ZAM – zasiłek za okres odpowiadający urlopowi ojcowskiemu';
+      return 'ZAM – wniosek o zasiłek macierzyński za okres urlopu ojcowskiego';
     }
     if (doc.id === 'TAKEOVER') {
       return 'ZAM – wniosek ojca o zasiłek za przejęty okres macierzyńskiego';
@@ -1401,7 +1425,28 @@ interface PreviewModalState {
   verificationNote?: string;
   delivery?: DeliveryGuide;
   mailto?: string;
+  pdf?: ApplicationPdfData;
 }
+
+const ZAM_LEAVE_BY_TYPE: Partial<Record<string, ZamLeave>> = {
+  MATERNITY: 'maternity',
+  ADOPTION_MATERNITY: 'maternity',
+  PARENTAL: 'parental',
+  PARENTAL_ZA_ZYCIEM_EXTENSION: 'parental',
+  PARENTAL_WORK_EXTENSION: 'parental',
+  SUPPLEMENTARY_MATERNITY: 'supplementary',
+  PATERNITY: 'paternity',
+};
+
+/** Pola, które w piśmie są zbędne (informacje pomocnicze aplikacji, nie treść wniosku). */
+const LETTER_SKIPPED_LABELS = new Set([
+  'Wnioskodawca (rola)',
+  'Forma ubezpieczenia',
+  'Adresat',
+  'Termin złożenia',
+  'Załączniki',
+  'Wariant i stawka zasiłku',
+]);
 
 export interface CaseApplicationsProps {
   documents: CaseDocument[];
@@ -1460,6 +1505,17 @@ export function CaseApplications({
   );
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
   const openKey = useMemo(() => new URLSearchParams(search).get('open'), [search]);
+  // Lista pól w panelu „Wypełnij i pobierz” jest ustalana raz na otwarty wniosek – pole nie może
+  // zniknąć, gdy tylko zacznie się je wpisywać.
+  const [promptFields, setPromptFields] = useState<{
+    key: string | null;
+    personal: PersonalFieldKey[];
+    details: string[];
+  }>({
+    key: null,
+    personal: [],
+    details: [],
+  });
   const hasOpenItem = openKey !== null && forms.some((item) => item.key === openKey);
 
   useEffect(() => {
@@ -1672,13 +1728,7 @@ export function CaseApplications({
     const role = doc.parent_role;
     for (const field of requiredFieldsForApplication(item)) {
       const value = personalValue(role, field).trim();
-      const valid =
-        field === 'pesel'
-          ? /^\d{11}$/.test(value)
-          : field === 'bank'
-            ? /^\d{26}$/.test(value)
-            : !!value;
-      if (!valid) {
+      if (!isPersonalValueValid(field, value)) {
         showError(
           `${idPrefix}${personalId(role, field)}`,
           `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
@@ -1699,6 +1749,70 @@ export function CaseApplications({
     return true;
   }
 
+  function buildPdfData(
+    item: ApplicationItem,
+    title: string,
+    fields: { label: string; value: string }[],
+    attachments: string[] | undefined,
+  ): ApplicationPdfData {
+    const { doc } = item;
+    const role = doc.parent_role;
+    const kind: ApplicationPdfData['kind'] =
+      doc.id === 'ZAS-53' ? 'zas53' : doc.submit_to === 'ZUS' ? 'zam' : 'letter';
+
+    let zamPeriods: ZamPeriod[] | undefined;
+    if (kind === 'zam') {
+      const single = doc.leave_type ? ZAM_LEAVE_BY_TYPE[doc.leave_type] : undefined;
+      if (item.startDate && item.endDate && single && doc.id !== 'COMBINED_RATE') {
+        zamPeriods = [
+          { leave: single, start: item.startDate, end: item.endDate, part: item.partNumber },
+        ];
+      } else {
+        zamPeriods = (planProp?.outcome.periods ?? [])
+          .filter((period) => period.parent_role === role && !period.denied)
+          .flatMap((period) => {
+            const leave = ZAM_LEAVE_BY_TYPE[period.leave_type];
+            return leave ? [{ leave, start: period.start_date, end: period.end_date }] : [];
+          });
+      }
+    }
+
+    return {
+      kind,
+      title,
+      recipient: recipientFull(item, params),
+      applicant: {
+        name: personalValue(role, 'name').trim(),
+        pesel: personalValue(role, 'pesel').trim(),
+        birthDate: personalValue(role, 'birthDate'),
+        bank: personalValue(role, 'bank').trim(),
+      },
+      todayIso,
+      sections: fields.filter(
+        (field) =>
+          !LETTER_SKIPPED_LABELS.has(field.label) &&
+          !['Imię i nazwisko', 'PESEL', 'Numer rachunku do wypłaty', 'Data urodzenia'].includes(
+            field.label,
+          ),
+      ),
+      attachments: attachments ?? [],
+      legalNote: applicationLegalNote(item, applicationDetails(item)?.section),
+      zamPeriods,
+      zamReason:
+        effectiveInput?.adoption_type === 'ADOPTION'
+          ? 'adoption'
+          : effectiveInput?.adoption_type === 'FOSTER_FAMILY'
+            ? 'foster'
+            : 'birth',
+      voluntarySickness: item.parentCtx.isNonEmployee
+        ? (effectiveInput?.voluntary_sickness_insured ?? null)
+        : null,
+      fullLeaveDeclaration: doc.id === 'COMBINED_RATE',
+      childDate: effectiveInput?.due_or_birth_date ?? null,
+      manualFields: [],
+    };
+  }
+
   function openPreview(item: ApplicationItem) {
     const { doc, key } = item;
     const details = applicationDetails(item);
@@ -1708,20 +1822,22 @@ export function CaseApplications({
       : parentLabels[doc.parent_role];
     const attachments = details?.attachments;
     const verificationNote = applicationVerificationNote(item, params);
+    const previewFields = [
+      ...buildFields(item),
+      ...(details?.fields.map((field) => {
+        const value = field.value ?? answers[key]?.[field.id] ?? '';
+        return {
+          label: field.label,
+          value: field.options?.find((option) => option.value === value)?.label ?? value,
+        };
+      }) ?? []),
+    ];
     setPreviewModal({
       title: `${title} (${parentBadge})`,
       recipient: recipientFull(item, params),
       code: applicationCode(item, params),
-      fields: [
-        ...buildFields(item),
-        ...(details?.fields.map((field) => {
-          const value = field.value ?? answers[key]?.[field.id] ?? '';
-          return {
-            label: field.label,
-            value: field.options?.find((option) => option.value === value)?.label ?? value,
-          };
-        }) ?? []),
-      ],
+      fields: previewFields,
+      pdf: buildPdfData(item, title, previewFields, attachments),
       attachments,
       legalNote: applicationLegalNote(item, details?.section),
       verificationNote: verificationNote ?? undefined,
@@ -1821,15 +1937,9 @@ export function CaseApplications({
   }
 
   const openItem = hasOpenItem ? (forms.find((item) => item.key === openKey) ?? null) : null;
-  const isPersonalValid = (field: PersonalFieldKey, value: string) =>
-    field === 'pesel'
-      ? /^\d{11}$/.test(value)
-      : field === 'bank'
-        ? /^\d{26}$/.test(value)
-        : !!value;
   const openMissingPersonal = openItem
     ? requiredFieldsForApplication(openItem).filter(
-        (field) => !isPersonalValid(field, personalValue(openItem.doc.parent_role, field).trim()),
+        (field) => !isPersonalValueValid(field, personalValue(openItem.doc.parent_role, field)),
       )
     : [];
   const openMissingDetails = openItem
@@ -1838,6 +1948,22 @@ export function CaseApplications({
           field.value === undefined &&
           (!(answers[openItem.key]?.[field.id] ?? '').trim() ||
             (field.type === 'number' && !/^\d+$/.test(answers[openItem.key]?.[field.id] ?? ''))),
+      )
+    : [];
+
+  let frozenPrompt = promptFields;
+  if (openItem && promptFields.key !== openItem.key) {
+    frozenPrompt = {
+      key: openItem.key,
+      personal: openMissingPersonal,
+      details: openMissingDetails.map((field) => field.id),
+    };
+    setPromptFields(frozenPrompt);
+  }
+  const promptPersonal = openItem ? frozenPrompt.personal : [];
+  const promptDetails = openItem
+    ? (applicationDetails(openItem)?.fields ?? []).filter(
+        (field) => field.value === undefined && frozenPrompt.details.includes(field.id),
       )
     : [];
 
@@ -1904,9 +2030,9 @@ export function CaseApplications({
             </div>
           )}
 
-          {(openMissingPersonal.length > 0 || openMissingDetails.length > 0) && (
+          {(promptPersonal.length > 0 || promptDetails.length > 0) && (
             <div className="plan-controls__grid apps-open__fields">
-              {openMissingPersonal.map((field) => {
+              {promptPersonal.map((field) => {
                 const id = `open-${personalId(openItem.doc.parent_role, field)}`;
                 return (
                   <label key={id} className="plan-field">
@@ -1939,7 +2065,7 @@ export function CaseApplications({
                   </label>
                 );
               })}
-              {openMissingDetails.map((field) => {
+              {promptDetails.map((field) => {
                 const id = `open-${openItem.key}-${field.id}`;
                 const value = answers[openItem.key]?.[field.id] ?? '';
                 const update = (next: string) => {
@@ -2235,7 +2361,9 @@ export function CaseApplications({
           to="/login"
           state={{
             returnTo: `${pathname}${search}`,
-            applicantRoles: roles.filter((role) => forms.some(({ doc }) => doc.parent_role === role)),
+            applicantRoles: roles.filter((role) =>
+              forms.some(({ doc }) => doc.parent_role === role),
+            ),
           }}
           className="plan-btn plan-btn--secondary"
         >
@@ -2317,6 +2445,7 @@ export function CaseApplications({
           verificationNote={previewModal.verificationNote}
           delivery={previewModal.delivery}
           mailto={previewModal.mailto}
+          pdf={previewModal.pdf}
           onClose={() => setPreviewModal(null)}
         />
       )}

@@ -11,6 +11,11 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
     },
   },
+  optimizeDeps: {
+    // generator PDF ładuje się dopiero przy pobieraniu – bez tego Vite odkrywa te paczki w trakcie
+    // działania i przeładowuje stronę (wygląda to jak „odświeżenie bez efektu”).
+    include: ['pdf-lib', '@pdf-lib/fontkit'],
+  },
   server: {
     port: Number(process.env.VITE_PORT ?? 5173),
     strictPort: true,

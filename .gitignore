@@ -22,3 +22,6 @@ Thumbs.db
 docs/zus/
 data/cases-raw/
 *.[pP][dD][fF]
+
+# oficjalne formularze ZUS używane do generowania wniosków
+!zus-przewodnik-starter/client/public/forms/*.pdf
