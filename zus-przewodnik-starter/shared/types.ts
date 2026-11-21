@@ -45,8 +45,6 @@ export interface ParentData {
   age: number | null;                    // dla 33/14 dni wynagrodzenia chorobowego
   contributionDebt: Pln | null;          // tylko selfEmployed
   wantsLeave: boolean;
-  secondaryInsuranceTitle?: InsuranceTitle | null;
-  secondarySicknessInsurance?: SicknessInsurance | null;
 }
 
 export interface SpecialCircumstances {
@@ -56,13 +54,10 @@ export interface SpecialCircumstances {
   hospitalizationDays: number | null;
   stillbirth: boolean;
   childDeathDate: IsoDate | null;
-  deceasedChildrenCount?: number | null; // przy porodzie mnogim
   motherHospitalized: boolean;
   motherIncapableOfIndependentLiving: boolean; // orzeczenie o niezdolności do samodzielnej egzystencji
   motherDeceased: boolean;
-  motherAbandonedChild?: boolean;              // KP art. 180 § 13 – przejęcie urlopu przez ojca
   employerBankruptcyOrLiquidation: boolean;    // zasiłek w wysokości macierzyńskiego
-  unlawfulTerminationConfirmedByCourt?: boolean; // art. 30 ust. 3 ustawy zasiłkowej
 }
 
 /** Wewnętrzny format szkicu kreatora oraz testów wcześniejszych reguł. */
@@ -77,7 +72,7 @@ export interface WizardScenario {
   childAgeYears: number | null;           // przy adopcji
   schoolObligationDeferred: boolean;
   rateVariant: RateVariant;
-  mother: ParentData | null;
+  mother: ParentData;
   father: ParentData | null;
   special: SpecialCircumstances;
 }
@@ -382,8 +377,6 @@ export interface CaseParentInsurance {
   monthly_bases?: MonthlyBase[];
   title_start_date?: IsoDate | null;
   debt_amount_pln?: Pln | null;
-  secondary_employment_type?: EmploymentType | null;
-  secondary_voluntary_sickness_insured?: boolean | null;
 }
 
 export interface CaseCircumstances {
@@ -393,9 +386,7 @@ export interface CaseCircumstances {
   stillbirth_or_child_death: 'NONE' | 'BEFORE_8_WEEKS' | 'AFTER_8_WEEKS';
   mother_hospitalized_or_incapable: boolean;
   mother_deceased?: boolean;
-  mother_abandoned_child?: boolean;
   employer_bankruptcy_or_liquidation: boolean;
-  unlawful_termination_confirmed_by_court?: boolean;
   adopted_or_foster_child_age_years: number | null;
   is_professional_foster_family: boolean;
 }
@@ -423,9 +414,6 @@ export interface CaseInputs {
   part_time_work_fraction: number;
   special_circumstances: CaseCircumstances;
   living_children_count?: number;
-  deceased_children_count?: number;
-  secondary_employment_type?: EmploymentType | null;
-  secondary_voluntary_sickness_insured?: boolean | null;
   pregnancy_week_at_birth?: string;
   birth_weight_grams?: number | number[];
   newborn_hospitalization_start?: IsoDate;

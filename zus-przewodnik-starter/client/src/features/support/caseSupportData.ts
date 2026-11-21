@@ -96,13 +96,6 @@ export function getCaseWarningGuide(warning: CaseWarning, params: BenefitParams)
           'ZUS może przeprowadzić postępowanie wyjaśniające dotyczące faktycznego wykonywania pracy. Przygotuj dokumenty potwierdzające realizację obowiązków i wypłatę wynagrodzenia.',
         isReminder: true,
       };
-    case 'MULTIPLE_INSURANCE_TITLES':
-      return {
-        title: 'Dwa równoległe tytuły ubezpieczenia',
-        action:
-          'Zasiłek przysługuje odrębnie z każdego tytułu objętego składką chorobową. Złóż osobny wniosek dla drugiego tytułu i zweryfikuj podstawę wymiaru na PUE/eZUS.',
-        isReminder: true,
-      };
     case 'COMBINED_RATE_DEADLINE': {
       const dateMatch = warning.message_pl.match(/\d{4}-\d{2}-\d{2}/);
       const formattedDate = dateMatch ? formatPolishDate(dateMatch[0]) : null;

@@ -87,21 +87,17 @@ export function caseEntitlements(
     if (role === 'MOTHER' || kind === 'ADOPTION_MATERNITY') {
       const motherDeceased =
         role === 'MOTHER' && Boolean(input.special_circumstances.mother_deceased);
-      const motherAbandoned =
-        role === 'MOTHER' && Boolean(input.special_circumstances.mother_abandoned_child);
       add(
         kind,
-        motherDeceased || motherAbandoned ? false : applicant && input.parental_only ? false : state,
+        motherDeceased ? false : applicant && input.parental_only ? false : state,
         motherDeceased
           ? 'W związku ze śmiercią matki prawo do urlopu macierzyńskiego może przejąć ubezpieczony ojciec.'
-          : motherAbandoned
-            ? 'W związku z porzuceniem dziecka przez matkę prawo do pozostałej części urlopu macierzyńskiego może przejąć ubezpieczony ojciec.'
-            : applicant && input.parental_only
-              ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
-              : state
-                ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
-                : insuranceReason,
-        motherAbandoned ? KP.abandonment : kind === 'MATERNITY' ? KP.maternity : KP.adoption,
+          : applicant && input.parental_only
+            ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
+            : state
+              ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
+              : insuranceReason,
+        kind === 'MATERNITY' ? KP.maternity : KP.adoption,
       );
     } else {
       const takeover = rolePeriods.some((period) => period.leave_type === 'MATERNITY');
@@ -111,13 +107,11 @@ export function caseEntitlements(
         takeover
           ? input.special_circumstances.mother_deceased
             ? 'W związku ze śmiercią matki ubezpieczony ojciec przejmuje urlop macierzyński.'
-            : input.special_circumstances.mother_abandoned_child
-              ? 'W związku z porzuceniem dziecka przez matkę ubezpieczony ojciec przejmuje pozostałą część urlopu macierzyńskiego.'
-              : 'Ojciec przejmuje pozostały okres macierzyńskiego.'
+            : 'Ojciec przejmuje pozostały okres macierzyńskiego.'
           : absentOther
             ? insuranceReason
             : 'Przejęcie wymaga spełnienia warunków i ustalenia daty przekazania opieki.',
-        input.special_circumstances.mother_abandoned_child ? KP.abandonment : KP.maternity,
+        KP.maternity,
       );
     }
     if (role === 'FATHER') {
@@ -154,61 +148,37 @@ export function caseEntitlements(
         warning?.legal_basis ?? KP.supplementary,
       );
     }
-    const unlawfulTermination = Boolean(
-      input.special_circumstances.unlawful_termination_confirmed_by_court,
-    );
-    const hasMaternityEquivalentCause =
-      input.special_circumstances.employer_bankruptcy_or_liquidation || unlawfulTermination;
     if (
       role === 'MOTHER' &&
       applicant &&
-      (input.stage === 'PREGNANCY' ||
-        input.sickness_leave_start_date ||
-        hasMaternityEquivalentCause)
+      (input.stage === 'PREGNANCY' || input.sickness_leave_start_date)
     ) {
-      if (input.stage === 'PREGNANCY' || input.sickness_leave_start_date) {
-        const paid =
-          rolePeriods.some((period) => period.leave_type === 'SICKNESS') ||
-          outcome.employer_sick_pay.length > 0;
-        add(
-          'SICKNESS',
-          input.sickness_leave_start_date ? paid : null,
-          paid
-            ? 'Okres wyczekiwania upłynął. Daty wypłaty wynikają z e-ZLA i początku macierzyńskiego.'
-            : (outcome.periods.find((period) => period.leave_type === 'SICKNESS')
-                ?.denial_reason_pl ?? 'Podaj dane e-ZLA i długość ubezpieczenia.'),
-          KP.sickness,
-        );
-        add(
-          'REHABILITATION',
-          null,
-          'Prawo wymaga wyczerpania zasiłku chorobowego, dalszej niezdolności do pracy i rokowania jej odzyskania w ocenie ZUS.',
-          'Ustawa zasiłkowa, art. 18',
-        );
-      }
-      const isEmployee = input.employment_type === 'UOP';
-      result.push({
-        parent_role: role,
-        benefit_type: 'MATERNITY_EQUIVALENT',
-        is_qualified: unlawfulTermination
-          ? isEmployee
-          : input.special_circumstances.employer_bankruptcy_or_liquidation
-            ? isEmployee
-              ? null
-              : false
-            : false,
-        who_pays: hasMaternityEquivalentCause && isEmployee ? 'ZUS' : null,
-        reason_pl: unlawfulTermination
-          ? isEmployee
-            ? 'Prawomocny wyrok sądu potwierdzający bezprawne rozwiązanie umowy o pracę w ciąży daje prawo do zasiłku w wysokości zasiłku macierzyńskiego do dnia porodu (wypłaca ZUS).'
-            : 'Zasiłek w wysokości zasiłku macierzyńskiego po bezprawnym zwolnieniu dotyczy wyłącznie umowy o pracę.'
-          : input.special_circumstances.employer_bankruptcy_or_liquidation
-            ? isEmployee
-              ? 'Sprawdź okoliczności ustania zatrudnienia i możliwość zapewnienia innego zatrudnienia.'
-              : 'Zasiłek w wysokości zasiłku macierzyńskiego przy upadłości lub likwidacji dotyczy wyłącznie umowy o pracę.'
-            : 'Brak informacji o ustaniu zatrudnienia w okolicznościach objętych przepisem.',
-        legal_basis: KP.maternityEquivalent,
-      });
+      const paid =
+        rolePeriods.some((period) => period.leave_type === 'SICKNESS') ||
+        outcome.employer_sick_pay.length > 0;
+      add(
+        'SICKNESS',
+        input.sickness_leave_start_date ? paid : null,
+        paid
+          ? 'Okres wyczekiwania upłynął. Daty wypłaty wynikają z e-ZLA i początku macierzyńskiego.'
+          : (outcome.periods.find((period) => period.leave_type === 'SICKNESS')?.denial_reason_pl ??
+              'Podaj dane e-ZLA i długość ubezpieczenia.'),
+        KP.sickness,
+      );
+      add(
+        'REHABILITATION',
+        null,
+        'Prawo wymaga wyczerpania zasiłku chorobowego, dalszej niezdolności do pracy i rokowania jej odzyskania w ocenie ZUS.',
+        'Ustawa zasiłkowa, art. 18',
+      );
+      add(
+        'MATERNITY_EQUIVALENT',
+        input.special_circumstances.employer_bankruptcy_or_liquidation ? null : false,
+        input.special_circumstances.employer_bankruptcy_or_liquidation
+          ? 'Sprawdź okoliczności ustania zatrudnienia i możliwość zapewnienia innego zatrudnienia.'
+          : 'Brak informacji o ustaniu zatrudnienia w okolicznościach objętych przepisem.',
+        'Ustawa zasiłkowa, art. 30',
+      );
     }
   }
   return result;

@@ -35,16 +35,9 @@ export function planParentalSplit(
   const isCombined = scenario.rateVariant === 'combined';
   const errors: ParentalSplitResult['errors'] = [];
 
-  const hasChildLoss = scenario.special.stillbirth || scenario.special.childDeathDate !== null;
-  const aliveChildren = hasChildLoss
-    ? scenario.special.deceasedChildrenCount !== undefined &&
-      scenario.special.deceasedChildrenCount !== null
-      ? Math.max(0, scenario.childrenCount - scenario.special.deceasedChildrenCount)
-      : scenario.special.stillbirth
-        ? 0
-        : Math.max(0, scenario.childrenCount - 1)
-    : scenario.childrenCount;
-  const childLostAll = hasChildLoss && aliveChildren === 0;
+  const childLostAll =
+    (scenario.special.stillbirth || scenario.special.childDeathDate !== null) &&
+    scenario.childrenCount <= 1;
 
   const maxAdoptionAge = getAdoptionAgeLimit(scenario, params);
   const adoptionOverAge =
@@ -56,7 +49,7 @@ export function planParentalSplit(
   const totalPool =
     childLostAll || adoptionOverAge
       ? 0
-      : getParentalPoolWeeks(aliveChildren, scenario.special.zaZyciemCertificate, params);
+      : getParentalPoolWeeks(scenario.childrenCount, scenario.special.zaZyciemCertificate, params);
 
   const nonTransferable = params.parentalLeave.nonTransferableWeeksPerParent;
   const maxPerParent = Math.max(0, totalPool - nonTransferable);

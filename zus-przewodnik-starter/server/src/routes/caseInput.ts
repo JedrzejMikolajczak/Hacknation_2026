@@ -41,16 +41,11 @@ export const caseInputSchema = z
       stillbirth_or_child_death: z.enum(['NONE', 'BEFORE_8_WEEKS', 'AFTER_8_WEEKS']),
       mother_hospitalized_or_incapable: z.boolean(),
       mother_deceased: z.boolean().optional(),
-      mother_abandoned_child: z.boolean().optional(),
       employer_bankruptcy_or_liquidation: z.boolean(),
-      unlawful_termination_confirmed_by_court: z.boolean().optional(),
       adopted_or_foster_child_age_years: z.number().nonnegative().nullable(),
       is_professional_foster_family: z.boolean(),
     }),
     living_children_count: count.optional(),
-    deceased_children_count: count.optional(),
-    secondary_employment_type: title.nullable().optional(),
-    secondary_voluntary_sickness_insured: yesNo.optional(),
     pregnancy_week_at_birth: z
       .string()
       .regex(/^\d{1,2}(\+[0-6])?$/)
@@ -117,8 +112,6 @@ export const caseInputSchema = z
           .optional(),
         title_start_date: day.nullable().optional(),
         debt_amount_pln: money.nullable().optional(),
-        secondary_employment_type: title.nullable().optional(),
-        secondary_voluntary_sickness_insured: yesNo.optional(),
       })
       .optional(),
     sickness_base_changes: z
@@ -134,19 +127,6 @@ export const caseInputSchema = z
         input.living_children_count <= input.children_count,
       'living_children_count',
       'Liczba żywych dzieci nie może przekraczać liczby dzieci z porodu.',
-    );
-    check(
-      input.deceased_children_count === undefined ||
-        input.deceased_children_count <= input.children_count,
-      'deceased_children_count',
-      'Liczba zmarłych dzieci nie może przekraczać liczby dzieci z porodu.',
-    );
-    check(
-      input.living_children_count === undefined ||
-        input.deceased_children_count === undefined ||
-        input.living_children_count + input.deceased_children_count <= input.children_count,
-      'deceased_children_count',
-      'Suma żywych i zmarłych dzieci nie może przekraczać liczby dzieci z porodu.',
     );
     for (const [start, end] of [
       ['sickness_leave_start_date', 'sickness_leave_end_date'],
