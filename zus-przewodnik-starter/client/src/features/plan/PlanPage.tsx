@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import type { BenefitBaseResult, ScenarioInput } from '@shared/types';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
@@ -41,6 +41,7 @@ export function PlanPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { scenario: draft, updateScenario } = useScenario();
   const [shareCopied, setShareCopied] = useState(false);
+  const activeTabRef = useRef<HTMLAnchorElement | null>(null);
 
   const initialContext = useMemo(
     () => resolvePlanContext(draft, searchParams),
@@ -113,6 +114,12 @@ export function PlanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario, draft.benefitBaseInputs, draft.sicknessBenefitBaseInput, sicknessStartDate]);
 
+  useEffect(() => {
+    if (typeof activeTabRef.current?.scrollIntoView === 'function') {
+      activeTabRef.current.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    }
+  }, [tab]);
+
   const effectiveScenario: ScenarioInput = useMemo(
     () => ({
       ...scenario,
@@ -138,6 +145,7 @@ export function PlanPage() {
   }
 
   const activeTab: PlanTabId | null = tab ?? null;
+  const activeTabMeta = activeTab ? PLAN_TABS.find((item) => item.id === activeTab) : null;
   const difficult = isDifficultSituation(effectiveScenario);
   const wizardHref = `/wizard?situation=${effectiveScenario.situation}`;
 
@@ -169,30 +177,54 @@ export function PlanPage() {
 
   return (
     <div className="plan-page">
-      <header className="plan-page__header">
+      <div className="plan-page__demo-strip">
+        <div className="plan-page__container plan-page__demo-strip-inner">
+          <p className="plan-page__demo-note">
+            Wersja demonstracyjna – dane są symulowane
+            {!bundle.usingApi && activeTab !== null && (
+              <span className="plan-page__mode-inline" role="status">
+                {' '}
+                · tryb demonstracyjny – obliczenia w przeglądarce
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <header
+        className={
+          activeTab !== null ? 'plan-page__header plan-page__header--section' : 'plan-page__header'
+        }
+      >
         <div className="plan-page__container">
-          <div className="plan-page__top-bar">
-            <p className="plan-page__demo-label">
-              Wersja demonstracyjna – dane i wysyłka są symulowane (bez zapisu danych osobowych na
-              serwerze)
-            </p>
-            <div className="plan-page__top-links">
-              <Link to="/">Strona startowa</Link>
-              <Link to={wizardHref}>Wróć do kreatora</Link>
-              <Link to="/guide">Przewodnik</Link>
-              <Link to="/cases">Przykładowe sprawy</Link>
-            </div>
+          <div className="plan-page__nav-row">
+            {activeTabMeta ? (
+              <nav className="plan-breadcrumb" aria-label="Ścieżka nawigacji">
+                <Link to={`/plan${querySuffix}`} className="plan-breadcrumb__back">
+                  ← Twój plan
+                </Link>
+                <span className="plan-breadcrumb__sep" aria-hidden="true">
+                  ›
+                </span>
+                <span className="plan-breadcrumb__current" aria-current="page">
+                  {activeTabMeta.label}
+                </span>
+              </nav>
+            ) : (
+              <span className="plan-page__hub-kicker">Twój plan</span>
+            )}
+
+            <Link to={wizardHref} className="plan-page__wizard-link">
+              Zmień odpowiedzi
+            </Link>
           </div>
 
           <h1 className="plan-page__title">Twój plan zasiłkowy i urlopowy</h1>
-          <p className="plan-page__subtitle">
-            {difficult
-              ? 'Zestawienie przysługujących uprawnień, dokumentów i bezpłatnego wsparcia dopasowane do Twojej sytuacji.'
-              : 'Jedno miejsce na uprawnienia, wyliczenie kwot, oś czasu urlopów, listę dokumentów, gotowe wnioski i wsparcie.'}
-          </p>
-          {!bundle.usingApi && activeTab !== null && (
-            <p className="plan-page__mode-note" role="status">
-              tryb demonstracyjny – obliczenia w przeglądarce
+          {activeTab === null && (
+            <p className="plan-page__subtitle">
+              {difficult
+                ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
+                : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
             </p>
           )}
         </div>
@@ -204,24 +236,12 @@ export function PlanPage() {
             <PlanHub querySuffix={querySuffix} />
           ) : (
             <>
-              <Link to={`/plan${querySuffix}`} className="plan-page__back-link">
-                ← Wszystkie sekcje planu
-              </Link>
-
-              <PlanControlsBar
-                scenario={effectiveScenario}
-                meta={meta}
-                params={bundle.params}
-                onChange={handleScenarioChange}
-                onCopyShareLink={handleCopyShareLink}
-                shareCopied={shareCopied}
-              />
-
               <nav className="plan-tabs" aria-label="Zakładki Twojego planu">
                 <ul className="plan-tabs__list">
                   {PLAN_TABS.map((item) => (
                     <li key={item.id} className="plan-tabs__item">
                       <NavLink
+                        ref={item.id === activeTab ? activeTabRef : undefined}
                         to={`/plan/${item.id}${querySuffix}`}
                         className={({ isActive }) =>
                           isActive ? 'plan-tabs__link plan-tabs__link--active' : 'plan-tabs__link'
@@ -233,6 +253,15 @@ export function PlanPage() {
                   ))}
                 </ul>
               </nav>
+
+              <PlanControlsBar
+                scenario={effectiveScenario}
+                meta={meta}
+                params={bundle.params}
+                onChange={handleScenarioChange}
+                onCopyShareLink={handleCopyShareLink}
+                shareCopied={shareCopied}
+              />
 
               <div
                 className="plan-panel"
@@ -293,6 +322,27 @@ export function PlanPage() {
           )}
         </div>
       </main>
+
+      <footer className="plan-page__footer">
+        <div className="plan-page__container">
+          <nav aria-label="Dodatkowa nawigacja" className="plan-page__footer-nav">
+            <ul className="plan-page__footer-links">
+              <li>
+                <Link to="/">Strona startowa</Link>
+              </li>
+              <li>
+                <Link to={wizardHref}>Wróć do kreatora</Link>
+              </li>
+              <li>
+                <Link to="/guide">Przewodnik</Link>
+              </li>
+              <li>
+                <Link to="/cases">Przykładowe sprawy</Link>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }
