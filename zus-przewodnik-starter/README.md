@@ -185,10 +185,16 @@ Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez
 
 1. Po porodzie ustaw datę sprzed 21 dni, a następnie sprzed 22 dni. Sprawdź, czy kreator nadal pozwala wybrać 81,5% w pierwszym przypadku i wybiera stawki rozdzielone w drugim.
 2. W planie obojga rodziców zaznacz pobyt mamy w szpitalu i orzeczenie jednocześnie. Następnie wybierz zgon mamy. Podaj datę zgonu i sprawdź, czy formularz przechodzi do danych taty.
-3. W zakładce **Wnioski** wybierz **Pobierz dane z mObywatela (symulacja)**. Podaj testowe imię i nazwisko oraz opcjonalny PESEL. Po powrocie sprawdź dane wybranego wnioskodawcy.
+3. W zakładce **Wnioski** wybierz **Pobierz dane z mObywatela (symulacja)**. Wybierz gotowy profil, wskaż wnioskodawcę, jeśli plan obejmuje oboje rodziców, i kliknij **Przekaż dane testowe**. Po automatycznym powrocie sprawdź imię i nazwisko, PESEL oraz datę urodzenia wybranego wnioskodawcy.
 4. Rozwiń wniosek urlopowy. Uzupełnij wymagane pola i sprawdź listę załączników oraz podgląd do druku. Symulacja wysyłki sprawdza pola wniosku. Załączniki należy skompletować osobno.
 
 Wnioski pracownicze generowane z planu obejmują urlopy i czynności dostępne w aplikacji. Dane osobowe z symulacji pozostają w pamięci strony do jej odświeżenia. [Rozporządzenie MRPiPS, Dz.U. 2025 poz. 322](https://dziennikustaw.gov.pl/DU/2025/322)
+
+### Adapter logowania do wniosków
+
+`GET /api/v1/mock/profiles` zwraca identyfikatory i etykiety profili z `data/profiles/`. `POST /api/v1/mock/login` przyjmuje np. `{"profile_id":"anna"}` i zwraca `{ data: { sessionToken, profile }, error: null }`. Profile zawierają dane fikcyjne i PESEL-e z celowo niepoprawną cyfrą kontrolną. Sesja testowa jest ważna do 30 minut i żyje w pamięci procesu API.
+
+Punkt podpięcia integracji ZUS znajduje się w `server/src/app.ts`, gdzie rejestrowany jest router z implementacją `AuthProvider`. W wersji produkcyjnej można zastąpić demonstracyjny wybór profilu na `/login` właściwym przepływem uwierzytelniania i przekazać wynik z polami `firstName`, `lastName`, `pesel` i `birthDate` do tej samej funkcji `setSimulatedIdentity`. Wnioski odczytują te pola z kontekstu scenariusza.
 
 Gdy domyślne porty są zajęte, uruchom w PowerShell:
 

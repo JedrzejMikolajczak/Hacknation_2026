@@ -1,18 +1,33 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import type { ApplicantRole } from '@shared/types';
+import type { ApplicantRole, AuthSession, MockProfileSummary } from '@shared/types';
+import { apiGet, apiPost } from '../../api/client';
 import { useScenario } from '../../app/ScenarioContext';
 import { parseSituation } from '../../app/situation';
 import '../wizard/WizardPage.css';
+
+const applicantOptions = [
+  { role: 'MOTHER', label: 'Mama' },
+  { role: 'FATHER', label: 'Tata' },
+] as const;
 
 export function LoginPage() {
   const { scenario, setSimulatedIdentity } = useScenario();
   const [query] = useSearchParams();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const [role, setRole] = useState<ApplicantRole | ''>('');
-  const [name, setName] = useState('');
-  const [pesel, setPesel] = useState('');
+  const requestedRoles = state?.applicantRoles;
+  const availableApplicants = Array.isArray(requestedRoles)
+    ? applicantOptions.filter(({ role }) => requestedRoles.includes(role))
+    : applicantOptions;
+  const [selectedRole, setSelectedRole] = useState<ApplicantRole | null>(null);
+  const role = selectedRole ?? availableApplicants[0]?.role;
+  const [profiles, setProfiles] = useState<MockProfileSummary[] | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState('');
+  const profileId = selectedProfile || profiles?.[0]?.profileId;
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const mounted = useRef(false);
   const situation = parseSituation(query.get('situation')) ?? scenario.situation;
   const returnTo =
     typeof state?.returnTo === 'string' && /^\/plan\/applications(?:\?.*)?$/.test(state.returnTo)
@@ -21,11 +36,42 @@ export function LoginPage() {
         ? `/wizard?situation=${situation}`
         : '/';
 
-  function connect(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    mounted.current = true;
+    let active = true;
+    void apiGet<MockProfileSummary[]>('/mock/profiles')
+      .then((items) => {
+        if (!active) return;
+        setProfiles(items);
+        if (!items.length) setError('Brak dostępnych profili testowych.');
+      })
+      .catch(() => {
+        if (active) {
+          setProfiles([]);
+          setError('Nie udało się pobrać profili testowych.');
+        }
+      });
+    return () => {
+      active = false;
+      mounted.current = false;
+    };
+  }, []);
+
+  async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!role || !name.trim() || (pesel && !/^\d{11}$/.test(pesel))) return;
-    setSimulatedIdentity(role, { name: name.trim(), pesel });
-    navigate(returnTo, { replace: true });
+    if (!role || !profileId || submitting) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      const result = await apiPost<AuthSession>('/mock/login', { profile_id: profileId });
+      if (!mounted.current) return;
+      setSimulatedIdentity(role, result);
+      navigate(returnTo, { replace: true });
+    } catch {
+      if (!mounted.current) return;
+      setError('Nie udało się zalogować. Spróbuj ponownie.');
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -33,54 +79,56 @@ export function LoginPage() {
       <form className="wizard__card" onSubmit={connect}>
         <h1>Logowanie przez mObywatela (symulacja)</h1>
         <p>
-          Wpisz dane testowe osoby składającej wniosek. Dane trafiają do podglądu wniosków i są
-          dostępne do odświeżenia strony.
+          Wybierz gotowy profil testowy. Imię, nazwisko, PESEL i data urodzenia zostaną przeniesione
+          do danych wnioskodawcy.
         </p>
         <div className="wizard__input-group">
           <label className="wizard__field">
             Wnioskodawca
             <select
-              required
-              value={role}
+              value={role ?? ''}
+              disabled={submitting || availableApplicants.length < 2}
               onChange={(event) => {
-                const selected = event.target.value;
-                setRole(selected === 'MOTHER' || selected === 'FATHER' ? selected : '');
+                const applicant = availableApplicants.find(({ role }) => role === event.target.value);
+                if (applicant) setSelectedRole(applicant.role);
               }}
             >
-              <option value="">Wybierz osobę</option>
-              <option value="MOTHER">Mama</option>
-              <option value="FATHER">Tata</option>
+              {availableApplicants.map(({ role, label }) => (
+                <option key={role} value={role}>
+                  {label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="wizard__field">
-            Imię i nazwisko
-            <input
-              required
-              type="text"
-              autoComplete="off"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <label className="wizard__field">
-            PESEL (opcjonalnie)
-            <input
-              type="text"
-              autoComplete="off"
-              inputMode="numeric"
-              pattern="[0-9]{11}"
-              maxLength={11}
-              value={pesel}
-              onChange={(event) => setPesel(event.target.value)}
-            />
+            Profil testowy
+            <select
+              value={profileId ?? ''}
+              disabled={!profileId || submitting}
+              onChange={(event) => setSelectedProfile(event.target.value)}
+            >
+              {!profileId && (
+                <option value="">{profiles === null ? 'Wczytywanie…' : 'Brak profili'}</option>
+              )}
+              {profiles?.map((profile) => (
+                <option key={profile.profileId} value={profile.profileId}>
+                  {profile.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
+        {error && <p role="alert">{error}</p>}
         <div className="wizard__actions">
           <Link className="wizard__button wizard__button--secondary" to={returnTo}>
             Kontynuuj bez logowania
           </Link>
-          <button className="wizard__button wizard__button--primary" type="submit">
-            Przekaż dane testowe
+          <button
+            className="wizard__button wizard__button--primary"
+            type="submit"
+            disabled={!role || !profileId || submitting}
+          >
+            {submitting ? 'Pobieranie danych…' : 'Przekaż dane testowe'}
           </button>
         </div>
       </form>

@@ -58,6 +58,8 @@ Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error:
 | GET | `/params` | — | `BenefitParams` |
 | PUT | `/admin/params` | `BenefitParams`, nagłówek `Authorization: Bearer …` | Parametry aktywne do restartu |
 | POST | `/assistant/ask` | `{ question }` | `{ answer, sources, is_demo_fallback }` |
+| GET | `/mock/profiles` | — | `MockProfileSummary[]` |
+| POST | `/mock/login` | `{ profile_id }` | `AuthSession` z `sessionToken` i `profile: UserProfile` |
 
 `matches` porównuje kwalifikację, płatnika, stawkę, wymiary, formularze, okresy oraz znane kwoty. Streszczenie i cytaty źródłowe są zwracane obok wyniku jako treść decyzji.
 
@@ -89,3 +91,4 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | `CaseInputs`, `CaseOutcome`, `CasePlan`, format spraw ZUS oraz katalog i porównanie wyników |
 | 2026-11-21 | Wspólne okresy planu, dokumenty według zapisanych dat, ostrzeżenia z parametrami i symulacja odpowiedzi asystenta |
 | 2026-11-21 | Opcjonalne pola w `CaseParentInsurance` (`monthly_bases`, `title_start_date`, `debt_amount_pln`) i `CaseCircumstances` (`mother_deceased`) dla obliczeń drugiego rodzica |
+| 2026-11-21 | Dodano katalog i logowanie profili testowych oraz pola `pesel` i `birthDate` w `UserProfile` |

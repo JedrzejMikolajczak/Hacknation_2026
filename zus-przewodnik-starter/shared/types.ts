@@ -233,7 +233,14 @@ export interface UserProfile {
   profileId: string;
   firstName: string;
   lastName: string;
+  pesel: string;
+  birthDate: IsoDate;
   mother: ParentData;
+}
+
+export interface AuthSession {
+  sessionToken: string;
+  profile: UserProfile;
 }
 
 export interface SickLeaveCertificate {

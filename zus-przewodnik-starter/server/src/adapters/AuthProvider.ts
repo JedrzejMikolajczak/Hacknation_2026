@@ -1,4 +1,4 @@
-import type { MockProfileSummary, UserProfile } from '@shared/types';
+import type { AuthSession, MockProfileSummary, UserProfile } from '@shared/types';
 
 /**
  * Logowanie (dziś symulacja mObywatela – MockMObywatelProvider, Osoba 3).
@@ -6,7 +6,9 @@ import type { MockProfileSummary, UserProfile } from '@shared/types';
  */
 export interface AuthProvider {
   listProfiles(): Promise<MockProfileSummary[]>;
-  login(profileId: string): Promise<{ sessionToken: string; profile: UserProfile }>;
+  login(profileId: string): Promise<AuthSession>;
   /** Zwraca profil dla ważnej sesji albo null. */
   getProfileBySession(sessionToken: string): Promise<UserProfile | null>;
 }
+
+export class UnknownProfileError extends Error {}
