@@ -89,14 +89,20 @@ describe('family wizard', () => {
     await view.input('31');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('upadłości lub likwidacji');
     await view.choice('Nie');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('prawomocny wyrok');
+    await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zwolnieniu lekarskim');
     await view.choice('Tak');
     await view.input('2026-10-01');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('aż do porodu');
     await view.choice('Tak');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł ubezpieczenia');
+    await view.choice('Nie');
     await view.choice('Działalność gospodarcza');
     await view.choice('Nie wiem / uzupełnię później');
     await view.skip();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł ubezpieczenia');
+    await view.choice('Nie');
     await view.choice('Tak');
     await view.skip();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(

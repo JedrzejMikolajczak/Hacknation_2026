@@ -84,7 +84,7 @@ function applicableParents(
 ): ParentRole[] {
   const roles = parentRoles(answers);
   return situation === 'afterBirth' &&
-    answers.motherSituation === 'deceased' &&
+    (answers.motherSituation === 'deceased' || answers.motherSituation === 'abandoned') &&
     roles.includes('father')
     ? roles.filter((role) => role !== 'mother')
     : roles;
@@ -101,6 +101,11 @@ export function getQuestions(
     situation === 'afterBirth' &&
     answers.motherSituation === 'deceased' &&
     roles.includes('father');
+  const motherAbandoned =
+    situation === 'afterBirth' &&
+    answers.motherSituation === 'abandoned' &&
+    roles.includes('father');
+  const motherUnavailable = motherDeceased || motherAbandoned;
   const questions: WizardQuestion[] = [
     {
       id: 'family',
@@ -232,6 +237,13 @@ export function getQuestions(
   const childLost =
     situation === 'afterBirth' &&
     (answers.birthOutcome === 'stillbirth' || answers.birthOutcome === 'childDeath');
+  const parsedChildrenCount = Number(answers.childrenCount);
+  const multipleBirth = Number.isInteger(parsedChildrenCount) && parsedChildrenCount > 1;
+  const parsedDeceasedCount = Number(answers.deceasedChildrenCount);
+  const allChildrenLost =
+    childLost &&
+    (!multipleBirth ||
+      (Number.isInteger(parsedDeceasedCount) && parsedDeceasedCount >= parsedChildrenCount));
 
   // Dane faktycznego porodu są dostępne wyłącznie na ścieżce po narodzinach.
   if (situation === 'afterBirth') {
@@ -248,6 +260,19 @@ export function getQuestions(
         { value: 'childDeath', label: 'Dziecko zmarło po porodzie' },
       ],
     });
+    if (childLost && multipleBirth) {
+      questions.push({
+        id: 'deceasedChildrenCount',
+        stage: 1,
+        type: 'number',
+        title: 'Ile dzieci z tego porodu nie przeżyło?',
+        label: 'Liczba zmarłych dzieci',
+        min: 1,
+        max: parsedChildrenCount,
+        step: '1',
+        hint: 'Przy porodzie mnogim wymiar urlopu ustala się stosownie do liczby dzieci pozostałych przy życiu (KP art. 180¹).',
+      });
+    }
     if (answers.birthOutcome === 'childDeath') {
       questions.push({
         id: 'childDeathDate',
@@ -261,7 +286,7 @@ export function getQuestions(
     }
   }
 
-  if (situation === 'afterBirth' && !childLost) {
+  if (situation === 'afterBirth' && !allChildrenLost) {
     questions.push({
       id: 'hospitalization',
       stage: 1,
@@ -309,7 +334,7 @@ export function getQuestions(
   }
 
   // Zaświadczenie „Za życiem” wydaje się także w czasie ciąży – wydłuża urlop rodzicielski.
-  if (situation === 'pregnant' || (situation === 'afterBirth' && !childLost)) {
+  if (situation === 'pregnant' || (situation === 'afterBirth' && !allChildrenLost)) {
     questions.push({
       id: 'zaZyciemCertificate',
       stage: 1,
@@ -340,7 +365,12 @@ export function getQuestions(
           value: 'incapable',
           label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
         },
-        ...(situation === 'afterBirth' ? [{ value: 'deceased', label: 'Mama zmarła' }] : []),
+        ...(situation === 'afterBirth'
+          ? [
+              { value: 'deceased', label: 'Mama zmarła' },
+              { value: 'abandoned', label: 'Mama porzuciła dziecko' },
+            ]
+          : []),
       ],
     });
     if (motherDeceased) {
@@ -353,6 +383,18 @@ export function getQuestions(
         min: answers.birthDate,
         max: today,
         hint: 'Ta data jest potrzebna do ustalenia początku urlopu taty.',
+      });
+    }
+    if (motherAbandoned) {
+      questions.push({
+        id: 'motherAbandonmentDate',
+        stage: 1,
+        type: 'date',
+        title: 'Kiedy mama porzuciła dziecko?',
+        label: 'Data porzucenia dziecka przez matkę',
+        min: answers.birthDate,
+        max: today,
+        hint: 'Ta data jest potrzebna do ustalenia początku przejęcia urlopu przez tatę (KP art. 180 § 13).',
       });
     }
   }
@@ -438,16 +480,28 @@ export function getQuestions(
       title === 'employment' &&
       (situation === 'pregnant' || situation === 'afterBirth')
     ) {
-      questions.push({
-        id: 'employerBankruptcyOrLiquidation',
-        stage: 2,
-        type: 'choice',
-        title:
-          'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
-        label: 'Upadłość lub likwidacja pracodawcy',
-        hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
-        options: YES_NO,
-      });
+      questions.push(
+        {
+          id: 'employerBankruptcyOrLiquidation',
+          stage: 2,
+          type: 'choice',
+          title:
+            'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
+          label: 'Upadłość lub likwidacja pracodawcy',
+          hint: 'W takiej sytuacji ZUS może wypłacać zasiłek w wysokości zasiłku macierzyńskiego.',
+          options: YES_NO,
+        },
+        {
+          id: 'unlawfulTerminationConfirmedByCourt',
+          stage: 2,
+          type: 'choice',
+          title:
+            'Czy umowa mamy została rozwiązana z naruszeniem prawa i potwierdził to prawomocny wyrok sądu?',
+          label: 'Bezprawne zwolnienie potwierdzone wyrokiem',
+          hint: 'Zgodnie z art. 30 ust. 3 ustawy zasiłkowej ZUS wypłaca wówczas zasiłek w wysokości zasiłku macierzyńskiego do dnia porodu.',
+          options: YES_NO,
+        },
+      );
     }
     const motherSicknessInsured =
       title === 'employment' || answers['mother.sicknessInsurance'] === 'yes';
@@ -525,6 +579,38 @@ export function getQuestions(
         unknownLabel: 'Sprawdzimy to później',
       });
     }
+    if (title === 'employment' || title === 'mandateContract' || title === 'selfEmployed') {
+      questions.push({
+        id: `${role}.hasSecondaryTitle`,
+        stage: 2,
+        type: 'choice',
+        title: `Czy ${role === 'mother' ? 'mama' : 'tata'} ma jednocześnie drugi tytuł ubezpieczenia (np. dodatkowy etat, zlecenie lub JDG)?`,
+        label: `Drugi tytuł ubezpieczenia ${person}`,
+        hint: 'Przy dwóch równoległych tytułach zasiłek ustala się odrębnie dla każdego tytułu objętego składką chorobową.',
+        options: YES_NO,
+      });
+      if (answers[`${role}.hasSecondaryTitle`] === 'yes') {
+        const secondaryTitle = answers[`${role}.secondaryInsuranceTitle`];
+        questions.push({
+          id: `${role}.secondaryInsuranceTitle`,
+          stage: 2,
+          type: 'choice',
+          title: `Jaki jest drugi tytuł ubezpieczenia ${person}?`,
+          label: `Rodzaj drugiego tytułu ${person}`,
+          options: INSURANCE_OPTIONS.filter((option) => option.value !== 'none'),
+        });
+        if (secondaryTitle === 'mandateContract' || secondaryTitle === 'selfEmployed') {
+          questions.push({
+            id: `${role}.secondarySicknessInsurance`,
+            stage: 2,
+            type: 'choice',
+            title: `Czy z drugiego tytułu za ${person === 'mamy' ? 'mamę' : 'tatę'} jest opłacana dobrowolna składka chorobowa?`,
+            label: `Składka chorobowa z drugiego tytułu ${person}`,
+            options: YES_NO,
+          });
+        }
+      }
+    }
   }
 
   for (const role of roles) {
@@ -598,8 +684,8 @@ export function getQuestions(
   }
 
   if (
-    !childLost &&
-    !motherDeceased &&
+    !allChildrenLost &&
+    !motherUnavailable &&
     roles.length > 0 &&
     (roles.includes('mother') || situation === 'adoption')
   ) {
@@ -672,7 +758,8 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
     );
     return valid &&
       new Set(selected).size === selected.length &&
-      (selected.length === 1 || !selected.some((entry) => entry === 'none' || entry === 'deceased'))
+      (selected.length === 1 ||
+        !selected.some((entry) => entry === 'none' || entry === 'deceased' || entry === 'abandoned'))
       ? null
       : 'Wybierz sytuacje, które mają zastosowanie.';
   }
@@ -866,6 +953,19 @@ export function buildScenario(
     parent.contributionDebt = numberOrNull(values[`${role}.contributionDebt`]);
     parent.employerInsuredCount = numberOrNull(values[`${role}.employerInsuredCount`]);
     if (role === 'mother') parent.age = numberOrNull(values['mother.age']);
+    if (values[`${role}.hasSecondaryTitle`] === 'yes') {
+      const secondaryTitle = values[`${role}.secondaryInsuranceTitle`];
+      if (secondaryTitle && secondaryTitle !== 'unknown') {
+        parent.secondaryInsuranceTitle = secondaryTitle as InsuranceTitle;
+        if (secondaryTitle === 'employment') parent.secondarySicknessInsurance = 'mandatory';
+        else {
+          const secondaryVoluntary = knownBoolean(values[`${role}.secondarySicknessInsurance`]);
+          if (secondaryVoluntary !== undefined) {
+            parent.secondarySicknessInsurance = secondaryVoluntary ? 'voluntary' : 'none';
+          }
+        }
+      }
+    }
     const wantsLeave = knownBoolean(values[`${role}.wantsLeave`]);
     if (wantsLeave !== undefined) parent.wantsLeave = wantsLeave;
     scenario[role] = parent;
@@ -900,12 +1000,16 @@ export function buildScenario(
   const special: NonNullable<ScenarioDraft['special']> = {};
   if (situation === 'afterBirth') {
     const lost = values.birthOutcome === 'stillbirth' || values.birthOutcome === 'childDeath';
+    const deceasedCount = numberOrNull(values.deceasedChildrenCount);
+    const allLost =
+      lost && ((childrenCount ?? 1) <= 1 || (deceasedCount !== null && deceasedCount >= (childrenCount ?? 1)));
     if (values.birthOutcome) {
       special.stillbirth = values.birthOutcome === 'stillbirth';
       special.childDeathDate =
         values.birthOutcome === 'childDeath' ? dateOrNull(values.childDeathDate) : null;
+      if (lost && deceasedCount !== null) special.deceasedChildrenCount = deceasedCount;
     }
-    if (!lost) {
+    if (!allLost) {
       special.pregnancyWeekAtBirth = numberOrNull(values.pregnancyWeekAtBirth);
       special.birthWeightGrams = numberOrNull(values.birthWeightGrams);
       special.hospitalizationDays =
@@ -919,10 +1023,15 @@ export function buildScenario(
     special.motherHospitalized = situations.includes('hospitalized');
     special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
+    special.motherAbandonedChild = values.motherSituation === 'abandoned';
     if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
+    if (special.motherAbandonedChild)
+      scenario.motherAbandonmentDate = dateOrNull(values.motherAbandonmentDate);
   }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
+  const unlawful = knownBoolean(values.unlawfulTerminationConfirmedByCourt);
+  if (unlawful !== undefined) special.unlawfulTerminationConfirmedByCourt = unlawful;
   scenario.special = special;
   return scenario;
 }

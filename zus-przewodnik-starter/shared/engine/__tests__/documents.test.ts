@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { WizardScenario } from '../../types';
+import type { ParentData, WizardScenario } from '../../types';
 import { getRequiredDocuments } from '../index';
 
-function testScenario(): WizardScenario {
+function testScenario(): WizardScenario & { mother: ParentData } {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
@@ -124,6 +124,39 @@ describe('documents checklist', () => {
     expect(result.documents.some((d) => d.id === 'eZlaCodeB')).toBe(true);
   });
 
+  it('routes e-ZLA to the payer without requiring a leave date and lists ZAS-12 only for continuation paid by ZUS', () => {
+    const scenario = testScenario();
+    scenario.situation = 'pregnant';
+    scenario.birthDate = null;
+    scenario.expectedBirthDate = '2027-03-10';
+    scenario.mother.insuranceTitle = 'mandateContract';
+    scenario.mother.sicknessInsurance = 'voluntary';
+
+    const firstLeave = getRequiredDocuments(scenario, params);
+    expect(firstLeave.documents).toContainEqual(expect.objectContaining({ id: 'eZlaCodeB', submitTo: 'zus' }));
+    expect(firstLeave.documents.some((d) => d.id === 'formZAS12')).toBe(false);
+
+    const continuation = { ...scenario, sicknessLeaveContinues: true };
+    expect(getRequiredDocuments(continuation, params).documents).toContainEqual(
+      expect.objectContaining({ id: 'formZAS12', submitTo: 'zus', note: expect.stringContaining('Z-3a') }),
+    );
+
+    scenario.mother.employerInsuredCount = 21;
+    const largePayer = getRequiredDocuments(continuation, params);
+    expect(largePayer.documents).toContainEqual(expect.objectContaining({ id: 'eZlaCodeB', submitTo: 'employer' }));
+    expect(largePayer.documents.some((d) => d.id === 'formZAS12')).toBe(false);
+  });
+
+  it.each([
+    { start: '2026-09-19', expected: false },
+    { start: '2026-09-20', expected: true },
+    { start: '2026-11-01', expected: false },
+  ])('lists the expected-birth certificate for a valid prenatal start ($start)', ({ start, expected }) => {
+    const scenario = testScenario();
+    const { documents } = getRequiredDocuments({ ...scenario, maternityLeaveStartDate: start }, params);
+    expect(documents.some((d) => d.id === 'expectedBirthCertificate' && d.submitTo === 'zus')).toBe(expected);
+  });
+
   it('includes Za Zyciem certificate and court order for adoption, and omits parental deadlines on stillbirth', () => {
     const zaZyciem = testScenario();
     zaZyciem.special.zaZyciemCertificate = true;
@@ -143,6 +176,7 @@ describe('documents checklist', () => {
     stillbirth.special.stillbirth = true;
     const stillRes = getRequiredDocuments(stillbirth, params);
     expect(stillRes.deadlines).toHaveLength(0);
-    expect(stillRes.documents.some((d) => d.name.includes('martwym urodzeniu'))).toBe(true);
+    expect(stillRes.documents.find((d) => d.id === 'stillbirthCertificate')?.name).toContain('martwym urodzeniu');
+    expect(stillRes.documents.some((d) => d.id === 'birthCertificateShort')).toBe(false);
   });
 });

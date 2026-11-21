@@ -35,7 +35,11 @@ export function documentsForPlan(
   const hasChildLoss = input.special_circumstances.stillbirth_or_child_death !== 'NONE';
   const living =
     input.living_children_count ??
-    (hasChildLoss ? Math.max(0, input.children_count - 1) : input.children_count);
+    (input.deceased_children_count !== undefined
+      ? Math.max(0, input.children_count - input.deceased_children_count)
+      : hasChildLoss
+        ? Math.max(0, input.children_count - 1)
+        : input.children_count);
   const isChildDeathAfterBirth = Boolean(
     hasChildLoss && input.child_death_date && (!event || input.child_death_date !== event),
   );
@@ -179,16 +183,16 @@ export function documentsForPlan(
       add('e-ZLA', ezlaName, role, personPayer, KP.sickness, sickness);
       if (person.employment_type === 'B2B')
         add('ZAS-53', 'ZAS-53 – wniosek o zasiłek chorobowy', role, 'ZUS', KP.sickness, sickness);
-      const hasFurtherSicknessPeriod = Boolean(
+      const hasFurtherSicknessPeriod =
         sickness &&
         ((input.sickness_benefit_days_already_used ?? 0) > 0 ||
-          roleSickness.length > 1 ||
-          (sickness.amount_segments?.length ?? 0) > 1),
-      );
-      if (employee && personPayer === 'ZUS' && hasFurtherSicknessPeriod)
+          (employee && (roleSickness.length > 1 || (sickness.amount_segments?.length ?? 0) > 1)));
+      if ((employee || mandate) && personPayer === 'ZUS' && hasFurtherSicknessPeriod)
         add(
           'ZAS-12',
-          'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
+          mandate
+            ? 'ZAS-12 – zaświadczenie zleceniodawcy na dalszy okres zasiłku chorobowego (alternatywa dla Z-3a)'
+            : 'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
           role,
           'ZUS',
           KP.sickness,
@@ -202,6 +206,7 @@ export function documentsForPlan(
       role === input.applicant_role &&
       event &&
       !input.special_circumstances.mother_deceased &&
+      !input.special_circumstances.mother_abandoned_child &&
       input.requested_payment_variant === 'COMBINED_81_5'
     ) {
       add(
@@ -243,20 +248,51 @@ export function documentsForPlan(
     if (
       maternity &&
       role === 'FATHER' &&
-      (input.father_takeover_date || input.special_circumstances.mother_deceased)
+      (input.father_takeover_date ||
+        input.special_circumstances.mother_deceased ||
+        input.special_circumstances.mother_abandoned_child)
     )
       add(
         'TAKEOVER',
         'Wniosek ojca o przejęcie macierzyńskiego',
         role,
         destination,
-        KP.maternity,
+        input.special_circumstances.mother_abandoned_child ? KP.abandonment : KP.maternity,
         maternity,
         input.special_circumstances.mother_deceased ||
+          input.special_circumstances.mother_abandoned_child ||
           input.special_circumstances.mother_hospitalized_or_incapable
           ? null
           : addDays(maternity.start_date, -notice.fatherTakeoverPart),
       );
+    if (
+      role === 'MOTHER' &&
+      input.special_circumstances.unlawful_termination_confirmed_by_court &&
+      person?.employment_type === 'UOP'
+    ) {
+      add(
+        'COURT_JUDGMENT',
+        'Prawomocny wyrok sądu potwierdzający niezgodne z prawem rozwiązanie umowy o pracę oraz świadectwo pracy',
+        role,
+        'ZUS',
+        KP.maternityEquivalent,
+      );
+    }
+    if (
+      role === input.applicant_role &&
+      input.secondary_employment_type &&
+      input.secondary_employment_type !== 'NONE' &&
+      (input.secondary_employment_type === 'UOP' ||
+        input.secondary_voluntary_sickness_insured === true)
+    ) {
+      add(
+        'SECONDARY_TITLE_ZAM',
+        'Odrębny wniosek o zasiłek z drugiego tytułu ubezpieczenia (ZUS ZAM / płatnik drugiego tytułu)',
+        role,
+        input.secondary_employment_type === 'UOP' ? 'EMPLOYER' : 'ZUS',
+        KP.multipleTitles,
+      );
+    }
     for (const part of parental) {
       add(
         'PARENTAL_REQUEST',

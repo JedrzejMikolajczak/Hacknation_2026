@@ -55,9 +55,11 @@ export function maternityWeeks(
   const week = params.calendar.daysPerWeek;
   const alive =
     input.living_children_count ??
-    (input.special_circumstances.stillbirth_or_child_death === 'NONE'
-      ? input.children_count
-      : Math.max(0, input.children_count - 1));
+    (input.deceased_children_count !== undefined
+      ? Math.max(0, input.children_count - input.deceased_children_count)
+      : input.special_circumstances.stillbirth_or_child_death === 'NONE'
+        ? input.children_count
+        : Math.max(0, input.children_count - 1));
   const dimensions = params.maternityLeave.weeksByChildrenCount;
   if (alive > 0)
     return {
