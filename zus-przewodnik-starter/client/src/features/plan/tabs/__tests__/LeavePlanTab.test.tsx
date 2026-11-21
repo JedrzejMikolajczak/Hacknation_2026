@@ -82,11 +82,11 @@ function maternityFor(scenario: ScenarioInput): MaternityCalculationResult {
   }
 }
 
-function renderTab(scenario: ScenarioInput, usingApi?: boolean) {
+function renderTab(scenario: ScenarioInput, usingApi?: boolean, initialEntry = '/plan/leave-plan') {
   const maternity = maternityFor(scenario);
   const user = userEvent.setup();
-  render(
-    <MemoryRouter initialEntries={['/plan/leave-plan']}>
+  const utils = render(
+    <MemoryRouter initialEntries={[initialEntry]}>
       <LeavePlanTab
         scenario={scenario}
         params={DEFAULT_PARAMS}
@@ -95,7 +95,7 @@ function renderTab(scenario: ScenarioInput, usingApi?: boolean) {
       />
     </MemoryRouter>,
   );
-  return { user, maternity };
+  return { user, maternity, ...utils };
 }
 
 afterEach(() => {
@@ -103,21 +103,22 @@ afterEach(() => {
 });
 
 describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () => {
-  it('renderuje oś czasu, kalendarz i planer bez własnego nagłówka strony ani duplikatu zakładek', async () => {
+  it('pokazuje kluczową odpowiedź, najbliższy termin, uproszczoną oś czasu i zwija szczegóły w <details>', async () => {
     vi.spyOn(planApi, 'fetchParentalSplit').mockImplementation(async (input, params) =>
       planParentalSplit(input, params),
     );
 
-    renderTab(makeScenario(), false);
+    const { container } = renderTab(makeScenario(), false, '/plan/leave-plan?situation=afterBirth');
 
+    // Kluczowa odpowiedź i nagłówki
     expect(
-      screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów obojga rodziców/i }),
+      screen.getByRole('heading', { level: 2, name: /Plan urlopów w skrócie/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /Kalendarz miesięczny/i }),
+      screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /Zaplanuj podział urlopów/i }),
+      screen.getByRole('heading', { level: 2, name: /Jak chcecie podzielić urlop\?/i }),
     ).toBeInTheDocument();
 
     // Brak własnego <h1> i brak własnego paska zakładek
@@ -127,7 +128,37 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
     // Notatka usingApi: false
     expect(screen.getByText(/trybie lokalnym/i)).toBeInTheDocument();
 
+    // Po przeliczeniu: proste podsumowanie dat i najbliższy termin
     expect(await screen.findByText(/Podział zgodny z Kodeksem pracy/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Mama: urlop od 10\.11\.2026 do 08\.11\.2027, powrót do pracy 09\.11\.2027/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Tata: urlop od 10\.11\.2026 do 23\.11\.2026 oraz od 09\.11\.2027 do 10\.01\.2028, powrót do pracy 11\.01\.2028/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Najbliższy termin:/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /wniosek o 81,5%.*01\.12\.2026/i }),
+    ).toBeInTheDocument();
+
+    // Szczegóły są zwinięte domyślnie w natywnych <details>
+    const periodsSummary = screen.getByText('Zobacz okresy i kwoty');
+    expect(periodsSummary.closest('details')).not.toHaveAttribute('open');
+
+    const calendarSummary = screen.getByText('Pokaż kalendarz dzień po dniu');
+    expect(calendarSummary.closest('details')).not.toHaveAttribute('open');
+
+    const manualSummary = screen.getByText('Ułóż ręcznie / połącz z pracą');
+    expect(manualSummary.closest('details')).not.toHaveAttribute('open');
+
+    // Link końcowy z zachowaniem query string oraz dokładnie jedno główne CTA
+    const nextLink = screen.getByRole('link', { name: /Dalej: Dokumenty i terminy/i });
+    expect(nextLink).toHaveAttribute('href', '/plan/documents?situation=afterBirth');
+    expect(container.querySelectorAll('.plan-btn--primary')).toHaveLength(1);
   });
 
   it('nie liczy podwójnie okresów urlopu rodzicielskiego i pokazuje realne „Pozostały rodzicielski”', async () => {
@@ -141,18 +172,21 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
 
     await screen.findByText(/Podział zgodny z Kodeksem pracy/i);
 
-    // W klasycznym planie (Mama 32 + Tata 9) na liście okresów powinno być dokładnie 2 części rodzicielskiego (nie 4!)
+    // Rozwiń „Zobacz okresy i kwoty”
+    await user.click(screen.getByText('Zobacz okresy i kwoty'));
+
+    // W klasycznym planie (Mama 32 + Tata 9) na liście okresów powinno być dokładnie 2 części rodzicielskiego (nie 4)
     const periodList = screen.getByRole('list', { name: /Szczegółowa lista okresów urlopu/i });
     const parentalItems = within(periodList).getAllByText(/^Urlop rodzicielski$/i);
     expect(parentalItems).toHaveLength(2);
 
-    // Przełącz na „Tylko Mama” (32 tyg.) -> Pozostały rodzicielski – Ojciec MUSI wynosić 9 tyg., nie 0!
+    // Przełącz na „Tylko Mama” (32 tyg.) -> Pozostały rodzicielski dla Taty MUSI wynosić 9 tyg., nie 0
     await user.click(screen.getByRole('button', { name: /Tylko Mama/i }));
     await waitFor(() => {
       expect(within(periodList).getAllByText(/^Urlop rodzicielski$/i)).toHaveLength(1);
     });
 
-    const summary = screen.getByRole('region', { name: /Podsumowanie planu urlopów/i });
+    const summary = screen.getByLabelText(/Podsumowanie planu urlopów/i);
     expect(within(summary).getByText('9 tyg.')).toBeInTheDocument();
   });
 
@@ -175,23 +209,24 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
     expect(splitSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('pokazuje stan „uzupełnij dane” z linkiem do /wizard?situation=… gdy brakuje daty lub ubezpieczenia', () => {
+  it('pokazuje stan „uzupełnij dane” z jednym przyciskiem do /wizard?situation=… gdy brakuje daty lub ubezpieczenia', () => {
     const missingDateScenario = makeScenario({
       situation: 'pregnant',
       birthDate: null,
       expectedBirthDate: null,
     });
 
-    renderTab(missingDateScenario);
+    const { container } = renderTab(missingDateScenario);
 
     expect(
       screen.getByRole('heading', {
         level: 2,
-        name: /Uzupełnij dane, aby przygotować plan urlopów/i,
+        name: /Uzupełnij dane do planu urlopów/i,
       }),
     ).toBeInTheDocument();
-    const wizardLink = screen.getByRole('link', { name: /Uzupełnij dane w kreatorze/i });
+    const wizardLink = screen.getByRole('link', { name: /Uzupełnij dane/i });
     expect(wizardLink).toHaveAttribute('href', '/wizard?situation=pregnant');
+    expect(container.querySelectorAll('.plan-btn--primary')).toHaveLength(1);
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
 
@@ -207,11 +242,11 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
     renderTab(noBaseScenario);
 
     expect(await screen.findByText(/Brak podstawy wymiaru zasiłku dla Matki/i)).toBeInTheDocument();
-    const wizardLink = screen.getByRole('link', { name: /Uzupełnij dane w kreatorze/i });
+    const wizardLink = screen.getByRole('link', { name: /Uzupełnij dane/i });
     expect(wizardLink).toHaveAttribute('href', '/wizard?situation=afterBirth');
   });
 
-  it('przy łączeniu urlopu rodzicielskiego z pracą pokazuje obie części (praca + wydłużenie) i datę powrotu do pracy', async () => {
+  it('przy łączeniu urlopu rodzicielskiego z pracą (w <details>) pokazuje obie części i aktualizuje datę powrotu', async () => {
     vi.spyOn(planApi, 'fetchParentalSplit').mockImplementation(async (input, params) =>
       planParentalSplit(input, params),
     );
@@ -222,13 +257,18 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
     const { user } = renderTab(makeScenario());
     await screen.findByText(/Podział zgodny z Kodeksem pracy/i);
 
+    // Rozwiń sekcję ręcznej edycji i łączenia z pracą
+    await user.click(screen.getByText('Ułóż ręcznie / połącz z pracą'));
+
     const workSelects = screen.getAllByLabelText(/Praca w trakcie urlopu:/i);
     await user.selectOptions(workSelects[0], '0.5');
 
     expect(await screen.findByText(/Część 1 – praca 1\/2 etatu/i)).toBeInTheDocument();
     expect(screen.getByText(/Część 2 – proporcjonalne wydłużenie/i)).toBeInTheDocument();
     expect(screen.getByText(/Powrót do pracy po tej części:/i)).toBeInTheDocument();
-    // Okres wydłużenia pojawia się też na szczegółowej liście okresów osi czasu
+
+    // Po rozwinięciu listy okresów widać też okres wydłużenia
+    await user.click(screen.getByText('Zobacz okresy i kwoty'));
     expect(screen.getAllByText(/wydłużenie po pracy/i).length).toBeGreaterThanOrEqual(1);
   });
 
@@ -241,16 +281,17 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
       special: { ...makeScenario().special, stillbirth: true },
     });
 
-    renderTab(sensitiveScenario);
+    const { container } = renderTab(sensitiveScenario);
 
     expect(
       screen.getAllByText(/Urlop rodzicielski nie przysługuje/i).length,
     ).toBeGreaterThanOrEqual(1);
     expect(screen.queryByRole('button', { name: /Najpierw Mama/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Gratulacje/i)).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain('!');
   });
 
-  it('oznacza minione terminy na osi czasu oraz w szczegółach dnia w kalendarzu', async () => {
+  it('pokazuje minione terminy w skrócie i po kliknięciu otwiera kalendarz na tym dniu', async () => {
     vi.spyOn(planApi, 'fetchParentalSplit').mockImplementation(async (input, params) =>
       planParentalSplit(input, params),
     );
@@ -264,17 +305,21 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
     const { user } = renderTab(pastDeadlineScenario);
     await screen.findByText(/Podział zgodny z Kodeksem pracy/i);
 
-    const milestonesBox = screen.getByLabelText(/Ważne daty i terminy wniosków/i);
-    const pastChip = within(milestonesBox).getByRole('button', { name: /Termin minął.*81,5%/i });
+    const pastBox = screen.getByLabelText(/Minione terminy wniosków/i);
+    const pastChip = within(pastBox).getByRole('button', { name: /Termin minął.*81,5%/i });
     expect(pastChip).toBeInTheDocument();
 
+    // Kliknięcie minionego terminu rozwija kalendarz i pokazuje szczegóły dnia
     await user.click(pastChip);
+    expect(screen.getByText('Pokaż kalendarz dzień po dniu').closest('details')).toHaveAttribute(
+      'open',
+    );
     expect(
       screen.getByText(/Ten termin \(22\.10\.2026\) przypadł przed datą odniesienia/i),
     ).toBeInTheDocument();
   });
 
-  it('obsługuje adopcję (urlop na warunkach macierzyńskiego i walidację limitu wieku)', async () => {
+  it('obsługuje adopcję (widoczna walidacja limitu wieku bez rozwijania oraz skok w kalendarzu)', async () => {
     vi.spyOn(planApi, 'fetchParentalSplit').mockImplementation(async (input, params) =>
       planParentalSplit(input, params),
     );
@@ -289,11 +334,15 @@ describe('LeavePlanTab – zakładka „Plan urlopów” wewnątrz /plan', () =>
       schoolObligationDeferred: false,
     });
 
-    renderTab(adoptionScenario);
+    const { user } = renderTab(adoptionScenario);
 
+    // Błąd walidacji wieku jest widoczny od razu bez rozwijania <details>
     expect(
       await screen.findByText(/Wiek dziecka \(8 lat\) osiąga lub przekracza limit ustawowy/i),
     ).toBeInTheDocument();
+
+    // W rozwiniętym kalendarzu dostępny skok „Przyjęcie dziecka”
+    await user.click(screen.getByText('Pokaż kalendarz dzień po dniu'));
     expect(screen.getByRole('button', { name: /Przyjęcie dziecka/i })).toBeInTheDocument();
   });
 });
