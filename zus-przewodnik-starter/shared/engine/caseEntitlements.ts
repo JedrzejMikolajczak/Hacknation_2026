@@ -1,5 +1,5 @@
-import type { CaseEntitlement, CaseInputs, CaseOutcome } from '../types';
-import { insured, KP, payer } from './caseRules';
+import type { BenefitParams, CaseEntitlement, CaseInputs, CaseOutcome } from '../types';
+import { insured, KP, parentDenial, payer } from './caseRules';
 
 export function caseEntitlements(
   input: CaseInputs,
@@ -8,19 +8,35 @@ export function caseEntitlements(
   denial: string | null,
   paternityEnd: string | null,
   hasLivingChildren: boolean,
+  params?: BenefitParams,
 ): CaseEntitlement[] {
   const result: CaseEntitlement[] = [];
   const today = input.reference_date ?? input.application_date;
+  const otherDenial =
+    input.co_parenting && input.other_parent && event && params
+      ? parentDenial(input.other_parent, event, params)
+      : null;
   const otherInsured = input.co_parenting
     ? input.other_parent
-      ? insured(input.other_parent)
+      ? event && params
+        ? otherDenial === null
+        : insured(input.other_parent)
       : input.other_parent_insured
     : null;
   const kind = input.stage === 'ADOPTION' ? 'ADOPTION_MATERNITY' : 'MATERNITY';
+  const fosterFamily = input.stage === 'ADOPTION' && input.adoption_type === 'FOSTER_FAMILY';
+  const adoptionOverPaternityAge =
+    input.stage === 'ADOPTION' &&
+    params !== undefined &&
+    input.special_circumstances.adopted_or_foster_child_age_years !== null &&
+    input.special_circumstances.adopted_or_foster_child_age_years >=
+      params.paternityLeave.adoptionMaxChildAgeYears;
+
   for (const role of ['MOTHER', 'FATHER'] as const) {
     const applicant = role === input.applicant_role;
+    const absentOther = !applicant && !input.co_parenting;
     const person = applicant ? input : input.other_parent;
-    const state = applicant ? (event ? denial === null : null) : otherInsured;
+    const state = applicant ? (event ? denial === null : null) : absentOther ? null : otherInsured;
     const rolePeriods = outcome.periods.filter(
       (period) => period.parent_role === role && !period.denied,
     );
@@ -45,33 +61,42 @@ export function caseEntitlements(
               : null,
       });
     };
-    const insuranceReason =
-      applicant && denial
+    const insuranceReason = absentOther
+      ? 'Drugi rodzic nie został uwzględniony w planie (plan samodzielnego rodzica).'
+      : applicant && denial
         ? denial
-        : state === false
-          ? 'Brak ubezpieczenia chorobowego.'
-          : 'Uzupełnij dane ubezpieczenia i datę zdarzenia.';
+        : !applicant && otherDenial
+          ? otherDenial
+          : state === false
+            ? 'Brak ubezpieczenia chorobowego.'
+            : 'Uzupełnij dane ubezpieczenia i datę zdarzenia.';
     const parentalExpired = today && outcome.parental_deadline && today > outcome.parental_deadline;
     const available = outcome.parental_pool_weeks > 0 && !parentalExpired;
-    add(
-      'PARENTAL',
-      available ? state : false,
-      !available
-        ? 'Brak dostępnej puli lub upłynął termin jej wykorzystania.'
-        : state
-          ? 'Rodzic może wykorzystać część wspólnej puli.'
-          : insuranceReason,
-      KP.parental,
-    );
+    const nonTransferable = params?.parentalLeave.nonTransferableWeeksPerParent;
+    const parentalReason = !available
+      ? 'Brak dostępnej puli lub upłynął termin jej wykorzystania.'
+      : state
+        ? !input.co_parenting && nonTransferable !== undefined
+          ? `Rodzic może wykorzystać maks. ${outcome.parental_applicant_limit_weeks} z ${outcome.parental_pool_weeks} tyg. (${nonTransferable} tyg. to nieprzenoszalna część drugiego rodzica).`
+          : role === 'FATHER' && input.applicant_role === 'MOTHER' && denial !== null
+            ? `Mimo braku ubezpieczenia chorobowego matki, ubezpieczony ojciec może skorzystać z urlopu rodzicielskiego (maks. ${outcome.parental_applicant_limit_weeks} tyg.).`
+            : 'Rodzic może wykorzystać część wspólnej puli.'
+        : insuranceReason;
+    add('PARENTAL', available ? state : false, parentalReason, KP.parental);
+
     if (role === 'MOTHER' || kind === 'ADOPTION_MATERNITY') {
+      const motherDeceased =
+        role === 'MOTHER' && Boolean(input.special_circumstances.mother_deceased);
       add(
         kind,
-        applicant && input.parental_only ? false : state,
-        applicant && input.parental_only
-          ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
-          : state
-            ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
-            : insuranceReason,
+        motherDeceased ? false : applicant && input.parental_only ? false : state,
+        motherDeceased
+          ? 'W związku ze śmiercią matki prawo do urlopu macierzyńskiego może przejąć ubezpieczony ojciec.'
+          : applicant && input.parental_only
+            ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
+            : state
+              ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
+              : insuranceReason,
         kind === 'MATERNITY' ? KP.maternity : KP.adoption,
       );
     } else {
@@ -80,22 +105,33 @@ export function caseEntitlements(
         'MATERNITY',
         takeover ? true : state === false ? false : null,
         takeover
-          ? 'Ojciec przejmuje pozostały okres macierzyńskiego.'
-          : 'Przejęcie wymaga spełnienia warunków i ustalenia daty przekazania opieki.',
+          ? input.special_circumstances.mother_deceased
+            ? 'W związku ze śmiercią matki ubezpieczony ojciec przejmuje urlop macierzyński.'
+            : 'Ojciec przejmuje pozostały okres macierzyńskiego.'
+          : absentOther
+            ? insuranceReason
+            : 'Przejęcie wymaga spełnienia warunków i ustalenia daty przekazania opieki.',
         KP.maternity,
       );
     }
     if (role === 'FATHER') {
       const expired = today && paternityEnd && today > paternityEnd;
-      const canUse = hasLivingChildren && !expired ? state : false;
+      const canUse =
+        hasLivingChildren && !expired && !fosterFamily && !adoptionOverPaternityAge ? state : false;
       add(
         'PATERNITY',
         canUse,
-        expired
-          ? 'Upłynął termin wykorzystania ojcowskiego.'
-          : canUse
-            ? 'Ojciec może zaplanować odrębny okres ojcowskiego.'
-            : insuranceReason,
+        fosterFamily
+          ? 'Urlop ojcowski nie przysługuje w ramach rodziny zastępczej – dotyczy ojców biologicznych i adopcyjnych.'
+          : adoptionOverPaternityAge
+            ? 'Wiek dziecka przekracza ustawowy limit dla urlopu ojcowskiego przy adopcji.'
+            : !hasLivingChildren
+              ? 'Urlop ojcowski przysługuje ojcu wychowującemu dziecko.'
+              : expired
+                ? 'Upłynął termin wykorzystania ojcowskiego.'
+                : canUse
+                  ? 'Ojciec może zaplanować odrębny okres ojcowskiego.'
+                  : insuranceReason,
         KP.paternity,
       );
     }

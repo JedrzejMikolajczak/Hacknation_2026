@@ -5,7 +5,7 @@ import type {
   CaseParentInsurance,
   CaseWarning,
 } from '../types';
-import { addDays, addMonths, daysBetween } from './core';
+import { addDays, addMonths, daysBetween, roundPln } from './core';
 
 export const KP = {
   maternity: 'Kodeks pracy, art. 180 i 180¹',
@@ -88,8 +88,34 @@ export function applicantDenial(
   return insured(input) === null ? 'Brakuje informacji o ubezpieczeniu chorobowym.' : null;
 }
 
-export function grossBasis(input: CaseInputs, from: string, params: BenefitParams) {
-  const months = (input.monthly_bases ?? [])
+export function parentDenial(
+  parent: CaseParentInsurance,
+  on: string,
+  params: BenefitParams,
+): string | null {
+  if (insured(parent) === false) return 'Brak ubezpieczenia chorobowego.';
+  if (
+    parent.employment_type === 'B2B' &&
+    (parent.debt_amount_pln !== undefined && parent.debt_amount_pln !== null
+      ? parent.debt_amount_pln >
+        params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage
+      : parent.has_b2b_arrears)
+  ) {
+    return 'Zadłużenie składkowe przekracza ustawowy próg. Do wypłaty potrzebna jest spłata.';
+  }
+  if (parent.title_start_date && on < parent.title_start_date)
+    return 'Tytuł ubezpieczenia powstał po zdarzeniu.';
+  if (parent.contract_end_date && parent.contract_end_date < on)
+    return 'Umowa zakończyła się przed powstaniem prawa do tego świadczenia.';
+  return insured(parent) === null ? 'Brakuje informacji o ubezpieczeniu chorobowym.' : null;
+}
+
+export function grossBasisForParent(
+  parent: Pick<CaseParentInsurance, 'employment_type' | 'monthly_bases'>,
+  from: string,
+  params: BenefitParams,
+): number | null {
+  const months = (parent.monthly_bases ?? [])
     .filter(
       (item) =>
         item.month < from.slice(0, 7) &&
@@ -101,9 +127,16 @@ export function grossBasis(input: CaseInputs, from: string, params: BenefitParam
     months.reduce((sum, item) => sum + item.amount_pln - (item.excluded_bonus_pln ?? 0), 0) /
     months.length;
   const afterDeduction = average * (1 - params.benefitBase.socialContributionDeduction);
-  return input.employment_type === 'UOP'
-    ? afterDeduction
-    : Math.min(afterDeduction, params.benefitBase.maxBaseNonEmployee);
+  const capped =
+    parent.employment_type === 'UOP'
+      ? afterDeduction
+      : Math.min(afterDeduction, params.benefitBase.maxBaseNonEmployee);
+  // ZUS ustala podstawę wymiaru zasiłku w PLN (zaokrągloną do grosza) przed wyliczeniem stawki miesięcznej i dziennej.
+  return roundPln(capped);
+}
+
+export function grossBasis(input: CaseInputs, from: string, params: BenefitParams) {
+  return grossBasisForParent(input, from, params);
 }
 
 export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWarning[] {
