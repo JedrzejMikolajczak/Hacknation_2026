@@ -13,7 +13,7 @@ import { apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { PlanHub } from './PlanHub';
-import { combinedRateUnavailable, isPlanTab, PLAN_TABS, todayIsoDate } from './planScenario';
+import { combinedRateUnavailable, isPlanTab, livingChildren, PLAN_TABS, todayIsoDate } from './planScenario';
 import { CaseCalculator, CaseRights } from './tabs/CaseResults';
 import { CasePlanner } from './tabs/CasePlanner';
 import { CaseApplications, CaseDocuments } from './tabs/CasePaperwork';
@@ -59,7 +59,7 @@ function buildDataSummary(input: CaseInputs, params: BenefitParams): string {
   parts.push(input.applicant_role === 'FATHER' ? `tata: ${employmentText}` : employmentText);
   parts.push(shortChildrenLabel(input.children_count));
 
-  const living = input.living_children_count ?? input.children_count;
+  const living = livingChildren(input);
   const childLostAll =
     input.special_circumstances.stillbirth_or_child_death !== 'NONE' && living <= 0;
   if (!childLostAll) {
@@ -152,6 +152,12 @@ function PlanDataSummaryBar({
                   const nextStage = event.target.value as CaseStage;
                   onUpdate({
                     stage: nextStage,
+                    ...(nextStage === 'POST_BIRTH' ? {} : {
+                      mother_abandonment_date: undefined,
+                      mother_maternity_days_used: undefined,
+                      mother_was_insured_at_abandonment: undefined,
+                      father_stops_gainful_activity: undefined,
+                    }),
                     adopted_or_foster_child_acceptance_date:
                       nextStage === 'ADOPTION'
                         ? (input.adopted_or_foster_child_acceptance_date ??
@@ -225,12 +231,17 @@ function PlanDataSummaryBar({
                 value={input.children_count}
                 onChange={(event) => {
                   const count = Number(event.target.value);
+                  const deceased = input.deceased_children_count === undefined
+                    ? undefined
+                    : Math.min(input.deceased_children_count, count);
                   onUpdate({
                     children_count: count,
-                    living_children_count:
-                      input.living_children_count !== undefined
-                        ? Math.min(input.living_children_count, count)
-                        : undefined,
+                    deceased_children_count: deceased,
+                    living_children_count: deceased !== undefined
+                      ? count - deceased
+                      : input.living_children_count === undefined
+                        ? undefined
+                        : Math.min(input.living_children_count, count),
                   });
                 }}
               >

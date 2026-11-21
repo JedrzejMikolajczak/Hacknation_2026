@@ -89,3 +89,4 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | `CaseInputs`, `CaseOutcome`, `CasePlan`, format spraw ZUS oraz katalog i porównanie wyników |
 | 2026-11-21 | Wspólne okresy planu, dokumenty według zapisanych dat, ostrzeżenia z parametrami i symulacja odpowiedzi asystenta |
 | 2026-11-21 | Opcjonalne pola w `CaseParentInsurance` (`monthly_bases`, `title_start_date`, `debt_amount_pln`) i `CaseCircumstances` (`mother_deceased`) dla obliczeń drugiego rodzica |
+| 2026-11-21 | Brak danych matki w `WizardScenario`; w `CaseInputs` dane przejęcia po porzuceniu, prawomocny wyrok w sprawie rozwiązania umowy, liczba zmarłych dzieci i dodatkowe tytuły wnioskodawcy. `CasePlan.additional_title_outcomes` podaje ich wyniki z osobną podstawą i płatnikiem, a dotychczasowy `outcome` opisuje tytuł główny. |

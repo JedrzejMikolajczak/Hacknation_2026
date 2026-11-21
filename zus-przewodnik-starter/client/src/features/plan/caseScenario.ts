@@ -1,6 +1,7 @@
 import type {
   BenefitBaseInput,
   BenefitParams,
+  CaseAdditionalInsuranceTitle,
   CaseInputs,
   CaseParentInsurance,
   EmploymentType,
@@ -127,13 +128,35 @@ function defaultPaternityStartDate(
   return latestStart >= event ? latestStart : undefined;
 }
 
+function additionalInsuranceTitle(
+  draft: ScenarioDraft,
+  params: BenefitParams,
+  durationTarget: IsoDate,
+): CaseAdditionalInsuranceTitle | undefined {
+  const additional = draft.additionalInsurance;
+  if (!additional) return undefined;
+  const insurance = parentInsurance(additional.parent, params, additional.baseInput);
+  if (insurance.employment_type === 'NONE') return undefined;
+  const duration = insurance.title_start_date
+    ? diffDaysIso(insurance.title_start_date, durationTarget)
+    : null;
+  return {
+    ...insurance,
+    employment_type: insurance.employment_type,
+    sickness_insured: additional.sicknessInsured,
+    voluntary_sickness_insured: insurance.employment_type === 'UOP' ? null : additional.sicknessInsured,
+    insurance_duration_days: duration !== null && duration >= 0 ? duration : null,
+  };
+}
+
 export function wizardCase(
   draft: ScenarioDraft,
   params: BenefitParams = DEFAULT_PARAMS,
 ): CaseInputs | null {
-  const applicant = draft.mother ?? draft.father;
+  const hasAbandonment = draft.situation === 'afterBirth' && Boolean(draft.motherAbandonmentDate);
+  const applicant = hasAbandonment ? draft.father : (draft.mother ?? draft.father);
   if (!applicant?.insuranceTitle || !draft.situation) return null;
-  const fatherOnly = !draft.mother;
+  const fatherOnly = hasAbandonment || !draft.mother;
   const other = fatherOnly ? draft.mother : draft.father;
   const special = draft.special ?? {};
   if (special.motherDeceased && draft.motherDeathDate === null) return null;
@@ -154,7 +177,8 @@ export function wizardCase(
   const childDeathThresholdDays =
     params.childDeath.thresholdWeeksOfLife * params.calendar.daysPerWeek;
   const hasChildLoss = Boolean(special.stillbirth || death);
-  const livingChildren = hasChildLoss ? Math.max(0, childrenCount - 1) : childrenCount;
+  const deceasedChildrenCount = hasChildLoss ? (draft.deceasedChildrenCount ?? 1) : 0;
+  const livingChildren = Math.max(0, childrenCount - deceasedChildrenCount);
 
   const motherInsured = isParentInsured(draft.mother);
   const fatherInsured = isParentInsured(draft.father);
@@ -229,7 +253,9 @@ export function wizardCase(
   const insuranceDurationDays =
     rawInsuranceDuration !== null && rawInsuranceDuration >= 0 ? rawInsuranceDuration : null;
   const applicantContractType =
-    applicant.insuranceTitle === 'employment' && applicant.insuranceEndDate ? 'FIXED_TERM' : null;
+    applicant.insuranceTitle === 'employment' && applicant.insuranceEndDate &&
+    !draft.unlawfulTerminationConfirmedByCourt ? 'FIXED_TERM' : null;
+  const additional = additionalInsuranceTitle(draft, params, durationTarget);
   const applicantHasB2bArrears = hasB2bDebtAboveThreshold(applicant, params);
 
   return {
@@ -239,7 +265,7 @@ export function wizardCase(
     voluntary_sickness_insured: applicantInsurance.voluntary_sickness_insured,
     applicant_role: fatherOnly ? 'FATHER' : 'MOTHER',
     stage: stages[draft.situation],
-    co_parenting: other != null,
+    co_parenting: !hasAbandonment && other != null,
     other_parent_insured: isParentInsured(other),
     other_parent: other?.insuranceTitle
       ? parentInsurance(other, params, otherBaseInput)
@@ -253,6 +279,7 @@ export function wizardCase(
     application_date: null,
     days_from_birth_to_application: null,
     children_count: childrenCount,
+    ...(hasChildLoss ? { living_children_count: livingChildren, deceased_children_count: deceasedChildrenCount } : {}),
     requested_payment_variant: draft.rateVariant === 'combined' ? 'COMBINED_81_5' : 'SPLIT_100_70',
     father_parental_weeks: fatherParentalWeeks,
     part_time_work_fraction: 0,
@@ -271,6 +298,9 @@ export function wizardCase(
         special.motherHospitalized || special.motherIncapableOfIndependentLiving
       ),
       ...(special.motherDeceased ? { mother_deceased: true } : {}),
+      ...(!fatherOnly && draft.unlawfulTerminationConfirmedByCourt
+        ? { unlawful_termination_confirmed_by_court: true }
+        : {}),
       employer_bankruptcy_or_liquidation: !!special.employerBankruptcyOrLiquidation,
       adopted_or_foster_child_age_years: draft.childAgeYears ?? null,
       is_professional_foster_family: false,
@@ -294,6 +324,15 @@ export function wizardCase(
     newborn_hospitalization_end: hospital,
     paternity_leave_start_date: paternityStart,
     father_takeover_date: fatherTakeoverDate,
+    ...(hasAbandonment
+      ? {
+          mother_abandonment_date: draft.motherAbandonmentDate ?? undefined,
+          mother_was_insured_at_abandonment: draft.motherWasInsuredAtAbandonment,
+          mother_maternity_days_used: draft.motherMaternityDaysUsed,
+          father_stops_gainful_activity: draft.fatherStopsGainfulActivity,
+        }
+      : {}),
+    additional_insurance_titles: additional ? [additional] : undefined,
     monthly_bases: applicantMonthlyBases,
   };
 }

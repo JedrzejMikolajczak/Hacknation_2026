@@ -26,9 +26,12 @@ const tabs = [
   'Wsparcie',
 ];
 
-function openPlan(tab = 'entitlements') {
+function openPlan(tab = 'entitlements', input?: CaseInputs) {
+  const search = input
+    ? new URLSearchParams({ inputs: JSON.stringify(input) }).toString()
+    : 'case=case-04';
   render(
-    <MemoryRouter initialEntries={[`/plan/${tab}?case=case-04`]}>
+    <MemoryRouter initialEntries={[`/plan/${tab}?${search}`]}>
       <ScenarioProvider>
         <Routes>
           <Route path="/plan/:tab" element={<PlanPage />} />
@@ -64,6 +67,25 @@ describe('Twój plan', () => {
       stage: 'POST_BIRTH',
       pregnancy_week_at_birth: '28+5',
     });
+  });
+
+  it('wyświetla odrębną podstawę i płatnika drugiego tytułu w kalkulatorze', async () => {
+    openPlan('calculator', {
+      ...fixture.inputs,
+      additional_insurance_titles: [{
+        employment_type: 'ZLECENIE',
+        payer_insured_count_nov_30: '<= 20',
+        benefit_base_amount_pln: 3000,
+        sickness_insured: true,
+        voluntary_sickness_insured: true,
+      }],
+    });
+
+    const heading = await screen.findByRole('heading', { name: /Dodatkowy tytuł 1.*Umowa zlecenie/ });
+    const result = heading.closest('section')!;
+    expect(result).toHaveTextContent(/podstawa\s+3\s?000,00\s*zł/);
+    expect(result).toHaveTextContent('wypłaca ZUS');
+    expect(within(result).getByText('Dokumenty z tego tytułu')).toBeInTheDocument();
   });
 
   it('synchronizuje zmianę daty ojca z dokumentami i wnioskiem', async () => {

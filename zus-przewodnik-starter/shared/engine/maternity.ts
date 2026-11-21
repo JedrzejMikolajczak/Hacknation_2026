@@ -263,7 +263,8 @@ export function calculateMaternity(
   }
 
   // Walidacja terminu wniosku 81,5% (jeśli podano datę wniosku; bez niej zakładamy terminowe złożenie)
-  const effectiveCombined = input.rateVariant === 'combined' && aliveChildrenCount > 0;
+  const effectiveCombined =
+    input.rateVariant === 'combined' && aliveChildrenCount > 0 && (input.mother !== null || isAdoption);
   if (effectiveCombined) {
     if (input.combinedApplicationDate !== undefined) {
       const delay = daysBetween(start, input.combinedApplicationDate);
@@ -405,7 +406,8 @@ export function calculateMaternity(
     input.special.motherHospitalized || input.special.motherIncapableOfIndependentLiving,
   );
 
-  const motherUses = motherEligible && !input.special.motherDeceased && input.mother.wantsLeave;
+  const { mother, father } = input;
+  const motherUses = motherEligible && !input.special.motherDeceased && mother?.wantsLeave === true;
   const fatherUses = fatherEligible && Boolean(input.father?.wantsLeave);
 
   // Czy ojciec kwalifikuje się do urlopu ojcowskiego (tylko dla żywego dziecka, nie dla rodziny zastępczej)
@@ -437,7 +439,8 @@ export function calculateMaternity(
     rate: number,
   ) {
     if (days <= 0) return;
-    const parent = role === 'mother' ? input.mother : input.father!;
+    const parent = role === 'mother' ? mother : father;
+    requireValue(parent, role, `Brak danych rodzica: ${role}.`);
     amount(parent.benefitBase, `${role}.benefitBase`);
     const money = calculateBenefitAmount(parent.benefitBase, rate, days);
     periods.push({
@@ -545,7 +548,7 @@ export function calculateMaternity(
         legalBasis: 'KP art. 180 § 6–7; ustawa zasiłkowa art. 29 ust. 5',
       });
     }
-  } else if (motherEligible && !input.mother.wantsLeave && fatherUses && aliveChildrenCount > 0) {
+  } else if (motherEligible && mother?.wantsLeave === false && fatherUses && aliveChildrenCount > 0) {
     // Rezygnacja matki po obowiązkowych 14 tygodniach – przejęcie reszty przez ojca
     const mandatory = Math.min(
       maternityWeeks,
@@ -566,6 +569,10 @@ export function calculateMaternity(
       message: `Pierwsze ${params.maternityLeave.motherMandatoryWeeksAfterBirth} tygodni urlopu macierzyńskiego po porodzie matka musi wykorzystać osobiście; pozostałe ${fatherTakeover} tygodni przejmuje ojciec dziecka bezpośrednio po zakończeniu części matki.`,
       legalBasis: 'KP art. 180 § 4–5',
     });
+  } else if (isAdoption && !mother && fatherUses) {
+    const rate = effectiveCombined ? params.rates.combined : params.rates.adoptionMaternity;
+    appendDays('father', primaryLeaveType, currentDate, maternityDays, rate);
+    currentDate = addDays(currentDate, maternityDays);
   } else if (motherUses) {
     appendDays('mother', primaryLeaveType, currentDate, maternityDays, motherMaternityRate);
     currentDate = addDays(currentDate, maternityDays);
@@ -576,7 +583,7 @@ export function calculateMaternity(
         legalBasis: 'KP art. 180 § 6–10',
       });
     }
-  } else if (motherEligible && !input.mother.wantsLeave && !fatherUses) {
+  } else if (motherEligible && mother?.wantsLeave === false && !fatherUses) {
     explanations.push({
       message: `Matka zadeklarowała brak korzystania z urlopu. Uwaga: zgodnie z Kodeksem pracy pracownica nie może zrezygnować z pierwszych ${params.maternityLeave.motherMandatoryWeeksAfterBirth} tygodni urlopu macierzyńskiego po porodzie.`,
       legalBasis: 'KP art. 180 § 4',
@@ -598,6 +605,7 @@ export function calculateMaternity(
   // --- 3. Urlop rodzicielski ---
   const parentalStartDate = currentDate;
   const maxOneParentParental = Math.max(0, pool - nonTransferable);
+  const fatherPaternityStart = !mother && isAdoption ? parentalStartDate : start;
 
   if (pool > 0) {
     if (motherUses && !motherDeceasedOrAbandoned) {
@@ -623,19 +631,21 @@ export function calculateMaternity(
         });
       }
     } else if (fatherUses) {
-      // Ojciec korzysta samodzielnie (matka nieubezpieczona w dniu porodu albo zmarła / zrezygnowała)
-      const fatherParentalStart =
-        motherDeceasedOrAbandoned || motherEligible ? parentalStartDate : start;
+      // Plan samodzielnego ojca nie wymaga wprowadzania danych matki.
+      const fatherParentalStart = !mother && fatherEligibleForPaternity && !motherDeceasedOrAbandoned
+        ? addDays(fatherPaternityStart, params.paternityLeave.weeks * params.calendar.daysPerWeek)
+        : parentalStartDate;
+      const rate = !mother && isAdoption && effectiveCombined ? params.rates.combined : params.rates.parental;
       appendWeeks(
         'father',
         'parentalLeave',
         fatherParentalStart,
         maxOneParentParental,
-        params.rates.parental,
+        rate,
       );
       if (!motherEligible) {
         explanations.push({
-          message: `Mimo braku ubezpieczenia chorobowego matki na dzień zdarzenia, ubezpieczonemu ojcu przysługuje urlop rodzicielski (${maxOneParentParental} tyg., ${formatPercentPl(params.rates.parental)}). Pozostałe ${nonTransferable} tygodni stanowi nieprzenoszalną część drugiego rodzica.`,
+          message: `Ubezpieczonemu ojcu przysługuje urlop rodzicielski (${maxOneParentParental} tyg., ${formatPercentPl(rate)}). Pozostałe ${nonTransferable} tygodni stanowi nieprzenoszalną część drugiego rodzica.`,
           legalBasis: 'KP art. 182¹a § 4; ustawa zasiłkowa art. 29a',
         });
       } else {
@@ -652,7 +662,7 @@ export function calculateMaternity(
     appendWeeks(
       'father',
       'paternityLeave',
-      start,
+      fatherPaternityStart,
       params.paternityLeave.weeks,
       params.rates.paternity,
     );
@@ -663,12 +673,13 @@ export function calculateMaternity(
   if (
     motherUses &&
     !motherDeceasedOrAbandoned &&
-    input.mother.benefitBase !== null &&
+    mother !== null &&
+    mother.benefitBase !== null &&
     pool > 0 &&
     aliveChildrenCount > 0
   ) {
-    const motherBase = input.mother.benefitBase;
-    const fatherBase = fatherUses ? (input.father?.benefitBase ?? 0) : 0;
+    const motherBase = mother.benefitBase;
+    const fatherBase = fatherUses ? (father?.benefitBase ?? 0) : 0;
     const suppAmount =
       supplementaryWeeks > 0 && supplementaryOwner !== null
         ? calculateBenefitAmount(

@@ -6,14 +6,14 @@ import type {
   WizardScenario,
 } from '../types';
 import { addDays, addMonths, daysBetween, formatPercentPl, validateParams } from './core';
-import { resolveParentPayer } from './eligibility';
+import { resolveParentPayer, type EligibilityInput } from './eligibility';
 import { getMaternityWeeksForChildren, resolveSupplementaryMaternityLeave } from './maternity';
 
 function effectivePayerOrZus(payer: Payer | null): Payer {
   return payer ?? 'zus';
 }
 
-export type DocumentInput = WizardScenario & {
+export type DocumentInput = WizardScenario & Pick<EligibilityInput, 'unlawfulTerminationConfirmedByCourt'> & {
   maternityLeaveStartDate?: string;
   sicknessLeaveContinues?: boolean;
 };
@@ -30,15 +30,22 @@ export function getRequiredDocuments(
 
   const mother = input.mother;
   const father = input.father;
-  const motherInsured = mother.insuranceTitle !== 'none' && mother.sicknessInsurance !== 'none';
+  const motherInsured =
+    mother !== null && mother.insuranceTitle !== 'none' && mother.sicknessInsurance !== 'none';
   const fatherInsured =
     father !== null && father.insuranceTitle !== 'none' && father.sicknessInsurance !== 'none';
 
-  const motherPayerResolved = resolveParentPayer(mother, params);
+  const motherPayerResolved = mother ? resolveParentPayer(mother, params) : null;
   const fatherPayerResolved = father ? resolveParentPayer(father, params) : null;
 
-  // Główny płatnik: przy upadłości pracodawcy zawsze ZUS; jeśli matka nieubezpieczona/zmarła, płatnik ojca
-  const motherPayer: Payer = input.special.employerBankruptcyOrLiquidation
+  const hasCourtRuling =
+    input.situation !== 'adoption' &&
+    input.unlawfulTerminationConfirmedByCourt &&
+    mother?.insuranceTitle === 'employment' &&
+    mother.insuranceEndDate !== null &&
+    mother.insuranceEndDate < eventDate;
+
+  const motherPayer: Payer = input.special.employerBankruptcyOrLiquidation || hasCourtRuling
     ? 'zus'
     : effectivePayerOrZus(motherPayerResolved);
   const fatherPayer: Payer = effectivePayerOrZus(fatherPayerResolved);
@@ -264,6 +271,16 @@ export function getRequiredDocuments(
     });
   }
 
+  if (hasCourtRuling) {
+    documents.push({
+      id: 'unlawfulTerminationJudgment',
+      name: 'Prawomocne orzeczenie sądu stwierdzające rozwiązanie stosunku pracy z naruszeniem prawa',
+      submitTo: 'zus',
+      deadline: null,
+      note: 'Udokumentuj też ustanie zatrudnienia w okresie ciąży (art. 30 ust. 1 pkt 2 ustawy zasiłkowej).',
+    });
+  }
+
   // 5. Zaświadczenie „Za życiem”
   if (input.special.zaZyciemCertificate && !childLostAll) {
     documents.push({
@@ -401,11 +418,13 @@ export function getRequiredDocuments(
 
   // 9. Główne terminy urlopów i wniosków (tylko gdy dziecko żyje)
   if (!childLostAll) {
-    deadlines.push({
-      label: `Termin na wniosek o zasiłek w wariancie ${formatPercentPl(params.rates.combined)} (${params.combinedRateApplicationDeadlineDays} dni po dniu zdarzenia)`,
-      date: combinedDeadline,
-      legalBasis: 'Ustawa zasiłkowa art. 30a ust. 1',
-    });
+    if (mother !== null || input.situation === 'adoption') {
+      deadlines.push({
+        label: `Termin na wniosek o zasiłek w wariancie ${formatPercentPl(params.rates.combined)} (${params.combinedRateApplicationDeadlineDays} dni po dniu zdarzenia)`,
+        date: combinedDeadline,
+        legalBasis: 'Ustawa zasiłkowa art. 30a ust. 1',
+      });
+    }
 
     deadlines.push({
       label: `Termin na wniosek o urlop rodzicielski w trybie standardowym (${params.applicationDeadlinesDays.parentalLeave} dni przed rozpoczęciem urlopu rodzicielskiego)`,
@@ -413,7 +432,7 @@ export function getRequiredDocuments(
       legalBasis: 'KP art. 182¹d § 1',
     });
 
-    if (mother.insuranceTitle === 'selfEmployed' && motherInsured) {
+    if (motherInsured && mother.insuranceTitle === 'selfEmployed') {
       const motherParentalWeeks =
         (input.special.zaZyciemCertificate
           ? input.childrenCount === 1

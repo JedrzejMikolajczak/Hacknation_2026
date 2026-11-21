@@ -72,7 +72,7 @@ export interface WizardScenario {
   childAgeYears: number | null;           // przy adopcji
   schoolObligationDeferred: boolean;
   rateVariant: RateVariant;
-  mother: ParentData;
+  mother: ParentData | null;
   father: ParentData | null;
   special: SpecialCircumstances;
 }
@@ -379,6 +379,14 @@ export interface CaseParentInsurance {
   debt_amount_pln?: Pln | null;
 }
 
+/** Odrębny tytuł wnioskodawcy z niezależnie potwierdzanym ubezpieczeniem chorobowym. */
+export interface CaseAdditionalInsuranceTitle extends CaseParentInsurance {
+  employment_type: Exclude<EmploymentType, 'NONE'>;
+  sickness_insured: boolean | null;
+  contract_type?: ContractType | null;
+  insurance_duration_days?: number | null;
+}
+
 export interface CaseCircumstances {
   has_code_b_on_ezla: boolean | null;
   premature_or_hospitalized_newborn: boolean;
@@ -386,6 +394,7 @@ export interface CaseCircumstances {
   stillbirth_or_child_death: 'NONE' | 'BEFORE_8_WEEKS' | 'AFTER_8_WEEKS';
   mother_hospitalized_or_incapable: boolean;
   mother_deceased?: boolean;
+  unlawful_termination_confirmed_by_court?: boolean;
   employer_bankruptcy_or_liquidation: boolean;
   adopted_or_foster_child_age_years: number | null;
   is_professional_foster_family: boolean;
@@ -414,6 +423,7 @@ export interface CaseInputs {
   part_time_work_fraction: number;
   special_circumstances: CaseCircumstances;
   living_children_count?: number;
+  deceased_children_count?: number;
   pregnancy_week_at_birth?: string;
   birth_weight_grams?: number | number[];
   newborn_hospitalization_start?: IsoDate;
@@ -438,6 +448,11 @@ export interface CaseInputs {
   parental_only?: boolean;
   paternity_leave_start_date?: IsoDate;
   father_takeover_date?: IsoDate;
+  mother_abandonment_date?: IsoDate;
+  mother_maternity_days_used?: number;
+  mother_was_insured_at_abandonment?: boolean;
+  father_stops_gainful_activity?: boolean;
+  additional_insurance_titles?: CaseAdditionalInsuranceTitle[];
   reference_date?: IsoDate;
   debt_amount_pln?: Pln;
   sick_pay_days_already_used?: number;
@@ -525,8 +540,16 @@ export interface CaseDocument {
   legal_basis: string;
 }
 
+export interface CaseAdditionalTitleOutcome {
+  employment_type: CaseAdditionalInsuranceTitle['employment_type'];
+  outcome: CaseOutcome;
+  documents: CaseDocument[];
+  entitlements: CaseEntitlement[];
+}
+
 export interface CasePlan {
   outcome: CaseOutcome;
+  additional_title_outcomes?: CaseAdditionalTitleOutcome[];
   entitlements: CaseEntitlement[];
   documents: CaseDocument[];
   validation_errors: CaseWarning[];

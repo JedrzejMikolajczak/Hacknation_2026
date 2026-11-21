@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { WizardScenario } from '../../types';
+import type { ParentData, WizardScenario } from '../../types';
 import { getRequiredDocuments } from '../index';
 
-function testScenario(): WizardScenario {
+function testScenario(): WizardScenario & { mother: ParentData } {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
@@ -155,6 +155,37 @@ describe('documents checklist', () => {
     const scenario = testScenario();
     const { documents } = getRequiredDocuments({ ...scenario, maternityLeaveStartDate: start }, params);
     expect(documents.some((d) => d.id === 'expectedBirthCertificate' && d.submitTo === 'zus')).toBe(expected);
+  });
+
+  it('builds the checklist for a father without mother data', () => {
+    const scenario = testScenario();
+    const { documents, payer } = getRequiredDocuments(
+      {
+        ...scenario,
+        mother: null,
+        father: { ...scenario.mother, role: 'father', employerInsuredCount: 21 },
+      },
+      params,
+    );
+
+    expect(payer).toBe('employer');
+    expect(documents.some((doc) => doc.id === 'applicationPaternity')).toBe(true);
+    expect(documents.some((doc) => doc.id === 'formZAM')).toBe(false);
+  });
+
+  it('includes the final court ruling for maternity benefit after unlawful termination', () => {
+    const scenario = testScenario();
+    scenario.mother.employerInsuredCount = 21;
+    scenario.mother.insuranceEndDate = '2026-09-01';
+    const { documents, payer } = getRequiredDocuments(
+      { ...scenario, unlawfulTerminationConfirmedByCourt: true },
+      params,
+    );
+
+    expect(payer).toBe('zus');
+    expect(documents).toContainEqual(
+      expect.objectContaining({ id: 'unlawfulTerminationJudgment', submitTo: 'zus' }),
+    );
   });
 
   it('includes Za Zyciem certificate and court order for adoption, and omits parental deadlines on stillbirth', () => {

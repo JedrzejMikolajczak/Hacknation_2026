@@ -107,6 +107,8 @@ describe('family wizard', () => {
     await view.input('8200');
     await view.choice('Nie wiem / uzupełnię później');
     await view.input('5000');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł do ubezpieczeń');
+    await view.choice('Nie wiem / uzupełnię później');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zasiłek macierzyński');
     await view.choice(/^81,5%/);
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();

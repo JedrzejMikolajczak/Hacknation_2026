@@ -1,5 +1,5 @@
 import type { BenefitParams, CaseEntitlement, CaseInputs, CaseOutcome } from '../types';
-import { insured, KP, parentDenial, payer } from './caseRules';
+import { insured, KP, parentDenial, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
 
 export function caseEntitlements(
   input: CaseInputs,
@@ -36,6 +36,8 @@ export function caseEntitlements(
     const applicant = role === input.applicant_role;
     const absentOther = !applicant && !input.co_parenting;
     const person = applicant ? input : input.other_parent;
+    const courtMaternity = applicant && event !== null && params !== undefined &&
+      qualifiesAfterUnlawfulTermination(input, event, params);
     const state = applicant ? (event ? denial === null : null) : absentOther ? null : otherInsured;
     const rolePeriods = outcome.periods.filter(
       (period) => period.parent_role === role && !period.denied,
@@ -56,9 +58,11 @@ export function caseEntitlements(
           ? null
           : benefit_type === 'SICKNESS' && outcome.who_pays === 'SPLIT_EMPLOYER_THEN_ZUS'
             ? outcome.who_pays
-            : person
-              ? payer(person)
-              : null,
+            : courtMaternity && benefit_type !== 'SICKNESS'
+              ? 'ZUS'
+              : person
+                ? payer(person)
+                : null,
       });
     };
     const insuranceReason = absentOther
@@ -94,10 +98,12 @@ export function caseEntitlements(
           ? 'W związku ze śmiercią matki prawo do urlopu macierzyńskiego może przejąć ubezpieczony ojciec.'
           : applicant && input.parental_only
             ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
-            : state
-              ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
-              : insuranceReason,
-        kind === 'MATERNITY' ? KP.maternity : KP.adoption,
+            : courtMaternity
+              ? 'Prawomocny wyrok potwierdzający rozwiązanie stosunku pracy z naruszeniem prawa daje podstawę do zasiłku od dnia porodu.'
+              : state
+                ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
+                : insuranceReason,
+        courtMaternity ? KP.unlawfulTermination : kind === 'MATERNITY' ? KP.maternity : KP.adoption,
       );
     } else {
       const takeover = rolePeriods.some((period) => period.leave_type === 'MATERNITY');
@@ -108,10 +114,12 @@ export function caseEntitlements(
           ? input.special_circumstances.mother_deceased
             ? 'W związku ze śmiercią matki ubezpieczony ojciec przejmuje urlop macierzyński.'
             : 'Ojciec przejmuje pozostały okres macierzyńskiego.'
-          : absentOther
-            ? insuranceReason
-            : 'Przejęcie wymaga spełnienia warunków i ustalenia daty przekazania opieki.',
-        KP.maternity,
+          : (outcome.warnings.find((warning) => warning.code === 'FATHER_TAKEOVER_ABANDONMENT')
+              ?.message_pl ??
+            (absentOther
+              ? insuranceReason
+              : 'Przejęcie wymaga spełnienia warunków i ustalenia daty przekazania opieki.')),
+        input.mother_abandonment_date ? KP.abandonment : KP.maternity,
       );
     }
     if (role === 'FATHER') {

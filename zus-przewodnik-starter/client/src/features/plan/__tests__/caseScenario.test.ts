@@ -3,6 +3,7 @@ import { calculateCasePlan } from '@shared/engine/casePlan';
 import params from '@shared/params.json';
 import type { ScenarioDraft } from '../../../app/scenarioDraft';
 import { wizardCase } from '../caseScenario';
+import { buildScenario } from '../../wizard/wizardModel';
 
 const bothParentsDraft: ScenarioDraft = {
   situation: 'afterBirth',
@@ -46,6 +47,59 @@ const bothParentsDraft: ScenarioDraft = {
 };
 
 describe('wizardCase', () => {
+  it('przekazuje z kreatora datę porzucenia i drugie ubezpieczenie, bez profilu matki', () => {
+    const draft = buildScenario('afterBirth', {
+      family: 'both',
+      birthDate: '2026-10-10',
+      childrenCount: '1',
+      motherSituation: 'abandoned',
+      motherAbandonmentDate: '2026-10-20',
+      motherWasInsuredAtAbandonment: 'no',
+      'father.insuranceTitle': 'employment',
+      'additionalInsurance.insuranceTitle': 'mandateContract',
+      'additionalInsurance.sicknessInsured': 'yes',
+      'additionalInsurance.benefitBase': '3000',
+    });
+    const input = wizardCase(draft, params);
+
+    expect(draft.mother).toBeNull();
+    expect(input).toMatchObject({
+      applicant_role: 'FATHER',
+      co_parenting: false,
+      mother_abandonment_date: '2026-10-20',
+      mother_was_insured_at_abandonment: false,
+      additional_insurance_titles: [{
+        employment_type: 'ZLECENIE',
+        sickness_insured: true,
+        benefit_base_amount_pln: 3000,
+      }],
+    });
+    expect(input?.other_parent).toBeUndefined();
+  });
+
+  it('przekazuje potwierdzony wyrok i liczbę zmarłych dzieci do silnika', () => {
+    const draft = buildScenario('afterBirth', {
+      family: 'motherOnly',
+      birthDate: '2026-10-10',
+      childrenCount: '3',
+      birthOutcome: 'childDeath',
+      childDeathDate: '2026-10-15',
+      deceasedChildrenCount: '2',
+      employerBankruptcyOrLiquidation: 'unlawful',
+      unlawfulTerminationDate: '2026-06-10',
+      'mother.insuranceTitle': 'employment',
+    });
+    const input = wizardCase(draft, params);
+
+    expect(input).toMatchObject({
+      contract_end_date: '2026-06-10',
+      children_count: 3,
+      living_children_count: 1,
+      deceased_children_count: 2,
+      child_death_date: '2026-10-15',
+      special_circumstances: { unlawful_termination_confirmed_by_court: true },
+    });
+  });
   it('planuje przejęcie macierzyńskiego od dnia po zgonie mamy', () => {
     const input = wizardCase(
       {

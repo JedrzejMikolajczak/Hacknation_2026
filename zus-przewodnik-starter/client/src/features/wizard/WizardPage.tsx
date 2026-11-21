@@ -45,9 +45,10 @@ function QuestionField({
       if (!multiple) return onChange(option);
       if (selected.includes(option))
         return onChange(selected.filter((item) => item !== option).join(','));
-      if (option === 'none' || option === 'deceased') return onChange(option);
+      const exclusiveOptions = ['none', 'deceased', 'abandoned'];
+      if (exclusiveOptions.includes(option)) return onChange(option);
       onChange(
-        [...selected.filter((item) => item !== 'none' && item !== 'deceased'), option].join(','),
+        [...selected.filter((item) => !exclusiveOptions.includes(item)), option].join(','),
       );
     }
     return (
@@ -329,7 +330,7 @@ export function WizardPage() {
                       <div key={item.id}>
                         <dt>{item.label}</dt>
                         <dd>
-                          {item.id === 'family' && answers.motherSituation === 'deceased'
+                          {item.id === 'family' && ['deceased', 'abandoned'].includes(answers.motherSituation)
                             ? 'Plan taty po zgonie mamy'
                             : formatAnswer(item, answers[item.id])}
                         </dd>

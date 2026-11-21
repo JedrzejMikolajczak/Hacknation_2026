@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import params from '../../params.json';
-import type { BenefitBaseInput, WizardScenario } from '../../types';
+import type { BenefitBaseInput, ParentData, WizardScenario } from '../../types';
 import {
   calculateBenefitBase,
   calculateMaternity,
@@ -8,7 +8,7 @@ import {
   checkEligibility,
 } from '../index';
 
-function testScenario(): WizardScenario {
+function testScenario(): WizardScenario & { mother: ParentData } {
   return {
     situation: 'afterBirth',
     referenceDate: '2026-11-21',
@@ -176,6 +176,64 @@ describe('maternity leave extended scenarios', () => {
     expect(result.periods.find((p) => p.leaveType === 'parentalLeave')?.parentRole).toBe('father');
     expect(result.periods.find((p) => p.leaveType === 'parentalLeave')?.weeks).toBe(32);
     expect(result.periods.find((p) => p.leaveType === 'paternityLeave')?.weeks).toBe(2);
+  });
+
+  it('plans parental and paternity leave without inferring anything about the absent mother', () => {
+    const input: WizardScenario = { ...testScenario(), mother: null, rateVariant: 'combined' };
+    const eligibility = checkEligibility(input, params);
+    expect(eligibility.entitlements).toMatchObject([{ parentRole: 'father', entitled: true }]);
+    expect(eligibility.warnings.some((warning) => warning.code === 'NO_INSURANCE_ON_BIRTH_DATE')).toBe(false);
+    expect(
+      eligibility.warnings.some((warning) => warning.code === 'COMBINED_RATE_DEADLINE'),
+    ).toBe(false);
+
+    const result = calculateMaternity(input, params);
+    expect(result.periods.map((period) => period.leaveType)).toEqual(['parentalLeave', 'paternityLeave']);
+    const [parental, paternity] = result.periods;
+    expect(parental.startDate > paternity.endDate).toBe(true);
+    expect(result.variants).toBeNull();
+  });
+
+  it('schedules maternity leave for a father adopting without a second applicant', () => {
+    const input: WizardScenario = {
+      ...testScenario(),
+      situation: 'adoption',
+      adoptionType: 'adoption',
+      childAcceptanceDate: '2026-11-01',
+      childAgeYears: 2,
+      mother: null,
+    };
+    const result = calculateMaternity(input, params);
+    expect(result.periods.every((period) => period.parentRole === 'father')).toBe(true);
+    expect(result.periods).toContainEqual(
+      expect.objectContaining({
+        leaveType: 'adoptionMaternityLeave',
+        startDate: '2026-11-01',
+        weeks: 20,
+      }),
+    );
+  });
+
+  it('grants maternity benefit after birth for an unlawful termination confirmed by a final ruling', () => {
+    const scenario = testScenario();
+    scenario.mother.insuranceEndDate = '2026-09-01';
+    const input = { ...scenario, unlawfulTerminationConfirmedByCourt: true };
+    const result = checkEligibility(input, params);
+
+    expect(result.entitlements).toContainEqual(
+      expect.objectContaining({
+        benefit: 'maternityBenefit',
+        parentRole: 'mother',
+        entitled: true,
+        payer: 'zus',
+        reason: expect.objectContaining({ legalBasis: 'Ustawa zasiłkowa art. 30 ust. 1 pkt 2' }),
+      }),
+    );
+    expect(result.entitlements.some((item) => item.benefit === 'maternityEquivalentBenefit')).toBe(false);
+    expect(
+      checkEligibility(scenario, params).entitlements.find((item) => item.parentRole === 'mother')
+        ?.entitled,
+    ).toBe(false);
   });
 
   it('uses params.supplementaryMaternityLeave.cases without hardcoding and includes it in variants', () => {
