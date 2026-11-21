@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BenefitParams } from '@shared/types';
 import paramsJson from '@shared/params.json';
-import { buildScenario, changeAnswer, getQuestions, todayLocal, validateAnswer } from '../wizardModel';
+import { buildScenario, changeAnswer, getQuestions, isCombinedRateExpired, todayLocal, validateAnswer } from '../wizardModel';
 import { addDaysIso } from '../../plan/planScenario';
 
 const ids = (...args: Parameters<typeof getQuestions>) =>
@@ -348,5 +348,51 @@ describe('conditional family paths', () => {
     expect(ids('pregnant', { ...answers, 'mother.insuranceTitle': 'selfEmployed' })).not.toContain(
       'mother.contractSalary',
     );
+  });
+  it('blocks the 81.5% variant more than 21 days after birth', () => {
+    expect(isCombinedRateExpired('afterBirth', { birthDate: '2026-10-01' }, '2026-10-22')).toBe(
+      false,
+    );
+    expect(isCombinedRateExpired('afterBirth', { birthDate: '2026-10-01' }, '2026-10-23')).toBe(
+      true,
+    );
+    expect(isCombinedRateExpired('pregnant', { birthDate: '2020-01-01' }, '2026-10-23')).toBe(
+      false,
+    );
+    const old = { family: 'motherOnly', birthDate: '2020-01-01', rateVariant: 'combined' };
+    const question = getQuestions('afterBirth', old).find((item) => item.id === 'rateVariant')!;
+    expect(question.options?.map((option) => option.value)).toEqual(['standard']);
+    expect(buildScenario('afterBirth', old).rateVariant).toBe('standard');
+    const fresh = getQuestions('afterBirth', {
+      family: 'motherOnly',
+      birthDate: new Date().toISOString().slice(0, 10),
+    }).find((item) => item.id === 'rateVariant')!;
+    expect(fresh.options?.map((option) => option.value)).toContain('combined');
+  });
+
+  it('does not ask about the mother plans after her death and allows several mother situations', () => {
+    const both = { family: 'both' };
+    expect(ids('afterBirth', both)).toContain('mother.wantsLeave');
+    const deceased = { ...both, motherSituation: 'deceased' };
+    expect(ids('afterBirth', deceased)).not.toContain('mother.wantsLeave');
+    expect(ids('afterBirth', deceased)).toContain('father.wantsLeave');
+    expect(
+      changeAnswer(
+        'afterBirth',
+        { ...both, 'mother.wantsLeave': 'yes' },
+        'motherSituation',
+        'deceased',
+      ),
+    ).not.toHaveProperty('mother.wantsLeave');
+    expect(
+      buildScenario('afterBirth', { ...deceased, 'mother.insuranceTitle': 'employment' }).mother,
+    ).toBeNull();
+    expect(
+      buildScenario('afterBirth', { ...both, motherSituation: 'hospitalizedIncapable' }).special,
+    ).toMatchObject({
+      motherHospitalized: true,
+      motherIncapableOfIndependentLiving: true,
+      motherDeceased: false,
+    });
   });
 });

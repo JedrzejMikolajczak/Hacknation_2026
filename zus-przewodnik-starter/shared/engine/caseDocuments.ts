@@ -1,6 +1,6 @@
 import type { ApplicantRole, BenefitParams, CaseDocument, CaseInputs, CasePeriod } from '../types';
 import { addDays } from './core';
-import { KP, payer } from './caseRules';
+import { insured, KP, payer } from './caseRules';
 
 export function documentsForPlan(
   input: CaseInputs,
@@ -32,16 +32,41 @@ export function documentsForPlan(
     });
   }
   const notice = params.applicationDeadlinesDays;
+  const hasChildLoss = input.special_circumstances.stillbirth_or_child_death !== 'NONE';
+  const living =
+    input.living_children_count ??
+    (hasChildLoss ? Math.max(0, input.children_count - 1) : input.children_count);
+  const isChildDeathAfterBirth = Boolean(
+    hasChildLoss && input.child_death_date && (!event || input.child_death_date !== event),
+  );
+  const isStillbirth = hasChildLoss && !isChildDeathAfterBirth;
+
   for (const role of ['MOTHER', 'FATHER'] as const) {
     const rolePeriods = periods.filter((period) => !period.denied && period.parent_role === role);
-    if (!rolePeriods.length) continue;
     const person = role === input.applicant_role ? input : input.other_parent;
+    const pregnancySicknessGuidance =
+      input.stage === 'PREGNANCY' &&
+      role === 'MOTHER' &&
+      person !== undefined &&
+      insured(person) === true;
+
+    if (!rolePeriods.length && !pregnancySicknessGuidance) continue;
+
     const employee = person?.employment_type === 'UOP';
-    const destination = employee ? 'EMPLOYER' : person ? 'ZUS' : null;
+    const mandate = person?.employment_type === 'ZLECENIE';
+    const personPayer = person ? payer(person) : null;
+    // Pracownik (UoP) składa wnioski u pracodawcy (który wypłaca przy > 20 albo przekazuje Z-3 do ZUS).
+    // Zleceniobiorca składa ZAM u uprawnionego płatnika (> 20) albo w ZUS (≤ 20 + Z-3a od zleceniodawcy).
+    // JDG zawsze składa dokumenty bezpośrednio do ZUS. Gdy brak danych o wielkości płatnika → null.
+    const destination: CaseDocument['submit_to'] =
+      personPayer === null ? null : employee ? 'EMPLOYER' : personPayer;
+    const mandateEntitledPayer = mandate && personPayer === 'EMPLOYER';
+
     const maternity = rolePeriods.find(
       (period) => period.leave_type === 'MATERNITY' || period.leave_type === 'ADOPTION_MATERNITY',
     );
-    const sickness = rolePeriods.find((period) => period.leave_type === 'SICKNESS');
+    const roleSickness = rolePeriods.filter((period) => period.leave_type === 'SICKNESS');
+    const sickness = roleSickness[0];
     const parental = rolePeriods.filter(
       (period) =>
         period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION',
@@ -50,61 +75,133 @@ export function documentsForPlan(
       (period) => period.leave_type === 'SUPPLEMENTARY_MATERNITY',
     );
     const paternity = rolePeriods.find((period) => period.leave_type === 'PATERNITY');
-    if (maternity || parental.length || supplementary || paternity) {
-      add('ZAM', 'ZAM – wniosek o zasiłek macierzyński', role, destination, KP.qualification);
+    const hasMaternityBenefit = Boolean(maternity || parental.length || supplementary || paternity);
+    const hasSicknessGuidance = Boolean(sickness || pregnancySicknessGuidance);
+
+    if (hasMaternityBenefit) {
       add(
-        input.stage === 'ADOPTION' ? 'ADOPTION_ORDER' : 'BIRTH_CERTIFICATE',
-        input.stage === 'ADOPTION'
-          ? 'Dokument przyjęcia dziecka na wychowanie'
-          : 'Skrócony odpis aktu urodzenia dziecka',
+        'ZAM',
+        mandateEntitledPayer
+          ? 'ZAM – wniosek o zasiłek macierzyński (do płatnika składek – zleceniodawcy)'
+          : 'ZAM – wniosek o zasiłek macierzyński',
         role,
         destination,
         KP.qualification,
       );
-      if (input.stage !== 'ADOPTION')
+      if (input.stage === 'ADOPTION') {
+        add(
+          'ADOPTION_ORDER',
+          input.adoption_type === 'FOSTER_FAMILY'
+            ? 'Orzeczenie o ustanowieniu rodziny zastępczej niezawodowej i oświadczenie o dacie przyjęcia dziecka'
+            : 'Zaświadczenie sądu o wszczęciu postępowania o przysposobienie i oświadczenie o dacie przyjęcia dziecka',
+          role,
+          destination,
+          KP.adoption,
+        );
+      } else {
+        if (!isStillbirth || living > 0) {
+          add(
+            'BIRTH_CERTIFICATE',
+            'Skrócony odpis aktu urodzenia dziecka',
+            role,
+            destination,
+            KP.qualification,
+          );
+        }
+        if (isStillbirth) {
+          add(
+            'STILLBIRTH_CERTIFICATE',
+            'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu lub zaświadczenie o martwym urodzeniu',
+            role,
+            destination,
+            KP.maternity,
+          );
+        }
+        if (isChildDeathAfterBirth) {
+          add(
+            'DEATH_CERTIFICATE',
+            'Skrócony odpis aktu zgonu dziecka',
+            role,
+            destination,
+            KP.maternity,
+          );
+        }
         add(
           'USC_COPY',
-          'Wniosek do USC o wydanie odpisu aktu urodzenia',
+          isStillbirth && living === 0
+            ? 'Wniosek do USC o wydanie skróconego odpisu aktu urodzenia z adnotacją o martwym urodzeniu'
+            : hasChildLoss
+              ? 'Wniosek do USC o wydanie odpisów aktów stanu cywilnego'
+              : 'Wniosek do USC o wydanie odpisu aktu urodzenia',
           role,
           'USC',
           'Prawo o aktach stanu cywilnego',
         );
+      }
+      if (maternity && input.stage !== 'ADOPTION' && event && maternity.start_date < event) {
+        add(
+          'EXPECTED_BIRTH_CERTIFICATE',
+          'Zaświadczenie lekarskie o przewidywanej dacie porodu',
+          role,
+          destination,
+          KP.maternity,
+        );
+      }
     }
-    if (person?.employment_type === 'UOP' && payer(person) === 'ZUS')
+
+    if (employee && personPayer === 'ZUS' && (hasMaternityBenefit || hasSicknessGuidance))
       add(
         'Z-3',
         'Z-3 – zaświadczenie płatnika składek przekazywane przez pracodawcę',
         role,
         'ZUS',
-        KP.qualification,
+        hasMaternityBenefit ? KP.qualification : KP.sickness,
       );
-    if (person?.employment_type === 'ZLECENIE' && payer(person) === 'ZUS')
-      add('Z-3a', 'Z-3a – zaświadczenie płatnika składek', role, 'ZUS', KP.qualification);
-    if (sickness && person) {
+    if (mandate && personPayer === 'ZUS' && (hasMaternityBenefit || hasSicknessGuidance))
       add(
-        'e-ZLA',
-        'Elektroniczne zaświadczenie lekarskie',
+        'Z-3a',
+        'Z-3a – zaświadczenie płatnika składek przekazywane przez zleceniodawcę',
         role,
-        payer(person) === 'EMPLOYER' ? 'EMPLOYER' : 'ZUS',
-        KP.sickness,
-        sickness,
+        'ZUS',
+        hasMaternityBenefit ? KP.qualification : KP.sickness,
       );
+
+    if (hasSicknessGuidance && person) {
+      const codeB =
+        input.stage === 'PREGNANCY' || input.special_circumstances.has_code_b_on_ezla !== false;
+      const ezlaName = mandateEntitledPayer
+        ? codeB
+          ? 'e-ZLA (kod „B”) – elektroniczne zaświadczenie lekarskie (wypłaca zleceniodawca)'
+          : 'Elektroniczne zaświadczenie lekarskie e-ZLA (wypłaca zleceniodawca)'
+        : codeB
+          ? 'e-ZLA (kod „B”) – elektroniczne zaświadczenie lekarskie w ciąży'
+          : 'Elektroniczne zaświadczenie lekarskie';
+      add('e-ZLA', ezlaName, role, personPayer, KP.sickness, sickness);
       if (person.employment_type === 'B2B')
         add('ZAS-53', 'ZAS-53 – wniosek o zasiłek chorobowy', role, 'ZUS', KP.sickness, sickness);
-      if (employee && payer(person) === 'ZUS')
+      const hasFurtherSicknessPeriod = Boolean(
+        sickness &&
+        ((input.sickness_benefit_days_already_used ?? 0) > 0 ||
+          roleSickness.length > 1 ||
+          (sickness.amount_segments?.length ?? 0) > 1),
+      );
+      if (employee && personPayer === 'ZUS' && hasFurtherSicknessPeriod)
         add(
           'ZAS-12',
-          'ZAS-12 – wniosek o zasiłek za dalszy okres',
+          'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
           role,
           'ZUS',
           KP.sickness,
           sickness,
         );
     }
+
     if (
       maternity &&
+      living > 0 &&
       role === input.applicant_role &&
       event &&
+      !input.special_circumstances.mother_deceased &&
       input.requested_payment_variant === 'COMBINED_81_5'
     ) {
       add(
@@ -122,7 +219,7 @@ export function documentsForPlan(
         'ADOPTION_LEAVE',
         'Wniosek o urlop na warunkach macierzyńskiego',
         role,
-        'EMPLOYER',
+        destination,
         KP.adoption,
         maternity,
         addDays(event, notice.fosterFamilyAfterAcceptance),

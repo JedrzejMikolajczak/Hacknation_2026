@@ -67,12 +67,25 @@ function isParentInsured(parent: Partial<ParentData> | null | undefined): boolea
   return parent.sicknessInsurance === 'voluntary';
 }
 
+function hasB2bDebtAboveThreshold(
+  parent: Partial<ParentData>,
+  params: BenefitParams,
+): boolean | null {
+  if (parent.insuranceTitle !== 'selfEmployed' || parent.contributionDebt == null) return null;
+  const threshold =
+    Math.round(
+      params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
+    ) / 100;
+  return parent.contributionDebt > threshold;
+}
+
 function parentInsurance(
   parent: Partial<ParentData>,
   params: BenefitParams,
   baseInput?: BenefitBaseInput,
 ): CaseParentInsurance {
   const monthlyBases = parent.benefitBase == null ? monthlyBasesFromInput(baseInput) : undefined;
+  const arrears = hasB2bDebtAboveThreshold(parent, params);
   return {
     employment_type: parent.insuranceTitle ? titles[parent.insuranceTitle] : 'NONE',
     payer_insured_count_nov_30:
@@ -85,6 +98,7 @@ function parentInsurance(
     voluntary_sickness_insured:
       parent.sicknessInsurance === undefined ? null : parent.sicknessInsurance === 'voluntary',
     contract_end_date: parent.insuranceEndDate ?? null,
+    ...(arrears !== null ? { has_b2b_arrears: arrears } : {}),
     ...(parent.insuredSince ? { title_start_date: parent.insuredSince } : {}),
     ...(parent.contributionDebt != null ? { debt_amount_pln: parent.contributionDebt } : {}),
     ...(monthlyBases ? { monthly_bases: monthlyBases } : {}),
@@ -207,6 +221,16 @@ export function wizardCase(
   const applicantInsurance = parentInsurance(applicant, params);
   const applicantMonthlyBases =
     applicant.benefitBase == null ? monthlyBasesFromInput(applicantBaseInput) : undefined;
+  const durationTarget = sick?.startDate ?? event ?? referenceDate;
+  const rawInsuranceDuration =
+    applicant.insuredSince && durationTarget
+      ? diffDaysIso(applicant.insuredSince, durationTarget)
+      : null;
+  const insuranceDurationDays =
+    rawInsuranceDuration !== null && rawInsuranceDuration >= 0 ? rawInsuranceDuration : null;
+  const applicantContractType =
+    applicant.insuranceTitle === 'employment' && applicant.insuranceEndDate ? 'FIXED_TERM' : null;
+  const applicantHasB2bArrears = hasB2bDebtAboveThreshold(applicant, params);
 
   return {
     employment_type: applicantInsurance.employment_type,
@@ -220,10 +244,10 @@ export function wizardCase(
     other_parent: other?.insuranceTitle
       ? parentInsurance(other, params, otherBaseInput)
       : undefined,
-    contract_type: null,
+    contract_type: applicantContractType,
     contract_end_date: applicant.insuranceEndDate ?? null,
-    insurance_duration_days: null,
-    has_b2b_arrears: null,
+    insurance_duration_days: insuranceDurationDays,
+    has_b2b_arrears: applicantHasB2bArrears,
     applicant_age_50_plus: applicant.age == null ? null : applicant.age >= 50,
     due_or_birth_date: birth,
     application_date: null,

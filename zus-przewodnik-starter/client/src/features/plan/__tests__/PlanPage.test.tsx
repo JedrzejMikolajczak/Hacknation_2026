@@ -127,7 +127,7 @@ describe('Twój plan', () => {
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: /^Wyślij ZAM.*Matka/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Wyślij Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
     expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
@@ -135,6 +135,75 @@ describe('Twój plan', () => {
     fireEvent.click(tabLink('Plan urlopów'));
     fireEvent.click(tabLink('Wnioski'));
     expect(within(await screen.findByRole('group', { name: 'Matka' })).getByLabelText('PESEL')).toHaveValue('');
+  });
+
+  it('w zakładce Wnioski dla planu dwojga rodziców (UoP) pokazuje spójne wnioski z realnymi datami i bez duplikatów', async () => {
+    const twoParentScenario: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      expectedBirthDate: null,
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        insuranceEndDate: null,
+        benefitBase: 6903.2,
+        contributionDebt: null,
+        employerInsuredCount: 150,
+        age: 31,
+        wantsLeave: true,
+      },
+      father: {
+        role: 'father',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2019-01-01',
+        insuranceEndDate: null,
+        benefitBase: 5000,
+        contributionDebt: null,
+        employerInsuredCount: 10,
+        wantsLeave: true,
+      },
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/applications?situation=afterBirth']}>
+        <ScenarioProvider initialScenario={twoParentScenario}>
+          <Routes>
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Lista wniosków (5)', level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Wniosek do USC o wydanie odpisu aktu urodzenia')).toHaveLength(1);
+    expect(screen.getAllByText(/10\.11\.2026–29\.03\.2027/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/28\.11\.2026–11\.12\.2026/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/09\.11\.2027–10\.01\.2028/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Wzór zgodny z rozporządzeniem MRPiPS 2025 poz\. 322 – do weryfikacji/)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Dalej: Wsparcie ›' })).toHaveAttribute(
+      'href',
+      '/plan/support?situation=afterBirth',
+    );
   });
 
   it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
@@ -296,5 +365,174 @@ describe('Twój plan', () => {
     expect(screen.getByRole('region', { name: 'Okresy: Mama' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Okresy: Tata' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dalej: Plan urlopów ›' })).toBeInTheDocument();
+  });
+
+  it('w zakładce Dokumenty poprawnie wskazuje zleceniodawcę (> 20) bez Z-3a oraz ścieżkę ciążową bez daty L4', async () => {
+    const mandateScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-04-10',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'mandateContract',
+        sicknessInsurance: 'voluntary',
+        insuredSince: '2022-01-01',
+        insuranceEndDate: null,
+        benefitBase: 5500,
+        contributionDebt: null,
+        employerInsuredCount: 45,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/documents?situation=pregnant']}>
+        <ScenarioProvider initialScenario={mandateScenario}>
+          <Routes>
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Dokumenty i terminy', level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/U zleceniodawcy \(> 20 ubezpieczonych – wypłaca zleceniodawca\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Zwolnienie lekarskie w ciąży \(e-ZLA, kod „B”\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Z-3a –/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ZAS-12 –/)).not.toBeInTheDocument();
+  });
+
+  it('pokazuje ryzyka z danych formularza (ubezpieczenie 2 mies. przed porodem) w zakładkach Uprawnienia i Wsparcie', async () => {
+    const riskyFormScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-01-21',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2026-11-21',
+        insuranceEndDate: null,
+        benefitBase: 6000,
+        contributionDebt: null,
+        employerInsuredCount: 50,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/entitlements?situation=pregnant']}>
+        <ScenarioProvider initialScenario={riskyFormScenario}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Możliwa kontrola tytułu ubezpieczenia')).toBeInTheDocument();
+    expect(screen.getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
+
+    fireEvent.click(tabLink('Wsparcie'));
+    expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByText('Możliwa weryfikacja tytułu ubezpieczenia przez ZUS'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
+  });
+
+  it('dla umowy na czas określony przedłużanej do porodu pokazuje w Uprawnieniach i Wsparciu informację o przedłużeniu zamiast alarmu', async () => {
+    const fixedTermScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'standard',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2022-01-01',
+        insuranceEndDate: '2026-12-31',
+        benefitBase: 6000,
+        contributionDebt: null,
+        employerInsuredCount: 50,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/entitlements?situation=pregnant']}>
+        <ScenarioProvider initialScenario={fixedTermScenario}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Koniec umowy przed porodem')).not.toBeInTheDocument();
+    expect(screen.getByText(/przedłuża się z mocy prawa do dnia porodu/)).toBeInTheDocument();
+
+    fireEvent.click(tabLink('Wsparcie'));
+    expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Umowa lub ubezpieczenie kończy się przed zdarzeniem'),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/przedłuża się z mocy prawa do dnia porodu/).length).toBeGreaterThan(
+      0,
+    );
   });
 });

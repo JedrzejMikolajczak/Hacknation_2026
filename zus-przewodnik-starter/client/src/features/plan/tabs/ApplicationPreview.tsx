@@ -5,18 +5,22 @@ import './ApplicationPreview.css';
 interface ApplicationPreviewProps {
   title: string;
   recipient: string;
+  code?: string;
   fields: { label: string; value: string }[];
-  attachments: string[];
-  legalBasis: string;
+  attachments?: string[];
+  legalNote?: string;
+  verificationNote?: string;
   onClose: () => void;
 }
 
 export function ApplicationPreview({
   title,
   recipient,
+  code,
   fields,
   attachments,
-  legalBasis,
+  legalNote,
+  verificationNote,
   onClose,
 }: ApplicationPreviewProps) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -40,8 +44,9 @@ export function ApplicationPreview({
         <p className="application-preview__notice">
           Podgląd demonstracyjny · dane osobowe nie są wysyłane na serwer
         </p>
+        {code && <p className="application-preview__code">{code}</p>}
         <h2 id={headingId}>{title}</h2>
-        <p>Adresat: {recipient}</p>
+        <p className="application-preview__recipient">Adresat: {recipient}</p>
       </header>
       <dl>
         {fields.map(({ label, value }) => (
@@ -51,17 +56,30 @@ export function ApplicationPreview({
           </div>
         ))}
       </dl>
-      <h3>Załączniki</h3>
-      {attachments.length > 0 ? (
-        <ul>
-          {attachments.map((attachment) => (
-            <li key={attachment}>{attachment}</li>
-          ))}
-        </ul>
-      ) : (
-        <p>Brak wymaganych załączników.</p>
+      {attachments && (
+        <section>
+          <h3>Załączniki</h3>
+          {attachments.length > 0 ? (
+            <ul>
+              {attachments.map((attachment) => (
+                <li key={attachment}>{attachment}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>Brak wymaganych załączników.</p>
+          )}
+        </section>
       )}
-      <p>{legalBasis}</p>
+      {(legalNote || verificationNote) && (
+        <div className="application-preview__notes">
+          {legalNote && (
+            <p className="application-preview__legal">
+              <strong>Podstawa prawna:</strong> {legalNote}
+            </p>
+          )}
+          {verificationNote && <p className="application-preview__verify">{verificationNote}</p>}
+        </div>
+      )}
       <footer>
         <button type="button" className="plan-btn plan-btn--primary" onClick={() => window.print()}>
           Drukuj lub zapisz PDF

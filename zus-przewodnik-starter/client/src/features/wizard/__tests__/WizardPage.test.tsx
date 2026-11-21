@@ -193,6 +193,8 @@ describe('family wizard', () => {
     await view.input('2026-01-14');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
+    // Mama zmarła: nie pytamy o jej plany; dziecko ma ponad 21 dni, więc 81,5% jest niedostępne.
+    expect(screen.queryByRole('radio', { name: /^81,5%/ })).not.toBeInTheDocument();
     await view.choice('Tak');
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
     expect(screen.queryByText('Plan urlopu mamy')).not.toBeInTheDocument();

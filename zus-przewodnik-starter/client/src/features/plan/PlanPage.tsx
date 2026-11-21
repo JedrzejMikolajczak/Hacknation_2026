@@ -671,7 +671,7 @@ export function PlanPage() {
                       />
                     )}
                     {tab === 'applications' && (
-                      <CaseApplications documents={plan.documents} input={input} periods={plan.outcome.periods} />
+                      <CaseApplications documents={plan.documents} input={input} plan={plan} params={params} />
                     )}
                     {tab === 'support' && <CaseSupport input={input} plan={plan} params={params} />}
                   </>

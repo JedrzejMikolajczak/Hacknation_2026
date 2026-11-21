@@ -604,13 +604,8 @@ export function getQuestions(
     (roles.includes('mother') || situation === 'adoption')
   ) {
     const { rates, combinedRateApplicationDeadlineDays: deadline } = params;
-    const event =
-      situation === 'afterBirth'
-        ? answers.birthDate
-        : situation === 'adoption' && answers.adoptionStage === 'accepted'
-          ? answers.childAcceptanceDate
-          : undefined;
-    const expired = rateDeadlinePassed(event, today, params);
+    const event = combinedRateEvent(situation, answers);
+    const expired = isCombinedRateExpired(situation, answers, today, params);
     const standard = {
       value: 'standard',
       label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
@@ -643,6 +638,26 @@ export function getQuestions(
   return questions;
 }
 
+function combinedRateEvent(situation: SituationType, answers: Record<string, string>) {
+  if (situation === 'afterBirth') return answers.birthDate;
+  if (situation === 'adoption' && answers.adoptionStage === 'accepted')
+    return answers.childAcceptanceDate;
+  return undefined;
+}
+
+export function isCombinedRateExpired(
+  situation: SituationType,
+  answers: Record<string, string>,
+  today = todayLocal(),
+  params: BenefitParams = DEFAULT_PARAMS,
+): boolean {
+  return rateDeadlinePassed(combinedRateEvent(situation, answers), today, params);
+}
+
+export function selectedMotherSituations(value: string): string[] {
+  return value === 'hospitalizedIncapable' ? ['hospitalized', 'incapable'] : value.split(',');
+}
+
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
   if (!value) return 'Odpowiedz na pytanie, aby przejść dalej.';
   if (question.type === 'choice') {
@@ -651,7 +666,7 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
       : 'Wybierz jedną z odpowiedzi.';
   }
   if (question.type === 'multiple') {
-    const selected = value.split(',');
+    const selected = selectedMotherSituations(value);
     const valid = selected.every((entry) =>
       question.options?.some((option) => option.value === entry),
     );
@@ -900,7 +915,7 @@ export function buildScenario(
   const certificate = knownBoolean(values.zaZyciemCertificate);
   if (certificate !== undefined) special.zaZyciemCertificate = certificate;
   if (values.motherSituation) {
-    const situations = values.motherSituation.split(',');
+    const situations = selectedMotherSituations(values.motherSituation);
     special.motherHospitalized = situations.includes('hospitalized');
     special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
@@ -926,7 +941,7 @@ export function formatAnswer(question: WizardQuestion, value: string | undefined
   if (question.type === 'multiple')
     return (
       question.options
-        ?.filter((option) => value.split(',').includes(option.value))
+        ?.filter((option) => selectedMotherSituations(value).includes(option.value))
         .map((option) => option.label)
         .join(', ') || 'Do uzupełnienia później'
     );

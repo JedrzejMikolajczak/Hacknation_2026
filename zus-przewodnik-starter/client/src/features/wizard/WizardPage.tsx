@@ -10,6 +10,7 @@ import {
   displayDate,
   formatAnswer,
   getQuestions,
+  selectedMotherSituations,
   SITUATION_LABELS,
   STAGES,
   validateAnswer,
@@ -39,7 +40,7 @@ function QuestionField({
       .join(' ') || undefined;
   if (question.type === 'choice' || question.type === 'multiple') {
     const multiple = question.type === 'multiple';
-    const selected = value ? value.split(',') : [];
+    const selected = value ? (multiple ? selectedMotherSituations(value) : [value]) : [];
     function toggle(option: string) {
       if (!multiple) return onChange(option);
       if (selected.includes(option))
