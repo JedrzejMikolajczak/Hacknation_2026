@@ -1,6 +1,6 @@
 import { test, assert } from 'vitest';
 import params from '../../params.json';
-import type { WizardScenario } from '../../types';
+import type { ParentData, WizardScenario } from '../../types';
 import {
   calculateBenefitAmount,
   calculateBenefitBase,
@@ -11,7 +11,7 @@ import {
 } from '../index';
 import type { BaseInput } from '../index';
 
-function scenario(): WizardScenario {
+function scenario(): WizardScenario & { mother: ParentData } {
   const parent = {
     role: 'mother' as const,
     insuranceTitle: 'employment' as const,
