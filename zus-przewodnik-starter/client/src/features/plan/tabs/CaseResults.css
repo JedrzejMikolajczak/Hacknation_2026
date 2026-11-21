@@ -1,0 +1,501 @@
+/*
+ * Zakładki „Uprawnienia” i „Kalkulator” – układ „odpowiedź najpierw” zgodny z www.zus.pl.
+ * Wyłącznie tokeny z client/src/styles/tokens.css; mobile-first (640 / 1024 px).
+ */
+
+.results-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Główny blok odpowiedzi */
+.results-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+}
+
+.results-answer--none {
+  border-left-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.results-answer--info {
+  border-left-color: var(--color-navy);
+  background: var(--color-info-soft);
+}
+
+.results-answer__title {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.results-answer__headline {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.results-answer__total {
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.results-answer__sub {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.results-answer__compare {
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.results-answer__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.results-answer__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.results-answer__role {
+  color: var(--color-navy);
+  font-weight: var(--font-weight-bold);
+}
+
+.results-answer__note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Sekcje pod główną odpowiedzią */
+.results-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.results-section__title {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+}
+
+/* Kompaktowe ostrzeżenia i ryzyka */
+.results-risks__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.results-risk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-error);
+  border-radius: var(--radius-sm);
+  background: var(--color-error-soft);
+  color: var(--color-text);
+}
+
+.results-risk--info {
+  border-left-color: var(--color-navy);
+  background: var(--color-info-soft);
+}
+
+.results-risk__title {
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+
+.results-risk__text {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+/* Karty świadczeń (Uprawnienia) */
+.results-rights-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.results-right-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.results-right-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.results-right-item__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+}
+
+.results-right-item__status {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.results-right-item__status--yes {
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+}
+
+.results-right-item__status--no {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.results-right-item__status--unknown {
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+}
+
+.results-right-item__meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Przełącznik wariantu w Kalkulatorze */
+.results-variant-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.results-variant-bar__segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.results-variant-bar__btn {
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-control) solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.results-variant-bar__btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.results-variant-bar__btn--active {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+}
+
+/* Rozwijane szczegóły (<details>) */
+.results-details-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.results-details {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.results-details--inline {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border: none;
+  border-top: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.results-details__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-target-min);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  list-style: none;
+}
+
+.results-details--inline > .results-details__summary {
+  padding: var(--space-1) 0;
+  color: var(--color-link);
+  font-size: var(--font-size-sm);
+}
+
+.results-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.results-details__summary::after {
+  content: '▾';
+  flex-shrink: 0;
+  color: var(--color-primary);
+  transition: transform 0.15s ease;
+}
+
+.results-details[open] > .results-details__summary::after {
+  transform: rotate(180deg);
+}
+
+.results-details__summary:hover {
+  color: var(--color-primary-hover);
+}
+
+.results-details__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.results-details--inline > .results-details__body {
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
+  border-top: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.results-legal {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.results-legal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-5);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+/* Okresy zgrupowane według rodzica (PeriodCards) */
+.period-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.period-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.period-group__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--border-width-control) solid var(--color-primary);
+}
+
+.period-group--father .period-group__header {
+  border-bottom-color: var(--color-navy);
+}
+
+.period-group__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+}
+
+.period-group__summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.period-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.period-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-sm);
+}
+
+.period-group--father .period-card {
+  border-left-color: var(--color-navy);
+  background: var(--color-info-soft);
+}
+
+.period-card--denied {
+  border-left-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.period-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.period-card__type {
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.period-card__rate {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+.period-group--father .period-card__rate {
+  color: var(--color-navy);
+}
+
+.period-card__dates {
+  color: var(--color-text-muted);
+}
+
+.period-card__amounts {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.period-card__segments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+  color: var(--color-text);
+}
+
+.period-card__denial {
+  color: var(--color-error);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Nawigacja do kolejnej sekcji */
+.results-next {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.results-next__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width-control) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.results-next__link:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+@media (min-width: 640px) {
+  .results-answer {
+    padding: var(--space-5);
+  }
+
+  .results-answer__headline {
+    font-size: var(--font-size-xl);
+  }
+
+  .results-answer__item {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+
+  .results-rights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .results-next__link {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-details__summary::after {
+    transition: none;
+  }
+}

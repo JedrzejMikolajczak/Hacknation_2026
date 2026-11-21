@@ -374,6 +374,9 @@ export interface CaseParentInsurance {
   voluntary_sickness_insured: boolean | null;
   contract_end_date?: IsoDate | null;
   has_b2b_arrears?: boolean | null;
+  monthly_bases?: MonthlyBase[];
+  title_start_date?: IsoDate | null;
+  debt_amount_pln?: Pln | null;
 }
 
 export interface CaseCircumstances {
@@ -382,6 +385,7 @@ export interface CaseCircumstances {
   za_zyciem_certificate: boolean;
   stillbirth_or_child_death: 'NONE' | 'BEFORE_8_WEEKS' | 'AFTER_8_WEEKS';
   mother_hospitalized_or_incapable: boolean;
+  mother_deceased?: boolean;
   employer_bankruptcy_or_liquidation: boolean;
   adopted_or_foster_child_age_years: number | null;
   is_professional_foster_family: boolean;

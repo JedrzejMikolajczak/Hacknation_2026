@@ -1,0 +1,27 @@
+/*
+ * Style uzupełniające dla zakładki „Wsparcie” (CaseSupport).
+ * Wyłącznie tokeny z client/src/styles/tokens.css; mobile-first (375 px bez przewijania poziomego).
+ */
+
+.case-support__heading {
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-tight);
+}
+
+.support-tab,
+.support-accordion,
+.support-accordion__body,
+.support-org-tile,
+.support-risk-card,
+.support-special-card,
+.support-faq-answer {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.support-faq-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

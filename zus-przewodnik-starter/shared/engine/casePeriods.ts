@@ -22,7 +22,8 @@ export function calculatePeriod(
   denial: string | null = null,
   legalBasis: string = KP.parental,
 ): CasePeriod {
-  const monthly = denial || rawBase === null ? null : rawBase * rate * (1 - workFraction);
+  const base = rawBase === null ? null : roundPln(rawBase);
+  const monthly = denial || base === null ? null : base * rate * (1 - workFraction);
   return {
     leave_type: leaveType,
     start_date: startDate,
@@ -33,7 +34,7 @@ export function calculatePeriod(
     weeks: days / params.calendar.daysPerWeek,
     rate_percent: denial ? null : rate * 100,
     work_fraction: workFraction,
-    benefit_base_pln: rawBase === null ? null : roundPln(rawBase),
+    benefit_base_pln: base,
     daily_amount_pln:
       monthly === null ? null : roundPln(monthly / params.calendar.dailyBenefitDivisor),
     monthly_amount_pln: monthly === null ? null : roundPln(monthly),

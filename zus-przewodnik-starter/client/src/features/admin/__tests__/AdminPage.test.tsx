@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resetSessionAdminParams } from '../adminApi';
 import { AdminPage } from '../AdminPage';
 
+const TEST_ADMIN_TOKEN = 'test-admin-token-0123456789abcdef0123';
+
 function renderAdmin() {
   const user = userEvent.setup();
   render(
@@ -56,9 +58,7 @@ describe('AdminPage', () => {
     await user.clear(minWageInput);
     await user.type(minWageInput, '5000');
 
-    expect(
-      screen.getByText(/Liczba zmienionych parametrów do zapisania: 1/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Liczba zmienionych parametrów do zapisania: 1/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Lista zmienionych parametrów')).toHaveTextContent(
       /Płaca minimalna: 4806 zł → 5000 zł/i,
     );
@@ -67,8 +67,11 @@ describe('AdminPage', () => {
     await user.click(screen.getByRole('button', { name: 'Zapisz parametry w systemie' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/Podaj klucz dostępu administratora/i);
 
-    // Wypełnienie tokenu demonstracyjnego jednym kliknięciem i zapis.
-    await user.click(screen.getByRole('button', { name: 'Wypełnij hasłem demonstracyjnym' }));
+    // Token wpisuje administrator – nie ma go w kodzie aplikacji.
+    await user.type(
+      screen.getByLabelText('Klucz dostępu administratora (token)'),
+      TEST_ADMIN_TOKEN,
+    );
     await user.click(screen.getByRole('button', { name: 'Zapisz parametry w systemie' }));
 
     await waitFor(() => {
@@ -84,9 +87,7 @@ describe('AdminPage', () => {
     const { user } = renderAdmin();
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('tab', { name: /2\. Długości urlopów/i }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /2\. Długości urlopów/i })).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('tab', { name: /2\. Długości urlopów/i }));
@@ -95,9 +96,7 @@ describe('AdminPage', () => {
 
     await user.clear(parentalInput);
     await user.type(parentalInput, '45');
-    expect(
-      screen.getByText(/Liczba zmienionych parametrów do zapisania: 1/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Liczba zmienionych parametrów do zapisania: 1/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Przywróć oficjalne przepisy 2026' }));
     expect(parentalInput).toHaveValue(41);
@@ -128,7 +127,10 @@ describe('AdminPage', () => {
       expect(screen.getByLabelText('Płaca minimalna (zł brutto)')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: 'Wypełnij hasłem demonstracyjnym' }));
+    await user.type(
+      screen.getByLabelText('Klucz dostępu administratora (token)'),
+      TEST_ADMIN_TOKEN,
+    );
     await user.click(screen.getByRole('button', { name: 'Zapisz parametry w systemie' }));
 
     await waitFor(() => {
@@ -140,6 +142,7 @@ describe('AdminPage', () => {
       '/api/v1/admin/params',
       expect.objectContaining({
         method: 'PUT',
+        headers: expect.objectContaining({ Authorization: `Bearer ${TEST_ADMIN_TOKEN}` }),
       }),
     );
   });

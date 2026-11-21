@@ -40,6 +40,7 @@ export const caseInputSchema = z
       za_zyciem_certificate: z.boolean(),
       stillbirth_or_child_death: z.enum(['NONE', 'BEFORE_8_WEEKS', 'AFTER_8_WEEKS']),
       mother_hospitalized_or_incapable: z.boolean(),
+      mother_deceased: z.boolean().optional(),
       employer_bankruptcy_or_liquidation: z.boolean(),
       adopted_or_foster_child_age_years: z.number().nonnegative().nullable(),
       is_professional_foster_family: z.boolean(),
@@ -100,6 +101,17 @@ export const caseInputSchema = z
         voluntary_sickness_insured: yesNo,
         contract_end_date: day.nullable().optional(),
         has_b2b_arrears: yesNo.optional(),
+        monthly_bases: z
+          .array(
+            z.strictObject({
+              month,
+              amount_pln: money,
+              excluded_bonus_pln: money.optional(),
+            }),
+          )
+          .optional(),
+        title_start_date: day.nullable().optional(),
+        debt_amount_pln: money.nullable().optional(),
       })
       .optional(),
     sickness_base_changes: z
@@ -135,6 +147,17 @@ export const caseInputSchema = z
     check(
       months.every((base) => (base.excluded_bonus_pln ?? 0) <= base.amount_pln),
       'monthly_bases',
+      'Wyłączona premia przekracza podstawę.',
+    );
+    const otherMonths = input.other_parent?.monthly_bases ?? [];
+    check(
+      new Set(otherMonths.map((base) => base.month)).size === otherMonths.length,
+      'other_parent',
+      'Każdy miesiąc może wystąpić tylko raz.',
+    );
+    check(
+      otherMonths.every((base) => (base.excluded_bonus_pln ?? 0) <= base.amount_pln),
+      'other_parent',
       'Wyłączona premia przekracza podstawę.',
     );
   }) satisfies z.ZodType<CaseInputs>;

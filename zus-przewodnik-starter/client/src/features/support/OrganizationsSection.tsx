@@ -23,7 +23,7 @@ export function OrganizationsDetails({ organizations, defaultOpen }: Organizatio
                 <span className="plan-badge plan-badge--navy">{org.helps_with}</span>
                 <span className="support-org-tile__form">{org.legal_form}</span>
               </div>
-              <h3 className="support-org-tile__title">{org.name}</h3>
+              <h4 className="support-org-tile__title">{org.name}</h4>
               <p className="support-org-tile__desc">{org.description}</p>
               <a
                 href={org.url}

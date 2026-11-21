@@ -9,7 +9,15 @@ const titleLabels: Record<EmploymentType, string> = {
   NONE: 'Brak tytułu ubezpieczenia',
 };
 
-export function PueSimulationDetails({ input }: { input: CaseInputs }) {
+interface PueSimulationDetailsProps {
+  input: CaseInputs;
+  usePrimarySubmit?: boolean;
+}
+
+export function PueSimulationDetails({
+  input,
+  usePrimarySubmit = true,
+}: PueSimulationDetailsProps) {
   const [accountChecked, setAccountChecked] = useState(false);
 
   const [pueTopic, setPueTopic] = useState('Zasiłek macierzyński – ustalenie uprawnień');
@@ -24,6 +32,15 @@ export function PueSimulationDetails({ input }: { input: CaseInputs }) {
         ? 'Dobrowolne'
         : input.employment_type === 'NONE' || input.voluntary_sickness_insured === false
           ? 'Brak ubezpieczenia chorobowego'
+          : 'Brak danych';
+
+  const debtDisplay =
+    input.debt_amount_pln !== undefined
+      ? formatPln(input.debt_amount_pln)
+      : input.has_b2b_arrears === true
+        ? 'Wskazano zaległość składkową'
+        : input.has_b2b_arrears === false
+          ? 'Brak zaległości'
           : 'Brak danych';
 
   function handleSendPue(event: FormEvent) {
@@ -47,7 +64,7 @@ export function PueSimulationDetails({ input }: { input: CaseInputs }) {
       </summary>
       <div className="support-accordion__body">
         <div className="support-pue-account">
-          <h3 className="support-subheading">Dane na koncie ubezpieczonego (symulacja PUE/eZUS)</h3>
+          <h4 className="support-subheading">Dane na koncie ubezpieczonego (symulacja PUE/eZUS)</h4>
           <p className="support-accordion__intro">
             Sprawdź zestawienie danych zgłoszonych w planie przed złożeniem wniosku w PUE/eZUS.
             Brakujące pola nie są uzupełniane domyślnie.
@@ -99,11 +116,7 @@ export function PueSimulationDetails({ input }: { input: CaseInputs }) {
                 {input.employment_type === 'B2B' && (
                   <div className="support-account-dl__row">
                     <dt>Stan zadłużenia składkowego (JDG)</dt>
-                    <dd>
-                      {input.debt_amount_pln !== undefined
-                        ? formatPln(input.debt_amount_pln)
-                        : 'Brak danych'}
-                    </dd>
+                    <dd>{debtDisplay}</dd>
                   </div>
                 )}
                 {(input.employment_type === 'UOP' || input.employment_type === 'ZLECENIE') && (
@@ -112,13 +125,25 @@ export function PueSimulationDetails({ input }: { input: CaseInputs }) {
                     <dd>{input.payer_insured_count_nov_30 ?? 'Brak danych'}</dd>
                   </div>
                 )}
+                {input.sickness_leave_start_date && (
+                  <div className="support-account-dl__row">
+                    <dt>Zwolnienie lekarskie e-ZLA</dt>
+                    <dd>
+                      {formatPolishDate(input.sickness_leave_start_date)}
+                      {input.sickness_leave_end_date
+                        ? ` – ${formatPolishDate(input.sickness_leave_end_date)}`
+                        : ''}
+                      {input.special_circumstances.has_code_b_on_ezla ? ' (kod „B”)' : ''}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
           )}
         </div>
 
         <div className="support-pue-divider">
-          <h3 className="support-subheading">Zapytanie do doradcy ZUS (POG – symulacja)</h3>
+          <h4 className="support-subheading">Zapytanie do doradcy ZUS (POG – symulacja)</h4>
           <p className="support-accordion__intro">
             W razie wątpliwości wyślij pismo ogólne (POG) na koncie PUE/eZUS (symulacja).
           </p>
@@ -161,7 +186,14 @@ export function PueSimulationDetails({ input }: { input: CaseInputs }) {
               />
             </label>
 
-            <button type="submit" className="plan-btn plan-btn--primary support-action-btn">
+            <button
+              type="submit"
+              className={
+                usePrimarySubmit
+                  ? 'plan-btn plan-btn--primary support-action-btn'
+                  : 'plan-btn plan-btn--secondary support-action-btn'
+              }
+            >
               Wyślij pytanie do PUE / eZUS ›
             </button>
           </form>
@@ -227,9 +259,9 @@ export function OfficialLinksAndUscDetails({
         </ul>
 
         <div className="support-pue-divider">
-          <h3 className="support-subheading">
+          <h4 className="support-subheading">
             Wniosek o odpis aktu urodzenia dziecka (symulacja USC)
-          </h3>
+          </h4>
           <p className="support-accordion__intro">
             Do wniosku o zasiłek macierzyński potrzebny jest skrócony odpis aktu urodzenia. Możesz
             zasymulować złożenie wniosku poniżej lub przejść bezpośrednio do oficjalnego Rejestru
