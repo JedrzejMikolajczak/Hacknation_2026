@@ -126,7 +126,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
 
     const heading = screen.getByRole('heading', {
       level: 2,
-      name: /Uzupełnij dane, aby wyliczyć wysokość zasiłków/i,
+      name: /Uzupełnij dane, aby wyliczyć zasiłek/i,
     });
     expect(heading).toBeInTheDocument();
     const missingBox = heading.closest('.plan-missing-data') as HTMLElement;
@@ -134,14 +134,14 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(
       within(missingBox).getByText(/Forma zatrudnienia \/ tytuł ubezpieczenia matki/i),
     ).toBeInTheDocument();
-    const wizardLink = within(missingBox).getByRole('link', { name: /Uzupełnij formularz/i });
+    const wizardLink = within(missingBox).getByRole('link', { name: /Uzupełnij dane/i });
     expect(wizardLink).toHaveAttribute('href', '/wizard?situation=afterBirth');
     expect(
       screen.getByText(/tryb demonstracyjny – obliczenia w przeglądarce/i),
     ).toBeInTheDocument();
   });
 
-  it('kafelek Uprawnienia otwiera karty uprawnień oraz ostrzeżenia dla JDG z zadłużeniem', async () => {
+  it('kafelek Uprawnienia otwiera odpowiedź najpierw, ostrzeżenia dla JDG z zadłużeniem i link Dalej: Kalkulator', async () => {
     const { user } = renderPlan('/plan?zatrudnienie=jdg&zadluzenie=500&dzieci=1&porod=2026-11-10');
 
     await user.click(screen.getByRole('link', { name: /^Uprawnienia/ }));
@@ -149,9 +149,56 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(
       screen.getByRole('heading', { level: 1, name: /Twój plan zasiłkowy i urlopowy/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: /Twoje uprawnienia/i }),
+    ).toBeInTheDocument();
 
     expect(screen.getByText(/Zadłużenie składkowe \(JDG\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Nie przysługuje/i).length).toBeGreaterThanOrEqual(1);
+    const nextLink = screen.getByRole('link', { name: /Dalej: Kalkulator/i });
+    expect(nextLink).toHaveAttribute('href', expect.stringContaining('/plan/calculator'));
+  });
+
+  it('Uprawnienia pokazują w bloku odpowiedzi status i płatnika dla obojga rodziców', () => {
+    const bothDraft: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      childrenCount: 1,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        benefitBase: 6903.2,
+        employerInsuredCount: 150,
+        wantsLeave: true,
+      },
+      father: {
+        role: 'father',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2019-01-01',
+        benefitBase: 5000,
+        employerInsuredCount: 10,
+        wantsLeave: true,
+      },
+      special: {},
+    };
+
+    renderPlan('/plan/entitlements', bothDraft);
+
+    const answerRegion = screen.getByRole('heading', {
+      level: 2,
+      name: /Twoje uprawnienia/i,
+    }).parentElement as HTMLElement;
+    expect(
+      within(answerRegion).getByText(/Przysługuje zasiłek macierzyński – wypłaca pracodawca\./i),
+    ).toBeInTheDocument();
+    expect(
+      within(answerRegion).getByText(/Przysługuje zasiłek macierzyński – wypłaca ZUS\./i),
+    ).toBeInTheDocument();
   });
 
   it('przelicza kalkulator na żywo po zmianie wariantu (81,5% vs 100%+70%) i liczby dzieci oraz aktualizuje URL', async () => {
@@ -160,14 +207,22 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     );
 
     expect(
-      screen.getByRole('heading', { level: 2, name: /Przełączniki kalkulatora/i }),
+      screen.getByRole('heading', { level: 2, name: /Twój szacowany zasiłek/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Otrzymasz ok\..+miesięcznie przez 52 tygodnie/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wariant 100% \+ 70%: łącznie/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Dalej: Plan urlopów/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/plan/leave-plan'),
+    );
 
     await user.click(screen.getByRole('button', { name: /100% \+ 70%/i }));
     expect(screen.getByTestId('loc')).toHaveTextContent('wariant=standard');
+    expect(screen.getByText(/Wariant 81,5%: łącznie/i)).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText(/Liczba dzieci w kalkulatorze/i), '2');
     expect(screen.getByTestId('loc')).toHaveTextContent('dzieci=2');
+    await user.click(screen.getByText(/Zobacz okresy i kwoty/i));
     expect(await screen.findByText(/31 tyg\./i)).toBeInTheDocument();
   });
 
@@ -223,13 +278,12 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
       },
     };
 
-    renderPlan('/plan/calculator', draft);
+    const { user } = renderPlan('/plan/calculator', draft);
 
     // Podstawa 6000 * (1 - 0.1371) = 5177,40 zł przeniesiona przez ciągłość art. 43
-    expect(
-      await screen.findByText(/Podstawę wymiaru wyliczono z podanych zarobków/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Podstawę wyliczono z podanych zarobków/i)).toBeInTheDocument();
     expect(screen.getAllByText(/5\s?177,40\s?zł/i).length).toBeGreaterThanOrEqual(1);
+    await user.click(screen.getByText(/Zobacz szczegóły podstawy/i));
     expect(screen.getByText(/Ustawa zasiłkowa art\. 43/i)).toBeInTheDocument();
   });
 
