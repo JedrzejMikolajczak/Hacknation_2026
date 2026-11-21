@@ -16,3 +16,7 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+# Materiały konkursowe używane lokalnie
+docs/zus/
+data/cases-raw/
+*.[pP][dD][fF]

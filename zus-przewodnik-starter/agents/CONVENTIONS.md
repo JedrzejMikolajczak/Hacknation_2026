@@ -190,3 +190,4 @@ Aplikacja ma wyglądać jak część serwisu ZUS, żeby jury i użytkownik od ra
 | 2026-11-21 | Wersja początkowa | zespół |
 | 2026-11-21 | Dodano GET /api/v1/health – endpoint techniczny | JedrzejMikolajczak |
 | 2026-11-21 | Dodano §7.1 Wygląd: zgodność z www.zus.pl (tokeny w `client/src/styles/tokens.css`) | JedrzejMikolajczak |
+| 2026-11-21 | Wprowadzono typy CaseInputs, CaseOutcome i parametry spraw w formacie snake_case oraz UPPER_SNAKE_CASE | zespół |

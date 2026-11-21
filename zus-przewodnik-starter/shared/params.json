@@ -24,6 +24,7 @@
     "adoptionMaxChildAgeYears": 14
   },
   "parentalLeave": {
+    "zaZyciemExtensionWeeks": 24,
     "weeksSingleChild": 41,
     "weeksMultipleChildren": 43,
     "weeksSingleChildZaZyciem": 65,
@@ -42,6 +43,7 @@
     "adoptionMaxChildAgeYears": 14
   },
   "supplementaryMaternityLeave": {
+    "transitionalEffectiveDate": "2025-03-19",
     "cases": [
       { "id": 1, "description": "Urodzenie przed 28. tygodniem ciąży", "maxPregnancyWeekExclusive": 28, "minPregnancyWeek": null, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
       { "id": 2, "description": "Masa urodzeniowa do 1000 g", "maxPregnancyWeekExclusive": null, "minPregnancyWeek": null, "maxBirthWeightGrams": 1000, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
@@ -49,6 +51,15 @@
       { "id": 4, "description": "Urodzenie od 28. do przed 37. tygodniem, masa powyżej 1000 g", "maxPregnancyWeekExclusive": 37, "minPregnancyWeek": 28, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": 1000, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 8 },
       { "id": 5, "description": "Urodzenie od 37. tygodnia i hospitalizacja min. 2 kolejne dni między 5. a 28. dniem po porodzie", "maxPregnancyWeekExclusive": null, "minPregnancyWeek": 37, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": 2, "countFromDayAfterBirth": 5, "limitWeekAfterBirth": 8 }
     ]
+  },
+  "calendar": { "daysPerWeek": 7, "dailyBenefitDivisor": 30 },
+  "forms2026EffectiveDate": "2026-10-24",
+  "insuranceRisk": {
+    "estimatedPregnancyDays": 280,
+    "shortTitleMonths": 6,
+    "baseIncreasePercent": 30,
+    "beforePregnancyMonths": 6,
+    "description": "Sygnały możliwej weryfikacji przez ZUS. Nie wpływają na kwalifikację."
   },
   "childDeath": {
     "thresholdWeeksOfLife": 8,
