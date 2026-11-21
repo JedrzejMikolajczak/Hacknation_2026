@@ -24,9 +24,51 @@ function renderPlan(initialEntry = '/plan') {
 }
 
 describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na żywo', () => {
-  it('przekierowuje /plan na /plan/entitlements i pokazuje karty uprawnień oraz ostrzeżenia', async () => {
-    renderPlan('/plan?zatrudnienie=jdg&zadluzenie=500&dzieci=1&porod=2026-11-10');
+  it('na /plan pokazuje 6 kafelków sekcji, każdy prowadzi do swojej zakładki z zachowaniem scenariusza', () => {
+    renderPlan('/plan?zatrudnienie=uop&dzieci=2');
 
+    expect(screen.getByTestId('loc')).toHaveTextContent('/plan?zatrudnienie=uop&dzieci=2');
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Czym chcesz się teraz zająć?' }),
+    ).toBeInTheDocument();
+    const hub = within(screen.getByRole('region', { name: 'Czym chcesz się teraz zająć?' }));
+    const tiles = hub.getAllByRole('link');
+    expect(tiles).toHaveLength(6);
+    const expected: [string, string][] = [
+      ['Uprawnienia', 'entitlements'],
+      ['Kalkulator', 'calculator'],
+      ['Plan urlopów', 'leave-plan'],
+      ['Dokumenty i terminy', 'documents'],
+      ['Wnioski', 'applications'],
+      ['Wsparcie', 'support'],
+    ];
+    expected.forEach(([label, id], index) => {
+      expect(tiles[index]).toHaveTextContent(label);
+      expect(tiles[index]).toHaveAttribute('href', `/plan/${id}?zatrudnienie=uop&dzieci=2`);
+    });
+    // na ekranie kafelków nie ma jeszcze zakładek ani panelu sekcji
+    expect(
+      screen.queryByRole('navigation', { name: 'Zakładki Twojego planu' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('nieznana sekcja wraca do kafelków, a z sekcji można wrócić do listy sekcji', async () => {
+    const { user } = renderPlan('/plan/nie-ma-takiej?dzieci=1');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/plan?dzieci=1');
+
+    await user.click(screen.getByRole('link', { name: /^Kalkulator/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('/plan/calculator?dzieci=1');
+    expect(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: '← Wszystkie sekcje planu' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent(/^\/plan\?/);
+    expect(screen.getAllByRole('link', { name: /Przejdź|Uprawnienia/ }).length).toBeGreaterThan(0);
+  });
+
+  it('kafelek Uprawnienia otwiera karty uprawnień oraz ostrzeżenia', async () => {
+    const { user } = renderPlan('/plan?zatrudnienie=jdg&zadluzenie=500&dzieci=1&porod=2026-11-10');
+
+    await user.click(screen.getByRole('link', { name: /^Uprawnienia/ }));
     expect(screen.getByTestId('loc')).toHaveTextContent('/plan/entitlements');
     expect(
       screen.getByRole('heading', { level: 1, name: /Twój plan zasiłkowy i urlopowy/i }),
@@ -38,7 +80,9 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
   });
 
   it('przelicza kalkulator na żywo po zmianie wariantu (81,5% vs 100%+70%) i liczby dzieci oraz aktualizuje URL', async () => {
-    const { user } = renderPlan('/plan/calculator?zatrudnienie=uop&dzieci=1&podstawa=6000&wariant=combined');
+    const { user } = renderPlan(
+      '/plan/calculator?zatrudnienie=uop&dzieci=1&podstawa=6000&wariant=combined',
+    );
 
     expect(
       screen.getByRole('heading', { level: 2, name: /Przełączniki kalkulatora/i }),
@@ -53,7 +97,9 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
   });
 
   it('wyświetla oś czasu, waliduje podział urlopu rodzicielskiego i liczy łączenie urlopu z pracą', async () => {
-    const { user } = renderPlan('/plan/leave-plan?zatrudnienie=uop&dzieci=1&podstawa=6000&ojciec=1');
+    const { user } = renderPlan(
+      '/plan/leave-plan?zatrudnienie=uop&dzieci=1&podstawa=6000&ojciec=1',
+    );
 
     expect(
       screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów obojga rodziców/i }),
@@ -61,12 +107,8 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
     expect(screen.getByLabelText(/Oś czasu urlopów matki/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Oś czasu urlopów drugiego rodzica/i)).toBeInTheDocument();
 
-    expect(
-      await screen.findByText(/Podział zgodny z Kodeksem pracy/i),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText(/Wydłużenie urlopu rodzicielskiego/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Podział zgodny z Kodeksem pracy/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Wydłużenie urlopu rodzicielskiego/i)).toBeInTheDocument();
 
     // Zmień wymiar etatu na 1/4
     await user.selectOptions(screen.getByLabelText(/Wymiar etatu podczas urlopu/i), '0.25');
@@ -88,23 +130,21 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
   });
 
   it('w zakładce Wnioski automatycznie wypełnia formularze (w tym odpis aktu urodzenia) i symuluje wysyłkę z UPO', async () => {
-    const { user } = renderPlan('/plan/applications?zatrudnienie=uop&porod=2026-11-10&podstawa=6000');
+    const { user } = renderPlan(
+      '/plan/applications?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
+    );
 
     expect(
       screen.getByText(/Wniosek o skrócony odpis aktu urodzenia dziecka/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Wniosek o zasiłek macierzyński \(ZUS ZAM\)/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Wniosek o zasiłek macierzyński \(ZUS ZAM\)/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Wyślij wniosek ZUS ZAM/i }));
     const receipt = screen.getByRole('region', { name: /Potwierdzenie wysłania ZUS ZAM/i });
     expect(within(receipt).getByText(/UPO – Potwierdzenie złożenia/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Wyślij wszystkie wnioski/i }));
-    expect(
-      screen.getByRole('button', { name: /Wszystkie wnioski wysłane/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Wszystkie wnioski wysłane/i })).toBeDisabled();
   });
 
   it('w zakładce Wsparcie udostępnia organizacje pomocowe, pytanie do PUE/eZUS oraz Asystenta AI z etykietą AI', async () => {
@@ -114,9 +154,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
     expect(screen.getByText(/Fundacja Rodzić po Ludzku/i)).toBeInTheDocument();
 
     // Zapytanie do Asystenta AI
-    await user.click(
-      screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }));
     expect(await screen.findByText(/ujednoliconą stawkę 81,5%/i)).toBeInTheDocument();
 
     // Wysłanie pytania do PUE / eZUS

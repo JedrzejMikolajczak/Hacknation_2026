@@ -12,6 +12,7 @@ import {
   type PlanBundleResult,
 } from './planApi';
 import { PlanControlsBar } from './PlanControlsBar';
+import { PlanHub } from './PlanHub';
 import {
   isPlanTab,
   isDifficultSituation,
@@ -65,14 +66,16 @@ export function PlanPage() {
     };
   }, [scenario]);
 
-  if (!tab || !isPlanTab(tab)) {
-    const query = searchParams.toString();
-    return <Navigate to={`/plan/entitlements${query ? `?${query}` : ''}`} replace />;
-  }
-
-  const activeTab: PlanTabId = tab;
   const currentQuery = searchParams.toString();
   const querySuffix = currentQuery ? `?${currentQuery}` : '';
+
+  // Nieznana sekcja → wracamy do ekranu z kafelkami (zachowując scenariusz z URL).
+  if (tab !== undefined && !isPlanTab(tab)) {
+    return <Navigate to={`/plan${querySuffix}`} replace />;
+  }
+
+  // /plan bez sekcji = ekran z 6 kafelkami; /plan/:tab = wybrana sekcja.
+  const activeTab: PlanTabId | null = tab ?? null;
   const difficult = isDifficultSituation(scenario);
 
   function handleScenarioChange(next: ScenarioInput) {
@@ -85,7 +88,8 @@ export function PlanPage() {
   function handleCopyShareLink() {
     const nextParams = scenarioToSearchParams(scenario);
     setSearchParams(nextParams, { replace: true });
-    const shareUrl = `${window.location.origin}/plan/${activeTab}?${nextParams.toString()}`;
+    const section = activeTab ? `/${activeTab}` : '';
+    const shareUrl = `${window.location.origin}/plan${section}?${nextParams.toString()}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(shareUrl).catch(() => {
         // ignore clipboard denial in test/sandbox environments
@@ -122,64 +126,78 @@ export function PlanPage() {
 
       <main className="plan-page__main">
         <div className="plan-page__container">
-          <PlanControlsBar
-            scenario={scenario}
-            params={bundle.params}
-            onChange={handleScenarioChange}
-            onCopyShareLink={handleCopyShareLink}
-            shareCopied={shareCopied}
-          />
+          {activeTab === null ? (
+            <PlanHub querySuffix={querySuffix} />
+          ) : (
+            <>
+              <Link to={`/plan${querySuffix}`} className="plan-page__back-link">
+                ← Wszystkie sekcje planu
+              </Link>
 
-          <nav className="plan-tabs" aria-label="Zakładki Twojego planu">
-            <ul className="plan-tabs__list">
-              {PLAN_TABS.map((item) => (
-                <li key={item.id} className="plan-tabs__item">
-                  <NavLink
-                    to={`/plan/${item.id}${querySuffix}`}
-                    className={({ isActive }) =>
-                      isActive ? 'plan-tabs__link plan-tabs__link--active' : 'plan-tabs__link'
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </nav>
+              <PlanControlsBar
+                scenario={scenario}
+                params={bundle.params}
+                onChange={handleScenarioChange}
+                onCopyShareLink={handleCopyShareLink}
+                shareCopied={shareCopied}
+              />
 
-          <div className="plan-panel" role="region" aria-label="Zawartość wybranej zakładki planu">
-            {activeTab === 'entitlements' && (
-              <EntitlementsTab eligibility={bundle.eligibility} />
-            )}
-            {activeTab === 'calculator' && (
-              <CalculatorTab
-                scenario={scenario}
-                params={bundle.params}
-                maternity={bundle.maternity}
-                sickness={bundle.sickness}
-                onScenarioChange={handleScenarioChange}
-              />
-            )}
-            {activeTab === 'leave-plan' && (
-              <LeavePlanTab
-                scenario={scenario}
-                params={bundle.params}
-                maternity={bundle.maternity}
-              />
-            )}
-            {activeTab === 'documents' && <DocumentsTab checklist={bundle.documents} />}
-            {activeTab === 'applications' && (
-              <ApplicationsTab
-                scenario={scenario}
-                params={bundle.params}
-                maternity={bundle.maternity}
-                checklist={bundle.documents}
-              />
-            )}
-            {activeTab === 'support' && (
-              <SupportTab scenario={scenario} params={bundle.params} />
-            )}
-          </div>
+              <nav className="plan-tabs" aria-label="Zakładki Twojego planu">
+                <ul className="plan-tabs__list">
+                  {PLAN_TABS.map((item) => (
+                    <li key={item.id} className="plan-tabs__item">
+                      <NavLink
+                        to={`/plan/${item.id}${querySuffix}`}
+                        className={({ isActive }) =>
+                          isActive ? 'plan-tabs__link plan-tabs__link--active' : 'plan-tabs__link'
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+
+              <div
+                className="plan-panel"
+                role="region"
+                aria-label="Zawartość wybranej zakładki planu"
+              >
+                {activeTab === 'entitlements' && (
+                  <EntitlementsTab eligibility={bundle.eligibility} />
+                )}
+                {activeTab === 'calculator' && (
+                  <CalculatorTab
+                    scenario={scenario}
+                    params={bundle.params}
+                    maternity={bundle.maternity}
+                    sickness={bundle.sickness}
+                    onScenarioChange={handleScenarioChange}
+                  />
+                )}
+                {activeTab === 'leave-plan' && (
+                  <LeavePlanTab
+                    scenario={scenario}
+                    params={bundle.params}
+                    maternity={bundle.maternity}
+                  />
+                )}
+                {activeTab === 'documents' && <DocumentsTab checklist={bundle.documents} />}
+                {activeTab === 'applications' && (
+                  <ApplicationsTab
+                    scenario={scenario}
+                    params={bundle.params}
+                    maternity={bundle.maternity}
+                    checklist={bundle.documents}
+                  />
+                )}
+                {activeTab === 'support' && (
+                  <SupportTab scenario={scenario} params={bundle.params} />
+                )}
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>
