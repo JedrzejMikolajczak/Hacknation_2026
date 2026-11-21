@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type {
   BenefitParams,
   LeavePartRequest,
@@ -16,6 +16,8 @@ import {
   computeReturnToWorkDates,
   DAYS_IN_WEEK,
   formatIsoPl,
+  formatParentLeaveSummary,
+  formatShortDeadlineLabel,
   getAnchorDate,
   getAnchorJumpLabel,
   getScenarioDataIssues,
@@ -55,6 +57,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePlanViewProps) {
+  const location = useLocation();
   const dataIssues = useMemo(() => getScenarioDataIssues(scenario), [scenario]);
   const anchorDate = getAnchorDate(scenario);
   const sensitive = isSensitiveSituation(scenario);
@@ -123,6 +126,9 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
   const [loading, setLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [retryCounter, setRetryCounter] = useState<number>(0);
+
+  const [calendarOpen, setCalendarOpen] = useState<boolean>(false);
+  const calendarDetailsRef = useRef<HTMLDetailsElement>(null);
 
   const [maternityOptions, setMaternityOptions] = useState<MaternityPlanOptions>({
     weeksBeforeBirth: 0,
@@ -255,6 +261,15 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
       focusedMonth: dateIso.slice(0, 7),
       selectedDay: openDayDetails ? dateIso : null,
     });
+    setCalendarOpen(true);
+    const detailsEl = calendarDetailsRef.current;
+    if (detailsEl && typeof detailsEl.scrollIntoView === 'function') {
+      const reducedMotion =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      detailsEl.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'nearest' });
+    }
   }
 
   function handleUpdateParts(
@@ -333,8 +348,7 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
       });
     }
 
-    // Jeśli użytkownik zmodyfikował termin/podział urlopu ojcowskiego, budujemy jego okresy bez wymyślania kwot:
-    // używamy stawki i proporcji dziennej z okresu ojcowskiego silnika (gdy dostępny) albo oznaczamy brak kwoty.
+    // Jeśli użytkownik zmodyfikował termin/podział urlopu ojcowskiego, budujemy jego okresy bez wymyślania kwot.
     if (customPaternityParts !== null && scenario.father) {
       const dailyFromEngine =
         enginePaternityPeriod && enginePaternityPeriod.days > 0
@@ -451,9 +465,43 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
     [scenario, combinedPeriods, maternityOptions, params],
   );
 
+  const upcomingDeadlines = useMemo(
+    () => milestones.filter((m) => m.kind === 'deadline' && !m.isPast),
+    [milestones],
+  );
+  const nextDeadline = upcomingDeadlines[0] ?? null;
+  const pastDeadlines = useMemo(
+    () => milestones.filter((m) => m.kind === 'deadline' && m.isPast),
+    [milestones],
+  );
+
   const returnToWorkDates = useMemo(
     () => computeReturnToWorkDates(combinedPeriods),
     [combinedPeriods],
+  );
+
+  const motherSummary = useMemo(
+    () =>
+      formatParentLeaveSummary(
+        'mother',
+        combinedPeriods,
+        returnToWorkDates.mother,
+        singleChildLoss ? null : (splitResult?.remainingWeeks.mother ?? null),
+      ),
+    [combinedPeriods, returnToWorkDates.mother, singleChildLoss, splitResult],
+  );
+
+  const fatherSummary = useMemo(
+    () =>
+      fatherAvailable
+        ? formatParentLeaveSummary(
+            'father',
+            combinedPeriods,
+            returnToWorkDates.father,
+            singleChildLoss ? null : (splitResult?.remainingWeeks.father ?? null),
+          )
+        : null,
+    [fatherAvailable, combinedPeriods, returnToWorkDates.father, singleChildLoss, splitResult],
   );
 
   const quickJumps: CalendarQuickJump[] = useMemo(() => {
@@ -479,18 +527,18 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
   }, [anchorDate, scenario, combinedPeriods, returnToWorkDates.mother]);
 
   const wizardLink = `/wizard?situation=${scenario.situation}`;
+  const nextTabHref = `/plan/documents${location.search}`;
 
   // Stan brakujących krytycznych danych (brak daty lub brak ubezpieczenia obojga rodziców)
   if (dataIssues.blockingMessages.length > 0) {
     return (
       <div className="lp-view">
-        <section className="lp-card lp-missing-data" aria-labelledby="missing-data-heading">
-          <h2 id="missing-data-heading" className="lp-card__title">
-            Uzupełnij dane, aby przygotować plan urlopów
+        <section className="lp-answer lp-answer--missing" aria-labelledby="missing-data-heading">
+          <h2 id="missing-data-heading" className="lp-answer__title">
+            Uzupełnij dane do planu urlopów
           </h2>
-          <p className="lp-card__lead">
-            Nie przyjmujemy fikcyjnych dat ani podstaw wymiaru. Aby wyświetlić oś czasu, kalendarz i
-            dokładne terminy wniosków, uzupełnij brakujące informacje:
+          <p className="lp-answer__lead">
+            Nie przyjmujemy fikcyjnych dat ani kwot. Aby przygotować plan urlopów, uzupełnij:
           </p>
           <ul className="lp-missing-data__list">
             {dataIssues.blockingMessages.map((msg) => (
@@ -498,11 +546,17 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
             ))}
           </ul>
           <div className="lp-missing-data__actions">
-            <Link to={wizardLink} className="plan-btn plan-btn--primary">
-              Uzupełnij dane w kreatorze ›
+            <Link to={wizardLink} className="plan-btn plan-btn--primary lp-missing-data__btn">
+              Uzupełnij dane ›
             </Link>
           </div>
         </section>
+
+        <nav className="lp-next-step lp-next-step--subtle" aria-label="Następny krok">
+          <Link to={nextTabHref} className="lp-next-link">
+            Dalej: Dokumenty i terminy ›
+          </Link>
+        </nav>
       </div>
     );
   }
@@ -511,15 +565,14 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
     <div className="lp-view">
       {usingApi === false && (
         <div className="lp-notice" role="status">
-          Obliczenia działają w trybie lokalnym (fallback z parametrów ZUS) – po uruchomieniu
-          endpointów obliczeń w API przełączą się automatycznie na dane z serwera.
+          Obliczenia działają w trybie lokalnym (na podstawie parametrów ZUS).
         </div>
       )}
 
       {dataIssues.warningMessages.length > 0 && (
         <div className="lp-missing-banner" role="status">
           <div>
-            <strong>Uzupełnij dane, aby zobaczyć pełne wyliczenie kwot:</strong>
+            <strong>Brakuje części danych do wyliczenia kwot:</strong>
             <ul>
               {dataIssues.warningMessages.map((msg) => (
                 <li key={msg}>{msg}</li>
@@ -527,7 +580,7 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
             </ul>
           </div>
           <Link to={wizardLink} className="plan-btn plan-btn--secondary">
-            Uzupełnij dane w kreatorze ›
+            Uzupełnij dane ›
           </Link>
         </div>
       )}
@@ -543,146 +596,201 @@ export function LeavePlanView({ scenario, params, maternity, usingApi }: LeavePl
         </div>
       )}
 
-      {/* Podsumowanie puli i dat powrotu do pracy */}
-      <section className="lp-summary-grid" aria-label="Podsumowanie planu urlopów">
-        {!singleChildLoss && (
-          <>
-            <div className="lp-summary-tile">
-              <span className="lp-summary-tile__label">Pozostały rodzicielski – Matka</span>
-              <strong className="lp-summary-tile__value">
-                {splitResult ? `${splitResult.remainingWeeks.mother} tyg.` : '—'}
-              </strong>
-            </div>
-            <div className="lp-summary-tile">
-              <span className="lp-summary-tile__label">Pozostały rodzicielski – Ojciec</span>
-              <strong className="lp-summary-tile__value">
-                {!fatherAvailable
-                  ? 'Nie dotyczy'
-                  : splitResult
-                    ? `${splitResult.remainingWeeks.father} tyg.`
-                    : '—'}
-              </strong>
-            </div>
-            <div className="lp-summary-tile">
-              <span className="lp-summary-tile__label">Nieprzenoszalne na rodzica</span>
-              <strong className="lp-summary-tile__value">
-                po {params.parentalLeave.nonTransferableWeeksPerParent} tyg.
-              </strong>
-            </div>
-          </>
-        )}
+      {/* Kluczowa odpowiedź na górze w prostych słowach */}
+      <section className="lp-answer" aria-labelledby="leave-answer-heading">
+        <h2 id="leave-answer-heading" className="lp-answer__title">
+          Plan urlopów w skrócie
+        </h2>
 
-        <div className="lp-summary-tile">
-          <span className="lp-summary-tile__label">Aktywny wariant stawki</span>
-          <strong className="lp-summary-tile__value">
-            {scenario.rateVariant === 'combined'
-              ? `${formatRate(params.rates.combined)} (wniosek do ${params.combinedRateApplicationDeadlineDays} dni)`
-              : `${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`}
-          </strong>
-          {scenario.rateVariant === 'combined' && !singleChildLoss && (
-            <span className="lp-summary-tile__hint">
-              {params.parentalLeave.nonTransferableWeeksPerParent} tyg. drugiego rodzica zawsze{' '}
-              {formatRate(params.rates.secondParentNonTransferableInCombined)}
-            </span>
+        <div className="lp-answer__lines">
+          {motherSummary && <p className="lp-answer__line">{motherSummary}</p>}
+          {fatherSummary && <p className="lp-answer__line">{fatherSummary}</p>}
+          {!motherSummary && !fatherSummary && (
+            <p className="lp-answer__line">
+              Dla podanych danych nie zaplanowano okresów urlopu – sprawdź komunikaty poniżej.
+            </p>
           )}
         </div>
 
-        <div className="lp-summary-tile">
-          <span className="lp-summary-tile__label">Powrót do pracy – Matka</span>
-          <strong className="lp-summary-tile__value">
-            {returnToWorkDates.mother ? formatIsoPl(returnToWorkDates.mother) : '—'}
-          </strong>
-        </div>
+        {nextDeadline && (
+          <p className="lp-answer__deadline">
+            <strong>Najbliższy termin:</strong>{' '}
+            <button
+              type="button"
+              className="lp-inline-date-btn"
+              onClick={() => handleSelectTimelineDate(nextDeadline.date, true)}
+            >
+              {formatShortDeadlineLabel(nextDeadline.label)} do {formatIsoPl(nextDeadline.date)}
+            </button>
+          </p>
+        )}
 
-        {fatherAvailable && (
-          <div className="lp-summary-tile">
-            <span className="lp-summary-tile__label">Powrót do pracy – Ojciec</span>
-            <strong className="lp-summary-tile__value">
-              {returnToWorkDates.father ? formatIsoPl(returnToWorkDates.father) : '—'}
-            </strong>
+        {pastDeadlines.length > 0 && (
+          <div className="lp-past-deadlines" aria-label="Minione terminy wniosków">
+            <div className="lp-past-deadlines__list">
+              {pastDeadlines.map((milestone) => (
+                <button
+                  key={`${milestone.date}-${milestone.label}`}
+                  type="button"
+                  className="lp-past-chip"
+                  title={milestone.description}
+                  onClick={() => handleSelectTimelineDate(milestone.date, true)}
+                >
+                  <span className="lp-past-chip__badge">Termin minął</span>
+                  <span>
+                    {formatShortDeadlineLabel(milestone.label)} ({formatIsoPl(milestone.date)})
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
+        )}
+
+        {sensitive && (
+          <p className="lp-sensitive-note" role="status">
+            {singleChildLoss
+              ? 'Urlop rodzicielski nie przysługuje. W zakładce „Wsparcie” znajdziesz bezpłatną pomoc organizacji specjalistycznych.'
+              : 'Przedstawiamy informacje o przysługujących okresach urlopu i terminach dokumentów. W zakładce „Wsparcie” znajdziesz bezpłatną pomoc.'}
+          </p>
+        )}
+
+        {/* Zwięzłe fakty (maks. 2–3) włączone w podsumowanie */}
+        <dl className="lp-answer__facts" aria-label="Podsumowanie planu urlopów">
+          <div className="lp-answer__fact">
+            <dt>Wariant stawki</dt>
+            <dd>
+              <strong>
+                {scenario.rateVariant === 'combined'
+                  ? formatRate(params.rates.combined)
+                  : `${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`}
+              </strong>
+              {scenario.rateVariant === 'combined' && !singleChildLoss && (
+                <span className="lp-answer__fact-hint">
+                  {' '}
+                  ({params.parentalLeave.nonTransferableWeeksPerParent} tyg. drugiego rodzica:{' '}
+                  {formatRate(params.rates.secondParentNonTransferableInCombined)})
+                </span>
+              )}
+            </dd>
+          </div>
+
+          {!singleChildLoss && (
+            <div className="lp-answer__fact">
+              <dt>Pozostały rodzicielski</dt>
+              <dd>
+                {splitResult ? (
+                  <>
+                    Mama: <strong>{splitResult.remainingWeeks.mother} tyg.</strong>
+                    {fatherAvailable && (
+                      <>
+                        {' '}
+                        · Tata: <strong>{splitResult.remainingWeeks.father} tyg.</strong>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {loading && (
+          <p className="lp-loading" role="status" aria-live="polite">
+            Przeliczanie planu urlopów…
+          </p>
         )}
       </section>
 
-      {sensitive && (
-        <div className="lp-sensitive-note" role="status">
-          Przedstawiamy wyłącznie informacje o przysługujących okresach urlopu i terminach złożenia
-          dokumentów. W zakładce „Wsparcie” znajdziesz bezpłatną pomoc organizacji
-          specjalistycznych.
-        </div>
-      )}
-
-      {loading && (
-        <p className="lp-loading" role="status" aria-live="polite">
-          Przeliczanie planu urlopów…
-        </p>
-      )}
-
       <div className="lp-sections">
+        {/* Uproszczona oś czasu (widoczna od razu) + lista okresów w <details> */}
         <LeaveTimeline
           periods={combinedPeriods}
-          milestones={milestones}
-          referenceDate={scenario.referenceDate}
           hasFather={fatherAvailable}
           onSelectDate={handleSelectTimelineDate}
         />
 
-        <MonthlyCalendar
-          periods={combinedPeriods}
-          milestones={milestones}
-          quickJumps={quickJumps}
-          focusedMonth={focusedMonth}
-          selectedDay={selectedDay}
-          referenceDate={scenario.referenceDate}
-          onSelectDay={handleSelectDay}
-          onChangeMonth={handleChangeMonth}
-        />
+        {/* Kalendarz miesięczny zwinięty domyślnie w <details> */}
+        <details
+          ref={calendarDetailsRef}
+          className="lp-details lp-details--card"
+          open={calendarOpen}
+          onToggle={(e) => setCalendarOpen(e.currentTarget.open)}
+        >
+          <summary className="lp-details__summary lp-details__summary--card">
+            Pokaż kalendarz dzień po dniu
+          </summary>
+          <div className="lp-details__body">
+            <MonthlyCalendar
+              periods={combinedPeriods}
+              milestones={milestones}
+              quickJumps={quickJumps}
+              focusedMonth={focusedMonth}
+              selectedDay={selectedDay}
+              referenceDate={scenario.referenceDate}
+              onSelectDay={handleSelectDay}
+              onChangeMonth={handleChangeMonth}
+              onSelectMilestoneDate={(dateIso) => handleSelectTimelineDate(dateIso, true)}
+            />
+          </div>
+        </details>
 
-        <LeaveSplitPlanner
-          scenario={scenario}
-          params={params}
-          maternity={maternity}
-          parts={parts}
-          activePreset={activePreset}
-          splitResult={splitResult}
-          workByPartIndex={workByPartIndex}
-          withWorkResults={withWorkResults}
-          maternityOptions={maternityOptions}
-          paternityParts={activePaternityParts}
-          isPaternityCustom={customPaternityParts !== null}
-          validationIssues={validationIssues}
-          onSelectPreset={handleSelectPreset}
-          onAddPart={(part) => handleUpdateParts([...parts, part], null)}
-          onUpdatePart={(idx, updatedPart) =>
-            handleUpdateParts(
-              parts.map((item, index) => (index === idx ? updatedPart : item)),
-              null,
-            )
-          }
-          onRemovePart={(idx) => {
-            const nextParts = parts.filter((_, index) => index !== idx);
-            const nextWorkMap: Record<number, number> = {};
-            Object.entries(workByPartIndex).forEach(([kStr, val]) => {
-              const k = Number(kStr);
-              if (k < idx) nextWorkMap[k] = val;
-              else if (k > idx) nextWorkMap[k - 1] = val;
-            });
-            handleUpdateParts(nextParts, null, nextWorkMap);
-          }}
-          onResetParts={() => {
-            const preset: LeavePlanPresetId = fatherAvailable ? 'classic' : 'onlyMother';
-            handleUpdateParts(
-              buildPresetParentalParts(preset, scenario, maternity, params),
-              preset,
-              {},
-            );
-          }}
-          onChangeWorkForPart={handleChangeWorkForPart}
-          onChangeMaternityOptions={setMaternityOptions}
-          onChangePaternityParts={handleChangePaternityParts}
-          onResetPaternity={() => handleChangePaternityParts(null)}
-        />
+        {/* Planer: prosty wybór gotowego scenariusza + ręczna edycja i łączenie z pracą w <details> */}
+        {(!singleChildLoss || validationIssues.length > 0) && (
+          <LeaveSplitPlanner
+            scenario={scenario}
+            params={params}
+            maternity={maternity}
+            parts={parts}
+            activePreset={activePreset}
+            splitResult={splitResult}
+            workByPartIndex={workByPartIndex}
+            withWorkResults={withWorkResults}
+            maternityOptions={maternityOptions}
+            paternityParts={activePaternityParts}
+            isPaternityCustom={customPaternityParts !== null}
+            validationIssues={validationIssues}
+            onSelectPreset={handleSelectPreset}
+            onAddPart={(part) => handleUpdateParts([...parts, part], null)}
+            onUpdatePart={(idx, updatedPart) =>
+              handleUpdateParts(
+                parts.map((item, index) => (index === idx ? updatedPart : item)),
+                null,
+              )
+            }
+            onRemovePart={(idx) => {
+              const nextParts = parts.filter((_, index) => index !== idx);
+              const nextWorkMap: Record<number, number> = {};
+              Object.entries(workByPartIndex).forEach(([kStr, val]) => {
+                const k = Number(kStr);
+                if (k < idx) nextWorkMap[k] = val;
+                else if (k > idx) nextWorkMap[k - 1] = val;
+              });
+              handleUpdateParts(nextParts, null, nextWorkMap);
+            }}
+            onResetParts={() => {
+              const preset: LeavePlanPresetId = fatherAvailable ? 'classic' : 'onlyMother';
+              handleUpdateParts(
+                buildPresetParentalParts(preset, scenario, maternity, params),
+                preset,
+                {},
+              );
+            }}
+            onChangeWorkForPart={handleChangeWorkForPart}
+            onChangeMaternityOptions={setMaternityOptions}
+            onChangePaternityParts={handleChangePaternityParts}
+            onResetPaternity={() => handleChangePaternityParts(null)}
+          />
+        )}
       </div>
+
+      {/* Jedno główne CTA prowadzące do kolejnej sekcji */}
+      <nav className="lp-next-step" aria-label="Następny krok">
+        <Link to={nextTabHref} className="plan-btn plan-btn--primary lp-next-step__btn">
+          Dalej: Dokumenty i terminy ›
+        </Link>
+      </nav>
     </div>
   );
 }

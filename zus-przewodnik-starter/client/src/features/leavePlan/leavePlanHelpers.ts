@@ -77,12 +77,31 @@ export function getLeaveTypeLabel(leaveType: LeaveType): string {
   }
 }
 
+export function getShortLeaveTypeLabel(leaveType: LeaveType): string {
+  switch (leaveType) {
+    case 'maternityLeave':
+      return 'Macierzyński';
+    case 'adoptionMaternityLeave':
+      return 'Na warunkach macierzyńskiego';
+    case 'supplementaryMaternityLeave':
+      return 'Uzupełniający';
+    case 'parentalLeave':
+      return 'Rodzicielski';
+    case 'paternityLeave':
+      return 'Ojcowski';
+  }
+}
+
 export function getParentRoleLabel(role: ParentRole): string {
   return role === 'mother' ? 'Matka' : 'Ojciec / drugi rodzic';
 }
 
 export function getShortParentRoleLabel(role: ParentRole): string {
   return role === 'mother' ? 'Matka' : 'Ojciec';
+}
+
+export function getPlainParentLabel(role: ParentRole): string {
+  return role === 'mother' ? 'Mama' : 'Tata';
 }
 
 export function formatWorkFraction(fraction: number): string {
@@ -555,4 +574,73 @@ export function computeReturnToWorkDates(periods: LeavePeriod[]): ReturnToWorkDa
     mother: lastMotherEnd ? addDaysIso(lastMotherEnd, 1) : null,
     father: lastFatherEnd ? addDaysIso(lastFatherEnd, 1) : null,
   };
+}
+
+export interface DateRange {
+  startDate: IsoDate;
+  endDate: IsoDate;
+}
+
+/**
+ * Łączy sąsiadujące lub nakładające się okresy urlopu jednego rodzica w ciągłe przedziały.
+ */
+export function mergeParentLeaveRanges(periods: LeavePeriod[], role: ParentRole): DateRange[] {
+  const sorted = periods
+    .filter((p) => p.parentRole === role)
+    .map((p) => ({ startDate: p.startDate, endDate: p.endDate }))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+  const merged: DateRange[] = [];
+  for (const range of sorted) {
+    const last = merged.at(-1);
+    if (!last || diffDaysIso(last.endDate, range.startDate) > 1) {
+      merged.push({ ...range });
+    } else if (range.endDate > last.endDate) {
+      last.endDate = range.endDate;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Buduje jednozdaniowe podsumowanie urlopu i daty powrotu do pracy dla rodzica w prostym języku.
+ */
+export function formatParentLeaveSummary(
+  role: ParentRole,
+  periods: LeavePeriod[],
+  returnDate: IsoDate | null,
+  remainingParentalWeeks?: number | null,
+): string | null {
+  const name = getPlainParentLabel(role);
+  const ranges = mergeParentLeaveRanges(periods, role);
+
+  if (ranges.length === 0) {
+    if (remainingParentalWeeks && remainingParentalWeeks > 0) {
+      return `${name}: brak zaplanowanego urlopu (zostało ${remainingParentalWeeks} tyg. rodzicielskiego).`;
+    }
+    return null;
+  }
+
+  const formattedRanges = ranges.map(
+    (r) => `od ${formatIsoPl(r.startDate)} do ${formatIsoPl(r.endDate)}`,
+  );
+  let rangeText: string;
+  if (formattedRanges.length === 1) {
+    rangeText = formattedRanges[0];
+  } else if (formattedRanges.length === 2) {
+    rangeText = `${formattedRanges[0]} oraz ${formattedRanges[1]}`;
+  } else {
+    rangeText = `${formattedRanges.slice(0, -1).join(', ')} oraz ${formattedRanges.at(-1)}`;
+  }
+
+  return `${name}: urlop ${rangeText}${returnDate ? `, powrót do pracy ${formatIsoPl(returnDate)}` : ''}.`;
+}
+
+/**
+ * Skraca etykietę terminu do zwięzłej formy zdaniowej (bez dopisków w nawiasie).
+ */
+export function formatShortDeadlineLabel(label: string): string {
+  const trimmed = label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (!trimmed) return label;
+  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
 }
