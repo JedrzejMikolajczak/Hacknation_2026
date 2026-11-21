@@ -1,0 +1,22 @@
+.placeholder-page {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: var(--space-7) var(--page-gutter);
+}
+
+.placeholder-page__title {
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-2xl);
+  color: var(--color-text);
+}
+
+.placeholder-page__text {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+}
+
+.placeholder-page__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+}

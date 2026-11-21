@@ -1,0 +1,3 @@
+Lato – Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic (team@latofonts.com) with Reserved Font Name "Lato".
+Licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+Pliki woff2 pobrane z Google Fonts (subsety latin + latin-ext, wagi 400 i 700).

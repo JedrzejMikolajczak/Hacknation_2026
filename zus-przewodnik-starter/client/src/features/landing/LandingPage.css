@@ -1,0 +1,359 @@
+/*
+ * Strona startowa – wygląd zgodny z www.zus.pl (CONVENTIONS §7.1).
+ * Mobile-first; breakpointy 640 / 1024 px (patrz tokens.css).
+ */
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.landing__container {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--page-gutter);
+}
+
+/* Header – biały, z szarym pasem pod spodem jak na zus.pl */
+.landing__header {
+  padding: var(--space-5) 0 var(--space-6);
+  background: var(--color-surface);
+  border-bottom: var(--divider-bar-width) solid var(--color-border);
+}
+
+.landing__demo-label {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.landing__title {
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-2xl);
+}
+
+.landing__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+/* Main */
+.landing__main {
+  flex: 1;
+  padding: var(--space-6) 0 var(--space-7);
+}
+
+.landing__section + .landing__section {
+  margin-top: var(--space-7);
+}
+
+/* Karta wyboru – gruby zielony pas u góry (znak rozpoznawczy zus.pl) */
+.landing__card {
+  padding: var(--space-5) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-top: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: 0;
+  background: var(--color-surface);
+}
+
+.landing__section-title {
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+}
+
+.landing__section-lead {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+}
+
+/* Kafelki sytuacji – jak kafelki usług na zus.pl: zielona ikona liniowa, pogrubiony tytuł */
+.situation-tiles {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.situation-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: var(--space-4);
+  padding-right: var(--space-7);
+  border: var(--border-width-control) solid var(--color-border-control);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.situation-tile:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.situation-tile--checked,
+.situation-tile--checked:hover {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  /* drugi obrys = grubsza ramka bez przesuwania układu */
+  box-shadow: inset 0 0 0 var(--border-width) var(--color-primary);
+}
+
+.situation-tile:focus-visible {
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.situation-tile--checked:focus-visible {
+  box-shadow:
+    inset 0 0 0 var(--border-width) var(--color-primary),
+    var(--focus-ring-shadow);
+}
+
+.situation-tile__check {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  border: var(--border-width-control) solid var(--color-border-control);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.situation-tile--checked .situation-tile__check {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.situation-tile__icon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+  color: var(--color-primary);
+}
+
+.situation-tile__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.situation-tile__description {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Komunikat walidacji */
+.landing__error {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: var(--accent-bar-width) solid var(--color-error);
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Przyciski – wzór z nagłówka zus.pl */
+.landing__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.landing__action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.landing__action-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.button__chevron {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  flex-shrink: 0;
+}
+
+/* Główne CTA = „Zaloguj do PUE/eZUS”: pomarańcz z granatowym tekstem, hover odwrócony */
+.button--primary {
+  border-color: var(--color-cta);
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+}
+
+.button--primary:hover {
+  border-color: var(--color-navy);
+  background: var(--color-navy);
+  color: var(--color-cta);
+}
+
+/* Drugorzędne = „Zarejestruj w PUE/eZUS”: granatowa ramka, hover wypełniony */
+.button--secondary {
+  background: var(--color-surface);
+  color: var(--color-navy);
+}
+
+.button--secondary:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+/* Co tu zrobisz – szary pas sekcji jak na zus.pl */
+.landing__benefits {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  list-style: none;
+  counter-reset: benefit;
+}
+
+.landing__benefit {
+  position: relative;
+  padding: var(--space-4);
+  padding-left: calc(var(--space-4) + var(--icon-size-md) + var(--space-3));
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  background: var(--color-surface-muted);
+  counter-increment: benefit;
+}
+
+.landing__benefit::before {
+  content: counter(benefit);
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Stopka */
+.landing__footer {
+  padding: var(--space-6) 0;
+  background: var(--color-surface-muted);
+  border-top: var(--accent-bar-width) solid var(--color-primary);
+}
+
+.landing__footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.landing__footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-bold);
+}
+
+.landing__privacy-note {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ≥ 640 px: 2 kolumny, przyciski w rzędzie */
+@media (min-width: 640px) {
+  .landing__title {
+    font-size: var(--font-size-3xl);
+  }
+
+  .landing__card {
+    padding: var(--space-6);
+  }
+
+  .situation-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .landing__actions {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .button {
+    width: auto;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .landing__benefits {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .landing__footer-links {
+    flex-direction: row;
+    flex-wrap: wrap;
+    column-gap: var(--space-5);
+  }
+}
+
+/* ≥ 1024 px: 4 kolumny */
+@media (min-width: 1024px) {
+  .situation-tiles {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .situation-tile,
+  .button {
+    transition: none;
+  }
+}
