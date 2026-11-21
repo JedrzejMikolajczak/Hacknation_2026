@@ -12,6 +12,7 @@ import type {
 import { apiGet } from '../../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
+import { SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { parentLabels, roles } from '../caseLabels';
 import { addDaysIso, diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
@@ -406,7 +407,7 @@ export function CaseDocuments({
   effectiveDate: string;
 }) {
   const { search } = useLocation();
-  const { scenario } = useScenario();
+  const { scenario, authSession } = useScenario();
   const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
   const params = DEFAULT_PARAMS;
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
@@ -430,6 +431,12 @@ export function CaseDocuments({
             </Link>
           </div>
         </section>
+
+        {authSession && authSession.zusData.sickLeaveCertificates.length > 0 && (
+          <section className="plan-section" aria-label="Podgląd zwolnień e-ZLA z ZUS">
+            <SickLeavePreview certificates={authSession.zusData.sickLeaveCertificates} />
+          </section>
+        )}
 
         <nav className="docs-next-nav" aria-label="Następny krok planu">
           <Link to={`/plan/applications${search}`} className="docs-next-link">
@@ -810,6 +817,12 @@ export function CaseDocuments({
           </>
         )}
       </section>
+
+      {authSession && authSession.zusData.sickLeaveCertificates.length > 0 && (
+        <section className="plan-section" aria-label="Podgląd zwolnień e-ZLA z ZUS">
+          <SickLeavePreview certificates={authSession.zusData.sickLeaveCertificates} />
+        </section>
+      )}
 
       <nav className="docs-next-nav" aria-label="Następny krok planu">
         <Link

@@ -1,0 +1,43 @@
+{
+  "label": "Katarzyna Kowalska – działalność gospodarcza (JDG), zaległość składkowa",
+  "profile": {
+    "profileId": "katarzyna-jdg-dlug",
+    "firstName": "Katarzyna",
+    "lastName": "Kowalska",
+    "mother": {
+      "role": "mother",
+      "insuranceTitle": "selfEmployed",
+      "sicknessInsurance": "voluntary",
+      "insuredSince": "2024-01-01",
+      "insuranceEndDate": null,
+      "benefitBase": null,
+      "employerInsuredCount": null,
+      "age": 33,
+      "contributionDebt": 680.5,
+      "wantsLeave": true
+    }
+  },
+  "incomes": [
+    { "month": "2025-10", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2025-11", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2025-12", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-01", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-02", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-03", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-04", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-05", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-06", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-07", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-08", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null },
+    { "month": "2026-09", "grossAmount": 5203.8, "workedDays": null, "requiredWorkingDays": null }
+  ],
+  "sickLeaveCertificates": [
+    {
+      "id": "EZLA-2026-10-3310",
+      "startDate": "2026-10-01",
+      "endDate": "2026-11-05",
+      "pregnancyCode": true
+    }
+  ],
+  "contributionDebt": 680.5
+}
