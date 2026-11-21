@@ -5,7 +5,7 @@ import type {
   RequiredDocument,
   WizardScenario,
 } from '../types';
-import { addDays, addMonths, formatPercentPl, validateParams } from './core';
+import { addDays, addMonths, daysBetween, formatPercentPl, validateParams } from './core';
 import { resolveParentPayer } from './eligibility';
 import { getMaternityWeeksForChildren, resolveSupplementaryMaternityLeave } from './maternity';
 
@@ -13,8 +13,13 @@ function effectivePayerOrZus(payer: Payer | null): Payer {
   return payer ?? 'zus';
 }
 
+export type DocumentInput = WizardScenario & {
+  maternityLeaveStartDate?: string;
+  sicknessLeaveContinues?: boolean;
+};
+
 export function getRequiredDocuments(
-  input: WizardScenario,
+  input: DocumentInput,
   params: BenefitParams,
 ): DocumentChecklist {
   const eventDate =
@@ -91,15 +96,24 @@ export function getRequiredDocuments(
         note: 'Osoba prowadząca JDG składa ZAS-53 bezpośrednio do ZUS (np. przez PUE/eZUS). Druk Z-3b został zlikwidowany 24.10.2026 r.',
       });
     } else if (motherPayer === 'zus') {
-      const certId = mother.insuranceTitle === 'employment' ? 'formZ3Sickness' : 'formZ3aSickness';
-      const certCode = mother.insuranceTitle === 'employment' ? 'ZUS Z-3' : 'ZUS Z-3a';
+      const employee = mother.insuranceTitle === 'employment';
+      const certCode = employee ? 'Z-3' : 'Z-3a';
       documents.push({
-        id: certId,
-        name: `Zaświadczenie płatnika składek ${certCode}${mother.insuranceTitle === 'employment' ? ' (oraz ZAS-12 na dalszy okres)' : ''} do zasiłku chorobowego`,
+        id: employee ? 'formZ3Sickness' : 'formZ3aSickness',
+        name: `Zaświadczenie płatnika składek ZUS ${certCode} do zasiłku chorobowego`,
         submitTo: 'zus',
         deadline: null,
         note: `Płatnik zgłaszający do ${params.payerThresholdInsuredCount} ubezpieczonych przekazuje zaświadczenie do ZUS.`,
       });
+      if (input.sicknessLeaveContinues) {
+        documents.push({
+          id: 'formZAS12',
+          name: 'ZAS-12 – zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego',
+          submitTo: 'zus',
+          deadline: null,
+          note: `Przy dalszym nieprzerwanym zwolnieniu płatnik może przekazać ZAS-12 zamiast ponownego ${certCode}.`,
+        });
+      }
     }
   }
 
@@ -131,11 +145,11 @@ export function getRequiredDocuments(
     }
   } else if (input.special.stillbirth) {
     documents.push({
-      id: 'birthCertificateShort',
-      name: 'Skrócony odpis aktu urodzenia dziecka z adnotacją o martwym urodzeniu',
+      id: 'stillbirthCertificate',
+      name: 'Zaświadczenie o martwym urodzeniu lub skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu',
       submitTo: primaryPayer,
       deadline: null,
-      note: 'Akt urodzenia wystawia Urząd Stanu Cywilnego na podstawie karty martwego urodzenia ze szpitala.',
+      note: 'Zaświadczenie o martwym urodzeniu składa się, gdy nie sporządzono aktu urodzenia.',
     });
   } else {
     documents.push({
@@ -158,6 +172,26 @@ export function getRequiredDocuments(
 
   // 3. Wniosek matki o zasiłek / urlop macierzyński
   if (motherInsured && !input.special.motherDeceased) {
+    if (
+      input.situation !== 'adoption' &&
+      (input.birthDate || input.expectedBirthDate) &&
+      input.maternityLeaveStartDate
+    ) {
+      const daysBeforeBirth = daysBetween(input.maternityLeaveStartDate, eventDate);
+      if (
+        daysBeforeBirth > 0 &&
+        daysBeforeBirth <= params.maternityLeave.maxWeeksBeforeBirth * params.calendar.daysPerWeek
+      ) {
+        documents.push({
+          id: 'expectedBirthCertificate',
+          name: 'Zaświadczenie lekarskie o przewidywanej dacie porodu',
+          submitTo: motherPayer,
+          deadline: null,
+          note: 'Dołącz zaświadczenie, gdy ubiegasz się o zasiłek macierzyński za okres przed porodem.',
+        });
+      }
+    }
+
     if (motherPayer === 'employer' && mother.insuranceTitle === 'employment') {
       documents.push({
         id: 'applicationToEmployer',
