@@ -825,11 +825,12 @@ export function CaseDocuments({
 
 /* ---------- Wnioski ---------- */
 
-type PersonalFieldKey = 'name' | 'pesel' | 'bank';
+type PersonalFieldKey = 'name' | 'pesel' | 'birthDate' | 'bank';
 
 const PERSONAL_FIELD_LABELS: Record<PersonalFieldKey, string> = {
   name: 'Imię i nazwisko',
   pesel: 'PESEL',
+  birthDate: 'Data urodzenia',
   bank: 'Numer rachunku',
 };
 
@@ -1588,8 +1589,11 @@ export function CaseApplications({
   const daysPerWeek = params.calendar.daysPerWeek;
 
   function personalValue(role: ApplicantRole, field: PersonalFieldKey) {
-    const imported = field === 'bank' ? '' : simulatedIdentities[role]?.[field];
-    return personal[role]?.[field] ?? imported ?? '';
+    const edited = personal[role]?.[field];
+    if (edited !== undefined) return edited;
+    const profile = simulatedIdentities[role]?.profile;
+    if (!profile || field === 'bank') return '';
+    return field === 'name' ? `${profile.firstName} ${profile.lastName}` : profile[field];
   }
 
   function personalId(role: ApplicantRole, field: PersonalFieldKey) {
@@ -1614,6 +1618,7 @@ export function CaseApplications({
     const required = requiredFieldsForApplication(item);
     const trimmedName = personalValue(doc.parent_role, 'name').trim();
     const trimmedPesel = personalValue(doc.parent_role, 'pesel').trim();
+    const birthDate = personalValue(doc.parent_role, 'birthDate');
     const trimmedBank = personalValue(doc.parent_role, 'bank').trim();
     const parentRoleValue = item.sharedWithBothParents
       ? 'Matka / Ojciec (jeden wniosek dla obojga rodziców)'
@@ -1639,6 +1644,9 @@ export function CaseApplications({
         value: trimmedPesel || 'Do uzupełnienia',
         missing: !trimmedPesel,
       });
+    }
+    if (birthDate) {
+      fields.push({ label: PERSONAL_FIELD_LABELS.birthDate, value: formatPolishDate(birthDate) });
     }
     if (required.includes('bank')) {
       fields.push({
@@ -2141,7 +2149,10 @@ export function CaseApplications({
 
         <Link
           to="/login"
-          state={{ returnTo: `${pathname}${search}` }}
+          state={{
+            returnTo: `${pathname}${search}`,
+            applicantRoles: roles.filter((role) => forms.some(({ doc }) => doc.parent_role === role)),
+          }}
           className="plan-btn plan-btn--secondary"
         >
           Pobierz dane z mObywatela (symulacja)
@@ -2162,6 +2173,10 @@ export function CaseApplications({
             ),
           ];
           if (!fields.length) return null;
+          if (simulatedIdentities[role]) {
+            if (!fields.includes('pesel')) fields.push('pesel');
+            fields.push('birthDate');
+          }
           return (
             <fieldset key={role} className="plan-section">
               <legend>{parentLabels[role]}</legend>
@@ -2173,9 +2188,9 @@ export function CaseApplications({
                       <span className="plan-field__label">{PERSONAL_FIELD_LABELS[field]}</span>
                       <input
                         id={id}
-                        type="text"
+                        type={field === 'birthDate' ? 'date' : 'text'}
                         autoComplete="off"
-                        inputMode={field === 'name' ? undefined : 'numeric'}
+                        inputMode={field === 'pesel' || field === 'bank' ? 'numeric' : undefined}
                         className={
                           invalidField === id
                             ? 'plan-field__input apps-field-error'
