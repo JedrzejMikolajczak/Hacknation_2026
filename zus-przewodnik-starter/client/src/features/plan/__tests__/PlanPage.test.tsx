@@ -96,7 +96,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
     expect(screen.getAllByText(/31 tyg\./i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('wyświetla oś czasu, waliduje podział urlopu rodzicielskiego i liczy łączenie urlopu z pracą', async () => {
+  it('wyświetla oś czasu, kalendarz, waliduje podział urlopu rodzicielskiego i liczy łączenie urlopu z pracą', async () => {
     const { user } = renderPlan(
       '/plan/leave-plan?zatrudnienie=uop&dzieci=1&podstawa=6000&ojciec=1',
     );
@@ -104,15 +104,20 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek i przeliczanie na ż
     expect(
       screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów obojga rodziców/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: /Kalendarz miesięczny/i }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/Oś czasu urlopów matki/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Oś czasu urlopów drugiego rodzica/i)).toBeInTheDocument();
 
     expect(await screen.findByText(/Podział zgodny z Kodeksem pracy/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Wydłużenie urlopu rodzicielskiego/i)).toBeInTheDocument();
 
-    // Zmień wymiar etatu na 1/4
-    await user.selectOptions(screen.getByLabelText(/Wymiar etatu podczas urlopu/i), '0.25');
-    expect(await screen.findByText(/\+3 tyg\./i)).toBeInTheDocument();
+    // Włącz łączenie z pracą na 1/4 etatu dla pierwszej części urlopu rodzicielskiego (32 tyg. → +8 tyg.)
+    const workSelects = screen.getAllByLabelText(/Praca w trakcie urlopu:/i);
+    await user.selectOptions(workSelects[0], '0.25');
+    expect(await screen.findByText(/Wydłużenie urlopu rodzicielskiego:/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/\+8 tyg\./i)).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Powrót do pracy po tej części:/i)).toBeInTheDocument();
   });
 
   it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy oraz pokazuje płatnika i terminy', async () => {
