@@ -1,12 +1,12 @@
+import { Link } from 'react-router-dom';
 import type { EligibilityResult, Warning } from '@shared/types';
-import {
-  formatBenefitName,
-  formatParentRole,
-  formatPayer,
-} from '../planScenario';
+import { formatBenefitName, formatParentRole, formatPayer } from '../planScenario';
 
 interface EntitlementsTabProps {
   eligibility: EligibilityResult;
+  missingFields?: string[];
+  wizardHref?: string;
+  hasMotherInPlan?: boolean;
 }
 
 const WARNING_TITLES: Record<Warning['code'], string> = {
@@ -19,23 +19,68 @@ const WARNING_TITLES: Record<Warning['code'], string> = {
   WAITING_PERIOD_NOT_MET: 'Okres wyczekiwania na zasiłek chorobowy',
 };
 
-export function EntitlementsTab({ eligibility }: EntitlementsTabProps) {
-  const { warnings, entitlements } = eligibility;
+export function EntitlementsTab({
+  eligibility,
+  missingFields = [],
+  wizardHref = '/wizard',
+  hasMotherInPlan = true,
+}: EntitlementsTabProps) {
+  if (missingFields.length > 0) {
+    return (
+      <div className="plan-tab-content">
+        <section className="plan-section" aria-labelledby="entitlements-missing-heading">
+          <div className="plan-missing-data" role="status">
+            <h2 id="entitlements-missing-heading" className="plan-section__title">
+              Uzupełnij dane, aby sprawdzić uprawnienia
+            </h2>
+            <p className="plan-section__lead">
+              Nie przyjmujemy zmyślonych założeń. Aby rzetelnie ocenić Twoje uprawnienia do
+              świadczeń z ZUS, podaj brakujące informacje w formularzu lub w pasku parametrów u
+              góry:
+            </p>
+            <ul className="plan-missing-data__list">
+              {missingFields.map((field) => (
+                <li key={field}>{field}</li>
+              ))}
+            </ul>
+            <Link to={wizardHref} className="plan-btn plan-btn--primary">
+              Uzupełnij formularz ›
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const visibleEntitlements = hasMotherInPlan
+    ? eligibility.entitlements
+    : eligibility.entitlements.filter((item) => item.parentRole === 'father');
+
+  const visibleWarnings = hasMotherInPlan
+    ? eligibility.warnings
+    : eligibility.warnings.filter((w) => w.code !== 'NO_INSURANCE_ON_BIRTH_DATE');
 
   return (
     <div className="plan-tab-content">
+      {!hasMotherInPlan && (
+        <div className="plan-callout plan-callout--info">
+          <strong>Plan dla samodzielnego ojca.</strong> Zestawienie obejmuje uprawnienia drugiego
+          rodzica (urlop rodzicielski oraz urlop ojcowski).
+        </div>
+      )}
+
       <section className="plan-section" aria-labelledby="warnings-heading">
         <h2 id="warnings-heading" className="plan-section__title">
           Ostrzeżenia o ryzykach i terminach
         </h2>
-        {warnings.length === 0 ? (
+        {visibleWarnings.length === 0 ? (
           <div className="plan-callout plan-callout--success">
             <strong>Brak zidentyfikowanych ryzyk utraty świadczeń.</strong> Na podstawie podanych
             danych nie wykryto zadłużenia składkowego ani przerwy w ubezpieczeniu przed porodem.
           </div>
         ) : (
           <ul className="plan-warning-list" role="list">
-            {warnings.map((warning) => (
+            {visibleWarnings.map((warning) => (
               <li
                 key={`${warning.code}-${warning.message}`}
                 className={
@@ -62,11 +107,11 @@ export function EntitlementsTab({ eligibility }: EntitlementsTabProps) {
         </h2>
         <p className="plan-section__lead">
           Dla każdego świadczenia sprawdzamy, czy spełniasz warunki ustawowe oraz kto odpowiada za
-          wypłatę (pracodawca czy ZUS).
+          wypłatę (płatnik składek czy ZUS).
         </p>
 
         <div className="plan-cards-grid">
-          {entitlements.map((item) => (
+          {visibleEntitlements.map((item) => (
             <article
               key={`${item.benefit}-${item.parentRole}`}
               className={
@@ -78,9 +123,7 @@ export function EntitlementsTab({ eligibility }: EntitlementsTabProps) {
               <div className="entitlement-card__header">
                 <span
                   className={
-                    item.entitled
-                      ? 'plan-badge plan-badge--yes'
-                      : 'plan-badge plan-badge--no'
+                    item.entitled ? 'plan-badge plan-badge--yes' : 'plan-badge plan-badge--no'
                   }
                 >
                   {item.entitled ? 'Przysługuje' : 'Nie przysługuje'}
