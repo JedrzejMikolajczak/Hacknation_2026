@@ -308,6 +308,11 @@ export function getQuestions(
           value: 'incapable',
           label: 'Mama ma orzeczenie o niezdolności do samodzielnej egzystencji',
         },
+        {
+          value: 'hospitalizedIncapable',
+          label:
+            'Mama przebywa w szpitalu i ma orzeczenie o niezdolności do samodzielnej egzystencji',
+        },
         ...(situation === 'afterBirth' ? [{ value: 'deceased', label: 'Mama zmarła' }] : []),
       ],
     });
@@ -485,6 +490,8 @@ export function getQuestions(
 
   for (const role of parentRoles(answers)) {
     const person = role === 'mother' ? 'mamy' : 'taty';
+    // Po zgonie mamy nie pytamy o jej plany urlopowe – tata może przejąć urlop.
+    if (role === 'mother' && answers.motherSituation === 'deceased') continue;
     questions.push({
       id: `${role}.wantsLeave`,
       stage: 3,
@@ -556,29 +563,54 @@ export function getQuestions(
   if (!childLost && parentRoles(answers).length > 0) {
     const rates = DEFAULT_PARAMS.rates;
     const deadline = DEFAULT_PARAMS.combinedRateApplicationDeadlineDays;
+    const combinedExpired = isCombinedRateExpired(situation, answers);
     questions.push({
       id: 'rateVariant',
       stage: 3,
       type: 'choice',
       title: 'Jak chcecie otrzymywać zasiłek macierzyński?',
       label: 'Wariant wysokości zasiłku',
-      hint: `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
+      hint: combinedExpired
+        ? `Wariant ${formatRate(rates.combined)} był dostępny do ${deadline} dni od ${situation === 'adoption' ? 'przyjęcia dziecka' : 'porodu'}. Ten termin już minął, więc pokazujemy wariant ${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}.`
+        : `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
       options: [
-        {
-          value: 'combined',
-          label: `${formatRate(rates.combined)} przez cały okres`,
-          description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
-        },
+        ...(combinedExpired
+          ? []
+          : [
+              {
+                value: 'combined',
+                label: `${formatRate(rates.combined)} przez cały okres`,
+                description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
+              },
+            ]),
         {
           value: 'standard',
           label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
           description: `${formatRate(rates.maternity)} za urlop macierzyński, ${formatRate(rates.parental)} za rodzicielski.`,
         },
-        { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
+        ...(combinedExpired
+          ? []
+          : [{ value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' }]),
       ],
     });
   }
   return questions;
+}
+
+/** Wariant łączny wymaga wniosku w ciągu 21 dni od porodu (przyjęcia dziecka) – po tym terminie niedostępny. */
+export function isCombinedRateExpired(
+  situation: SituationType,
+  answers: Record<string, string>,
+  today: string = todayLocal(),
+): boolean {
+  const event =
+    situation === 'afterBirth'
+      ? answers.birthDate
+      : situation === 'adoption' && answers.adoptionStage === 'accepted'
+        ? answers.childAcceptanceDate
+        : undefined;
+  if (!event || !/^\d{4}-\d{2}-\d{2}$/.test(event)) return false;
+  return today > addDays(event, DEFAULT_PARAMS.combinedRateApplicationDeadlineDays);
 }
 
 export function validateAnswer(question: WizardQuestion, value: string | undefined): string | null {
@@ -822,9 +854,14 @@ export function buildScenario(
   const certificate = knownBoolean(values.zaZyciemCertificate);
   if (certificate !== undefined) special.zaZyciemCertificate = certificate;
   if (values.motherSituation) {
-    special.motherHospitalized = values.motherSituation === 'hospitalized';
-    special.motherIncapableOfIndependentLiving = values.motherSituation === 'incapable';
+    special.motherHospitalized =
+      values.motherSituation === 'hospitalized' ||
+      values.motherSituation === 'hospitalizedIncapable';
+    special.motherIncapableOfIndependentLiving =
+      values.motherSituation === 'incapable' || values.motherSituation === 'hospitalizedIncapable';
     special.motherDeceased = values.motherSituation === 'deceased';
+    // Po zgonie mamy nie zakładamy jej urlopu.
+    if (special.motherDeceased && scenario.mother) scenario.mother.wantsLeave = false;
   }
   const bankruptcy = knownBoolean(values.employerBankruptcyOrLiquidation);
   if (bankruptcy !== undefined) special.employerBankruptcyOrLiquidation = bankruptcy;
