@@ -156,11 +156,12 @@ describe('CaseDocuments', () => {
     expect(screen.getByText(/pracodawca przekazuje Z-3 do ZUS/)).toBeInTheDocument();
     expect(screen.getByText(/U pracodawcy \(> 20 ubezpieczonych/)).toBeInTheDocument();
 
-    // Checklista z postępem i odhaczaniem
-    expect(screen.getByText('Skompletowano: 0 z 9 (0%)')).toBeInTheDocument();
-    const firstCheckbox = screen.getAllByRole('checkbox')[0];
-    fireEvent.click(firstCheckbox);
-    expect(screen.getByText('Skompletowano: 1 z 9 (11%)')).toBeInTheDocument();
+    // Mapa składania z postępem i odhaczaniem aktywnego kroku
+    expect(screen.getByRole('heading', { name: 'Mapa składania dokumentów' })).toBeInTheDocument();
+    const progress = () => document.querySelector('.fmap__progress')?.textContent ?? '';
+    expect(progress()).toMatch(/Załatwione:\s*0\s*z\s*\d+/);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mam to załatwione' }));
+    expect(progress()).toMatch(/Załatwione:\s*1\s*z\s*\d+/);
 
     // Formularze po 24.10.2026 i ścieżka ciążowa
     expect(screen.getByText(/Zmiany w formularzach ZUS \(od 24\.10\.2026\)/)).toBeInTheDocument();
@@ -213,8 +214,8 @@ describe('CaseDocuments', () => {
       screen.getByText(/U zleceniodawcy \(> 20 ubezpieczonych – wypłaca zleceniodawca\)/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Bezpośrednio w ZUS/)).not.toBeInTheDocument();
-    expect(screen.getAllByText('Zleceniodawca').length).toBeGreaterThan(0);
-    expect(screen.getByText(/u zleceniodawcy\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/Do zleceniodawcy/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/u zleceniodawcy\./).length).toBeGreaterThan(0);
   });
 
   it('dla umowy zlecenia ≤ 20 pokazuje złożenie w ZUS i przekazanie Z-3a przez zleceniodawcę', () => {
@@ -291,10 +292,10 @@ describe('CaseDocuments', () => {
     );
 
     expect(
-      screen.getByText(
+      screen.getAllByText(
         'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu lub zaświadczenie o martwym urodzeniu',
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(container.textContent).not.toContain('!');
     expect(container.textContent).not.toMatch(/gratulacj/i);
   });
@@ -344,13 +345,91 @@ describe('CaseDocuments', () => {
     );
 
     expect(screen.getByText(/Bezpośrednio w ZUS/)).toBeInTheDocument();
-    expect(screen.getByText('ZAS-53 – wniosek o zasiłek chorobowy')).toBeInTheDocument();
+    expect(screen.getAllByText('ZAS-53 – wniosek o zasiłek chorobowy').length).toBeGreaterThan(0);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Zaświadczenie lekarskie o przewidywanej dacie porodu/ }),
+    );
     expect(
-      screen.getByText('Zaświadczenie lekarskie o przewidywanej dacie porodu'),
-    ).toBeInTheDocument();
+      screen.getAllByText('Zaświadczenie lekarskie o przewidywanej dacie porodu').length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Co to za dokument i podstawa prawna'));
     expect(
       screen.getByText(/maksymalnie 6 tygodni przed przewidywaną datą porodu/),
     ).toBeInTheDocument();
+  });
+});
+
+describe('FilingMap (mapa składania)', () => {
+  it('prowadzi za rękę: co, gdzie i kiedy, z linkiem do wniosku, e-mailem do kadr i PUE', () => {
+    renderWithRouter(<CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />);
+
+    // Kroki na osi, rozpoczęte od automatycznych i załączników
+    const steps = screen
+      .getAllByRole('listitem')
+      .filter((li) => li.classList.contains('fmap__step'));
+    expect(steps.length).toBe(sampleDocuments.length);
+
+    // Wniosek do pracodawcy: link „Wypełnij i pobierz” z kluczem dokumentu + e-mail do kadr
+    fireEvent.click(screen.getByRole('button', { name: /Wniosek o okres rodzicielskiego/ }));
+    const fill = screen.getByRole('link', { name: 'Wypełnij i pobierz wniosek ›' });
+    expect(fill.getAttribute('href')).toMatch(
+      /^\/plan\/applications\?case=case-04&open=FATHER-PARENTAL_REQUEST/,
+    );
+    const mail = screen.getByRole('link', { name: /Napisz e-mail do kadr/ });
+    expect(mail.getAttribute('href')).toMatch(/^mailto:\?subject=/);
+
+    // ZUS: link do PUE/eZUS
+    fireEvent.click(screen.getByRole('button', { name: /ZAS-12/ }));
+    expect(screen.getByText(/przesyła do ZUS Twój płatnik składek/)).toBeInTheDocument();
+
+    // USC: link do gov.pl
+    fireEvent.click(screen.getByRole('button', { name: /Wniosek do USC/ }));
+    expect(screen.getByRole('link', { name: /Złóż wniosek na gov\.pl/ })).toHaveAttribute(
+      'href',
+      expect.stringContaining('gov.pl'),
+    );
+  });
+});
+
+describe('FilingMap – zapamiętywanie', () => {
+  it('przywraca zaznaczenia „Mam to załatwione” po ponownym wejściu', () => {
+    const first = renderWithRouter(
+      <CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mam to załatwione' }));
+    expect(document.querySelector('.fmap__progress')?.textContent).toMatch(/:\s*1\s*z/);
+    first.unmount();
+
+    renderWithRouter(<CaseDocuments documents={sampleDocuments} effectiveDate="2026-10-24" />);
+    expect(document.querySelector('.fmap__progress')?.textContent).toMatch(/:\s*1\s*z/);
+
+    // inna sprawa ma własny, czysty stan
+    first.unmount();
+  });
+});
+
+describe('CaseApplications – wejście z mapy (?open=)', () => {
+  it('pokazuje krótki formularz braków, waliduje i otwiera podgląd z informacją, gdzie wysłać', () => {
+    renderWithRouter(
+      <CaseApplications documents={sampleDocuments} />,
+      '/plan/applications?case=case-04&open=MOTHER-USC_COPY--',
+    );
+
+    const panel = within(screen.getByRole('region', { name: /Wniosek do USC/ }));
+    expect(panel.getByText(/Brakuje jeszcze 1 informacji/)).toBeInTheDocument();
+
+    // Walidacja przy pustym imieniu
+    fireEvent.click(panel.getByRole('button', { name: /Podgląd i pobierz PDF/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/Imię i nazwisko/);
+
+    fireEvent.change(panel.getByLabelText('Imię i nazwisko'), {
+      target: { value: 'Janina Nowak' },
+    });
+    fireEvent.click(panel.getByRole('button', { name: /Podgląd i pobierz PDF/ }));
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByText('Janina Nowak')).toBeInTheDocument();
+    expect(dialog.getByRole('heading', { name: /Gdzie to wysłać/ })).toBeInTheDocument();
+    expect(dialog.getByRole('link', { name: /Złóż wniosek na gov\.pl/ })).toBeInTheDocument();
   });
 });
 
@@ -392,7 +471,9 @@ describe('CaseApplications', () => {
     fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Nowak' } });
     fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
     expect(screen.getByRole('alert')).toHaveTextContent(/dotychczas wykorzystanego urlopu/);
-    fireEvent.change(screen.getByLabelText(/Okres dotychczas/), { target: { value: 'Nie korzystałem' } });
+    fireEvent.change(screen.getByLabelText(/Okres dotychczas/), {
+      target: { value: 'Nie korzystałem' },
+    });
     fireEvent.change(screen.getByLabelText(/Liczba wykorzystanych/), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText(/Oświadczenie pracownika o urlopie/), {
       target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
@@ -577,14 +658,18 @@ describe('CaseApplications', () => {
       fireEvent.change(parts, { target: { value: '0' } });
     }
     for (const statement of screen.getAllByLabelText(/Oświadczenie pracownika o urlopie/)) {
-      fireEvent.change(statement, { target: { value: 'Drugi rodzic nie korzysta w tym okresie.' } });
+      fireEvent.change(statement, {
+        target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
+      });
     }
     fireEvent.change(screen.getByLabelText(/Oświadczenie ojca, czy korzystał/), {
       target: { value: 'Nie korzystałem.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Ojciec');
-    fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Kowalski' } });
+    fireEvent.change(father.getByLabelText('Imię i nazwisko'), {
+      target: { value: 'Jan Kowalski' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Wyślij pozostałe (4) ›' }));
     expect(screen.getByRole('button', { name: 'Wszystkie wnioski wysłane' })).toBeDisabled();
 

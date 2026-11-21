@@ -17,6 +17,9 @@ import { parentLabels, roles } from '../caseLabels';
 import { addDaysIso, diffDaysIso, formatPolishDate, livingChildren, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
 import { leaveApplication } from './leaveApplication';
+import { documentKey } from './documentKey';
+import { FilingMap, type FilingStep } from './FilingMap';
+import { buildMailto, deliveryGuide, filingKind, type DeliveryGuide } from './filingGuide';
 import './DocumentsTab.css';
 import './ApplicationsTab.css';
 import './CasePaperwork.css';
@@ -33,9 +36,6 @@ const ATTACHMENT_IDS = new Set([
   'DEATH_CERTIFICATE',
   'EXPECTED_BIRTH_CERTIFICATE',
 ]);
-
-const documentKey = (doc: CaseDocument) =>
-  `${doc.parent_role}-${doc.id}-${doc.start_date ?? ''}-${doc.end_date ?? ''}`;
 
 function isMandateEntitledRole(
   documents: CaseDocument[],
@@ -408,7 +408,6 @@ export function CaseDocuments({
 }) {
   const { search } = useLocation();
   const { scenario, authSession } = useScenario();
-  const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
   const params = DEFAULT_PARAMS;
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
 
@@ -447,17 +446,25 @@ export function CaseDocuments({
     );
   }
 
-  function toggleDoc(key: string) {
-    setCheckedMap((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
-
-  const nextStep = selectNextStep(documents, checkedMap);
+  const nextStep = selectNextStep(documents, {});
   const parentsFiling = resolveParentsFiling(documents, params);
-  const groups = groupCaseDocuments(documents, params);
   const hasPregnancySickness = documents.some((doc) => PREGNANCY_SICKNESS_IDS.has(doc.id));
-  const totalCount = documents.length;
-  const completedCount = documents.filter((doc) => checkedMap[documentKey(doc)]).length;
-  const progressPercent = Math.round((completedCount / totalCount) * 100);
+  const activeRoles = roles.filter((role) => documents.some((doc) => doc.parent_role === role));
+  const filingSteps: FilingStep[] = documents.map((doc) => {
+    const isApplication = isActionableApplication(doc);
+    const mandateEntitled = isMandateEntitledRole(documents, doc.parent_role);
+    const openParams = new URLSearchParams(search);
+    openParams.set('open', documentKey(doc));
+    return {
+      doc,
+      title: doc.name_pl,
+      who: activeRoles.length > 1 ? parentLabels[doc.parent_role] : null,
+      kind: filingKind(doc, isApplication),
+      guide: deliveryGuide(doc, mandateEntitled),
+      details: describeDocumentDetails(doc, effectiveDate, params, mandateEntitled),
+      applicationHref: isApplication ? `/plan/applications?${openParams.toString()}` : null,
+    };
+  });
 
   const deadlineDocs = documents
     .filter((doc): doc is CaseDocument & { deadline: string } => doc.deadline !== null)
@@ -468,9 +475,6 @@ export function CaseDocuments({
   const remainingDeadlines = featuredDeadline
     ? deadlineDocs.filter((doc) => doc !== featuredDeadline)
     : [];
-  const multipleParentsInAttachments =
-    new Set(documents.filter((doc) => ATTACHMENT_IDS.has(doc.id)).map((doc) => doc.parent_role))
-      .size > 1;
 
   return (
     <div className="plan-tab-content">
@@ -523,132 +527,30 @@ export function CaseDocuments({
       <section className="plan-section" aria-labelledby="docs-checklist-heading">
         <div className="docs-checklist-header">
           <h3 id="docs-checklist-heading" className="plan-section__title">
-            Lista dokumentów
+            Mapa składania dokumentów
           </h3>
-          <span className="plan-badge plan-badge--navy" aria-live="polite">
-            Skompletowano: {completedCount} z {totalCount} ({progressPercent}%)
-          </span>
         </div>
+        <p className="plan-section__lead">
+          Idź krok po kroku: co przygotować, gdzie to złożyć i do kiedy. Wnioski wypełnimy danymi z
+          Twojego formularza.
+        </p>
 
-        <div className="docs-progress" aria-label="Postęp kompletowania dokumentów">
-          <div
-            className="docs-progress__track"
-            role="progressbar"
-            aria-valuenow={progressPercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Skompletowano ${completedCount} z ${totalCount} dokumentów (${progressPercent}%)`}
-          >
-            <div className="docs-progress__fill" style={{ width: `${progressPercent}%` }} />
+        {hasPregnancySickness && (
+          <div className="plan-callout">
+            <p className="plan-callout__title">Zwolnienie lekarskie w ciąży (e-ZLA, kod „B”)</p>
+            <p>
+              Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika
+              (PUE/eZUS). Gdy płatnik nie wypłaca zasiłków (do {params.payerThresholdInsuredCount}{' '}
+              ubezpieczonych), pracodawca przekazuje Z-3 (a ZAS-12 tylko na dalszy okres zasiłku
+              chorobowego), zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.
+            </p>
           </div>
-        </div>
+        )}
 
-        <div className="docs-groups">
-          {groups.map((group) => (
-            <div key={group.id} className="docs-group">
-              <div className="docs-group__header">
-                <h4 className="docs-group__title">{group.title}</h4>
-                {group.description && <p className="docs-group__desc">{group.description}</p>}
-              </div>
-
-              <ul className="docs-compact-list" role="list">
-                {group.documents.map((doc) => {
-                  const key = documentKey(doc);
-                  const isChecked = Boolean(checkedMap[key]);
-                  const showOverdue = !isChecked && doc.is_overdue;
-                  const mandateEntitled = isMandateEntitledRole(documents, doc.parent_role);
-                  return (
-                    <li
-                      key={key}
-                      className={
-                        isChecked
-                          ? 'docs-compact-item docs-compact-item--checked'
-                          : showOverdue
-                            ? 'docs-compact-item docs-compact-item--overdue'
-                            : 'docs-compact-item'
-                      }
-                    >
-                      <label className="docs-compact-item__main">
-                        <input
-                          type="checkbox"
-                          className="docs-compact-item__checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleDoc(key)}
-                        />
-                        <span className="docs-compact-item__content">
-                          <span className="docs-compact-item__top">
-                            <span className="docs-compact-item__name">
-                              {doc.name_pl}
-                              {group.id === 'attachments' && multipleParentsInAttachments && (
-                                <span className="case-doc__parent-tag">
-                                  {' '}
-                                  ({parentLabels[doc.parent_role]})
-                                </span>
-                              )}
-                            </span>
-                            <span className={submitBadgeClass(doc)}>
-                              {formatSubmitBadge(doc, mandateEntitled)}
-                            </span>
-                          </span>
-
-                          {(doc.start_date || doc.deadline) && (
-                            <span className="docs-compact-item__meta">
-                              {doc.start_date && doc.end_date && (
-                                <span>
-                                  Okres:{' '}
-                                  <strong>
-                                    {formatPolishDate(doc.start_date)}–
-                                    {formatPolishDate(doc.end_date)}
-                                  </strong>
-                                </span>
-                              )}
-                              {doc.deadline && (
-                                <span>
-                                  Do kiedy:{' '}
-                                  <strong>
-                                    <time dateTime={doc.deadline}>
-                                      {formatPolishDate(doc.deadline)}
-                                    </time>
-                                  </strong>
-                                  {showOverdue && (
-                                    <strong className="docs-compact-item__overdue">
-                                      {' '}
-                                      · Termin minął
-                                    </strong>
-                                  )}
-                                </span>
-                              )}
-                            </span>
-                          )}
-
-                          <span className="docs-compact-item__method">
-                            {formatSubmitMethod(doc, mandateEntitled)}
-                          </span>
-                        </span>
-                      </label>
-
-                      <div className="docs-compact-item__details-wrap">
-                        <details className="docs-details">
-                          <summary className="docs-details__summary">
-                            Szczegóły i podstawa prawna
-                          </summary>
-                          <div className="docs-details__body">
-                            <p>
-                              {describeDocumentDetails(doc, effectiveDate, params, mandateEntitled)}
-                            </p>
-                            <p className="docs-details__sub">
-                              <strong>Podstawa prawna:</strong> {doc.legal_basis}
-                            </p>
-                          </div>
-                        </details>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <FilingMap
+          steps={filingSteps}
+          storageKey={`zus.filing.done.${new URLSearchParams(search).get('case') ?? 'scenariusz'}`}
+        />
 
         <div className="docs-checklist-actions">
           <button
@@ -656,15 +558,7 @@ export function CaseDocuments({
             className="plan-btn plan-btn--secondary"
             onClick={() => window.print()}
           >
-            Drukuj checklistę
-          </button>
-          <button
-            type="button"
-            className="plan-btn plan-btn--ghost"
-            onClick={() => setCheckedMap({})}
-            disabled={completedCount === 0}
-          >
-            Wyczyść zaznaczenia
+            Drukuj listę dokumentów
           </button>
         </div>
 
@@ -1505,6 +1399,8 @@ interface PreviewModalState {
   legalNote: string;
   attachments?: string[];
   verificationNote?: string;
+  delivery?: DeliveryGuide;
+  mailto?: string;
 }
 
 export interface CaseApplicationsProps {
@@ -1563,6 +1459,16 @@ export function CaseApplications({
     [documents, effectiveInput, planProp, params],
   );
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
+  const openKey = useMemo(() => new URLSearchParams(search).get('open'), [search]);
+  const hasOpenItem = openKey !== null && forms.some((item) => item.key === openKey);
+
+  useEffect(() => {
+    if (!hasOpenItem) return;
+    const element = document.getElementById('apps-open');
+    if (typeof element?.scrollIntoView === 'function') {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [hasOpenItem, openKey]);
 
   if (forms.length === 0) {
     return (
@@ -1761,39 +1667,80 @@ export function CaseApplications({
     element?.focus();
   }
 
+  function validateItem(item: ApplicationItem, idPrefix = ''): boolean {
+    const { doc, key } = item;
+    const role = doc.parent_role;
+    for (const field of requiredFieldsForApplication(item)) {
+      const value = personalValue(role, field).trim();
+      const valid =
+        field === 'pesel'
+          ? /^\d{11}$/.test(value)
+          : field === 'bank'
+            ? /^\d{26}$/.test(value)
+            : !!value;
+      if (!valid) {
+        showError(
+          `${idPrefix}${personalId(role, field)}`,
+          `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
+        );
+        return false;
+      }
+    }
+    for (const field of applicationDetails(item)?.fields ?? []) {
+      const value = (field.value ?? answers[key]?.[field.id] ?? '').trim();
+      if (!value || (field.type === 'number' && !/^\d+$/.test(value))) {
+        showError(
+          `${idPrefix}${key}-${field.id}`,
+          `Uzupełnij pole „${field.label}” we wniosku „${doc.name_pl}”.`,
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function openPreview(item: ApplicationItem) {
+    const { doc, key } = item;
+    const details = applicationDetails(item);
+    const title = applicationTitle(item, params);
+    const parentBadge = item.sharedWithBothParents
+      ? 'Matka / Ojciec'
+      : parentLabels[doc.parent_role];
+    const attachments = details?.attachments;
+    const verificationNote = applicationVerificationNote(item, params);
+    setPreviewModal({
+      title: `${title} (${parentBadge})`,
+      recipient: recipientFull(item, params),
+      code: applicationCode(item, params),
+      fields: [
+        ...buildFields(item),
+        ...(details?.fields.map((field) => {
+          const value = field.value ?? answers[key]?.[field.id] ?? '';
+          return {
+            label: field.label,
+            value: field.options?.find((option) => option.value === value)?.label ?? value,
+          };
+        }) ?? []),
+      ],
+      attachments,
+      legalNote: applicationLegalNote(item, details?.section),
+      verificationNote: verificationNote ?? undefined,
+      delivery: deliveryGuide(doc, item.parentCtx.isNonEmployee),
+      mailto: buildMailto({
+        title,
+        who: parentBadge,
+        deadline: doc.deadline ? formatPolishDate(doc.deadline) : null,
+        attachments,
+      }),
+    });
+  }
+
   function send(requested: ApplicationItem[]) {
     const pending = requested.filter(({ doc, key }) => doc.submit_to && !receipts[key]);
     if (!pending.length) return;
 
     for (const item of pending) {
-      const { doc, key } = item;
-      const role = doc.parent_role;
-      for (const field of requiredFieldsForApplication(item)) {
-        const value = personalValue(role, field).trim();
-        const valid =
-          field === 'pesel'
-            ? /^\d{11}$/.test(value)
-            : field === 'bank'
-              ? /^\d{26}$/.test(value)
-              : !!value;
-        if (!valid) {
-          showError(
-            personalId(role, field),
-            `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
-          );
-          return;
-        }
-      }
-      for (const field of applicationDetails(item)?.fields ?? []) {
-        const value = (field.value ?? answers[key]?.[field.id] ?? '').trim();
-        if (!value || (field.type === 'number' && !/^\d+$/.test(value))) {
-          showError(
-            `${key}-${field.id}`,
-            `Uzupełnij pole „${field.label}” we wniosku „${doc.name_pl}”.`,
-          );
-          return;
-        }
-      }
+      if (!validateItem(item)) return;
     }
 
     const nextReceipts = { ...receipts };
@@ -1873,6 +1820,27 @@ export function CaseApplications({
     );
   }
 
+  const openItem = hasOpenItem ? (forms.find((item) => item.key === openKey) ?? null) : null;
+  const isPersonalValid = (field: PersonalFieldKey, value: string) =>
+    field === 'pesel'
+      ? /^\d{11}$/.test(value)
+      : field === 'bank'
+        ? /^\d{26}$/.test(value)
+        : !!value;
+  const openMissingPersonal = openItem
+    ? requiredFieldsForApplication(openItem).filter(
+        (field) => !isPersonalValid(field, personalValue(openItem.doc.parent_role, field).trim()),
+      )
+    : [];
+  const openMissingDetails = openItem
+    ? (applicationDetails(openItem)?.fields ?? []).filter(
+        (field) =>
+          field.value === undefined &&
+          (!(answers[openItem.key]?.[field.id] ?? '').trim() ||
+            (field.type === 'number' && !/^\d+$/.test(answers[openItem.key]?.[field.id] ?? ''))),
+      )
+    : [];
+
   return (
     <div className="plan-tab-content">
       <h2 className="case-paperwork__heading">Wnioski</h2>
@@ -1909,6 +1877,135 @@ export function CaseApplications({
         <div className="plan-callout plan-callout--success" role="status">
           <strong>Potwierdzenie wysyłki (symulacja):</strong> {statusMessage}
         </div>
+      )}
+
+      {openItem && (
+        <section
+          id="apps-open"
+          className="apps-open"
+          aria-labelledby="apps-open-heading"
+          tabIndex={-1}
+        >
+          <p className="apps-open__kicker">Wypełnij i pobierz</p>
+          <h3 id="apps-open-heading" className="apps-open__title">
+            {applicationTitle(openItem, params)}
+          </h3>
+          <p className="apps-open__lead">
+            {openMissingPersonal.length + openMissingDetails.length === 0
+              ? 'Wypełniliśmy wniosek danymi z Twojego formularza. Wszystko gotowe – sprawdź podgląd i pobierz PDF.'
+              : `Wypełniliśmy wniosek danymi z Twojego formularza. Brakuje jeszcze ${
+                  openMissingPersonal.length + openMissingDetails.length
+                } ${openMissingPersonal.length + openMissingDetails.length === 1 ? 'informacji' : 'informacji'} – uzupełnij je poniżej.`}
+          </p>
+
+          {validationError && (
+            <div className="plan-callout plan-callout--warning" role="alert">
+              {validationError}
+            </div>
+          )}
+
+          {(openMissingPersonal.length > 0 || openMissingDetails.length > 0) && (
+            <div className="plan-controls__grid apps-open__fields">
+              {openMissingPersonal.map((field) => {
+                const id = `open-${personalId(openItem.doc.parent_role, field)}`;
+                return (
+                  <label key={id} className="plan-field">
+                    <span className="plan-field__label">{PERSONAL_FIELD_LABELS[field]}</span>
+                    <input
+                      id={id}
+                      type={field === 'birthDate' ? 'date' : 'text'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      inputMode={field === 'pesel' || field === 'bank' ? 'numeric' : undefined}
+                      className={
+                        invalidField === id
+                          ? 'plan-field__input apps-field-error'
+                          : 'plan-field__input'
+                      }
+                      aria-invalid={invalidField === id || undefined}
+                      value={personalValue(openItem.doc.parent_role, field)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setPersonal((current) => ({
+                          ...current,
+                          [openItem.doc.parent_role]: {
+                            ...current[openItem.doc.parent_role],
+                            [field]: value,
+                          },
+                        }));
+                        clearError();
+                      }}
+                    />
+                  </label>
+                );
+              })}
+              {openMissingDetails.map((field) => {
+                const id = `open-${openItem.key}-${field.id}`;
+                const value = answers[openItem.key]?.[field.id] ?? '';
+                const update = (next: string) => {
+                  setAnswers((current) => ({
+                    ...current,
+                    [openItem.key]: { ...current[openItem.key], [field.id]: next },
+                  }));
+                  clearError();
+                };
+                return (
+                  <label key={id} className="plan-field">
+                    <span className="plan-field__label">{field.label}</span>
+                    {field.options ? (
+                      <select
+                        id={id}
+                        className="plan-field__input"
+                        aria-invalid={invalidField === id || undefined}
+                        value={value}
+                        onChange={(event) => update(event.target.value)}
+                      >
+                        <option value="">Wybierz odpowiedź</option>
+                        {field.options.map((option) => (
+                          <option value={option.value} key={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id={id}
+                        className="plan-field__input"
+                        aria-invalid={invalidField === id || undefined}
+                        type={field.type ?? 'text'}
+                        min={field.type === 'number' ? 0 : undefined}
+                        autoComplete="off"
+                        value={value}
+                        onChange={(event) => update(event.target.value)}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="apps-open__actions">
+            <button
+              type="button"
+              className="plan-btn plan-btn--primary"
+              onClick={() => {
+                if (validateItem(openItem, 'open-')) {
+                  clearError();
+                  openPreview(openItem);
+                }
+              }}
+            >
+              Podgląd i pobierz PDF ›
+            </button>
+            <Link
+              to={`/plan/documents${search.replace(/([?&])open=[^&]*&?/, '$1').replace(/[?&]$/, '')}`}
+              className="plan-btn plan-btn--ghost"
+            >
+              ← Wróć do mapy
+            </Link>
+          </div>
+        </section>
       )}
 
       <section className="plan-section" aria-labelledby="apps-list-heading">
@@ -2110,28 +2207,7 @@ export function CaseApplications({
                       <button
                         type="button"
                         className="plan-btn plan-btn--secondary"
-                        onClick={() =>
-                          setPreviewModal({
-                            title: `${title} (${parentBadge})`,
-                            recipient: recipientFull(item, params),
-                            code,
-                            fields: [
-                              ...fields,
-                              ...(details?.fields.map((field) => {
-                                const value = field.value ?? answers[key]?.[field.id] ?? '';
-                                return {
-                                  label: field.label,
-                                  value:
-                                    field.options?.find((option) => option.value === value)
-                                      ?.label ?? value,
-                                };
-                              }) ?? []),
-                            ],
-                            attachments,
-                            legalNote,
-                            verificationNote: verificationNote ?? undefined,
-                          })
-                        }
+                        onClick={() => openPreview(item)}
                       >
                         Drukuj lub zapisz PDF
                       </button>
@@ -2166,7 +2242,7 @@ export function CaseApplications({
           Pobierz dane z mObywatela (symulacja)
         </Link>
 
-        {validationError && (
+        {validationError && !openItem && (
           <div className="plan-callout plan-callout--warning apps-validation-alert" role="alert">
             {validationError}
           </div>
@@ -2239,6 +2315,8 @@ export function CaseApplications({
           attachments={previewModal.attachments}
           legalNote={previewModal.legalNote}
           verificationNote={previewModal.verificationNote}
+          delivery={previewModal.delivery}
+          mailto={previewModal.mailto}
           onClose={() => setPreviewModal(null)}
         />
       )}

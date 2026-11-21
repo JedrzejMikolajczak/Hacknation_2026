@@ -268,3 +268,43 @@
     transition: none;
   }
 }
+
+/* Panel „Wypełnij i pobierz” (wejście z mapy składania dokumentów) */
+.apps-open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid #cfe6d8;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(0 120 52 / 0.1), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #eef8f2 100%);
+  box-shadow: 0 18px 44px -26px rgb(0 70 30 / 0.45);
+  scroll-margin-top: var(--space-4);
+}
+
+.apps-open:focus {
+  outline: none;
+}
+
+.apps-open__kicker {
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.apps-open__title {
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.apps-open__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

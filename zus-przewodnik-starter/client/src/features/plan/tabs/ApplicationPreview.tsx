@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import type { DeliveryGuide } from './filingGuide';
 import './ApplicationPreview.css';
 
 interface ApplicationPreviewProps {
@@ -10,6 +11,8 @@ interface ApplicationPreviewProps {
   attachments?: string[];
   legalNote?: string;
   verificationNote?: string;
+  delivery?: DeliveryGuide;
+  mailto?: string;
   onClose: () => void;
 }
 
@@ -21,6 +24,8 @@ export function ApplicationPreview({
   attachments,
   legalNote,
   verificationNote,
+  delivery,
+  mailto,
   onClose,
 }: ApplicationPreviewProps) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -79,6 +84,35 @@ export function ApplicationPreview({
           )}
           {verificationNote && <p className="application-preview__verify">{verificationNote}</p>}
         </div>
+      )}
+      {delivery && (
+        <section className="application-preview__delivery">
+          <h3>Co dalej? Gdzie to wysłać</h3>
+          <p>
+            <strong>{delivery.where}.</strong> {delivery.how}
+          </p>
+          <p className="application-preview__delivery-actions">
+            {delivery.links.map((link, index) => (
+              <a
+                key={link.href}
+                className={
+                  index === 0 ? 'plan-btn plan-btn--primary' : 'plan-btn plan-btn--secondary'
+                }
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {link.label} ↗<span className="visually-hidden"> (otwiera się w nowej karcie)</span>
+              </a>
+            ))}
+            {delivery.mail && mailto && (
+              <a className="plan-btn plan-btn--secondary" href={mailto}>
+                Napisz e-mail do kadr ✉
+              </a>
+            )}
+          </p>
+          {delivery.alternative && <small>{delivery.alternative}</small>}
+        </section>
       )}
       <footer>
         <button type="button" className="plan-btn plan-btn--primary" onClick={() => window.print()}>
