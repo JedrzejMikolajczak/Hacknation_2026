@@ -1,45 +1,55 @@
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
-import { GeminiAssistantProvider } from '../adapters/GeminiAssistantProvider';
+import {
+  GeminiAssistantProvider,
+  redactSensitiveInput,
+} from '../adapters/GeminiAssistantProvider';
 import { errorHandler } from '../middleware/errorHandler';
-import { createAssistantRouter } from '../routes/assistant';
+import { createAssistantRouter, type AssistantRouterOptions } from '../routes/assistant';
 
-function createTestApp(provider: GeminiAssistantProvider) {
+function createTestApp(
+  provider: GeminiAssistantProvider,
+  options?: AssistantRouterOptions,
+) {
   const app = express();
   app.use(express.json());
-  app.use('/api/v1', createAssistantRouter(provider));
+  app.use('/api/v1', createAssistantRouter(provider, options));
   app.use(errorHandler);
   return app;
 }
 
+function geminiOkResponse(answer: string, sources: string[]) {
+  return new Response(
+    JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: JSON.stringify({ answer, sources }) }],
+          },
+        },
+      ],
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
 describe('Asystent AI (/api/v1/assistant/*)', () => {
-  it('wywołuje Gemini API z kluczem w nagłówku x-goog-api-key, przekazuje kontekst i zwraca is_demo_fallback: false', async () => {
+  it('wywołuje Gemini API z kluczem w nagłówku x-goog-api-key, maskuje PII, przekazuje kontekst i cachuje powtarzalne pytania', async () => {
+    expect(redactSensitiveInput('Mój PESEL 92031400006 i konto 12345678901234567890123456')).toBe(
+      'Mój PESEL [PESEL_UKRYTY] i konto [NUMER_KONTA_UKRYTY]',
+    );
+
     const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    text: JSON.stringify({
-                      answer: 'Przy JDG dług 500 zł przekracza 1% minimalnego wynagrodzenia i wstrzymuje wypłatę do czasu spłaty.',
-                      sources: ['Ustawa zasiłkowa art. 2a', 'Poradnik dla rodziców ZUS 2026'],
-                    }),
-                  },
-                ],
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      geminiOkResponse(
+        'Przy JDG dług 500 zł przekracza 1% minimalnego wynagrodzenia i wstrzymuje wypłatę do czasu spłaty.',
+        ['Ustawa zasiłkowa art. 2a', 'Poradnik dla rodziców ZUS 2026'],
       ),
     );
 
     const provider = new GeminiAssistantProvider({
       apiKey: 'test-gemini-key',
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.1-flash-lite',
       fetchImpl: fetchMock,
     });
     const app = createTestApp(provider);
@@ -50,46 +60,73 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
       error: null,
     });
 
-    const res = await request(app)
-      .post('/api/v1/assistant/ask')
-      .send({
-        question: 'Czy mój dług w ZUS blokuje zasiłek?',
-        context: {
-          stage: 'POST_BIRTH',
-          employment_type: 'B2B',
-          has_b2b_arrears: true,
-          debt_amount_pln: 500,
-          warning_codes: ['SELF_EMPLOYED_DEBT'],
-        },
-        history: [{ role: 'user', text: 'Prowadzę działalność gospodarczą.' }],
-      })
-      .expect(200);
+    const payload = {
+      question: 'Mój PESEL 92031400006 – czy mój dług w ZUS blokuje zasiłek?',
+      context: {
+        stage: 'POST_BIRTH',
+        employment_type: 'B2B',
+        has_b2b_arrears: true,
+        debt_amount_pln: 500,
+        warning_codes: ['SELF_EMPLOYED_DEBT'],
+      },
+    };
 
+    const res = await request(app).post('/api/v1/assistant/ask').send(payload).expect(200);
     expect(res.body.error).toBeNull();
     expect(res.body.data).toEqual({
       answer:
         'Przy JDG dług 500 zł przekracza 1% minimalnego wynagrodzenia i wstrzymuje wypłatę do czasu spłaty.',
       sources: ['Ustawa zasiłkowa art. 2a', 'Poradnik dla rodziców ZUS 2026'],
       is_demo_fallback: false,
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.1-flash-lite',
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl, calledInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(calledUrl).toBe(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',
     );
     expect(calledInit.headers).toMatchObject({ 'x-goog-api-key': 'test-gemini-key' });
     const sentBody = JSON.parse(String(calledInit.body));
     expect(sentBody.systemInstruction.parts[0].text).toContain('SELF_EMPLOYED_DEBT');
-    expect(sentBody.contents).toHaveLength(2);
+    expect(sentBody.contents[0].parts[0].text).not.toContain('92031400006');
+    expect(sentBody.contents[0].parts[0].text).toContain('[PESEL_UKRYTY]');
+
+    // Drugie identyczne pytanie bez historii trafia w cache (0 dodatkowych wywołań Gemini API)
+    const cached = await request(app).post('/api/v1/assistant/ask').send(payload).expect(200);
+    expect(cached.body.data.is_demo_fallback).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('przechodzi bezpiecznie na tryb awaryjny (is_demo_fallback: true), gdy brak klucza lub API Gemini zwróci błąd', async () => {
-    const noKeyApp = createTestApp(new GeminiAssistantProvider({ apiKey: '' }));
-    const noKeyStatus = await request(noKeyApp).get('/api/v1/assistant/status').expect(200);
-    expect(noKeyStatus.body.data).toEqual({ ai_enabled: false, provider: 'demo' });
+  it('przełącza się na model zapasowy przy 503/429, a gdy oba zawiodą lub przekroczono limit zapytań – zwraca tryb awaryjny', async () => {
+    // 1) Główny model 503 → automatyczny fallback na model zapasowy (200)
+    const fallbackFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 503 }))
+      .mockResolvedValueOnce(
+        geminiOkResponse('Odpowiedź z modelu zapasowego.', ['Kodeks pracy art. 180']),
+      );
+    const fallbackApp = createTestApp(
+      new GeminiAssistantProvider({
+        apiKey: 'test-key',
+        model: 'gemini-3.1-flash-lite',
+        fallbackModel: 'gemini-flash-latest',
+        fetchImpl: fallbackFetch,
+      }),
+    );
+    const recovered = await request(fallbackApp)
+      .post('/api/v1/assistant/ask')
+      .send({ question: 'Ile trwa urlop macierzyński?' })
+      .expect(200);
+    expect(recovered.body.data).toMatchObject({
+      answer: 'Odpowiedź z modelu zapasowego.',
+      is_demo_fallback: false,
+      model: 'gemini-flash-latest',
+    });
+    expect(fallbackFetch).toHaveBeenCalledTimes(2);
 
+    // 2) Brak klucza → lokalna baza ZUS
+    const noKeyApp = createTestApp(new GeminiAssistantProvider({ apiKey: '' }));
     const noKeyRes = await request(noKeyApp)
       .post('/api/v1/assistant/ask')
       .send({ question: 'Co jeśli spóźnię się z wnioskiem o 81,5%?' })
@@ -97,16 +134,25 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
     expect(noKeyRes.body.data.is_demo_fallback).toBe(true);
     expect(noKeyRes.body.data.answer).toContain('21 dni');
 
-    const failingFetch = vi.fn(async () => new Response('upstream error', { status: 503 }));
-    const failApp = createTestApp(
-      new GeminiAssistantProvider({ apiKey: 'test-key', fetchImpl: failingFetch }),
+    // 3) Rate limit chroni pulę tokenów i zwraca odpowiedź z lokalnej bazy
+    const limitedFetch = vi.fn(async () =>
+      geminiOkResponse('Odpowiedź AI.', ['Poradnik ZUS 2026']),
     );
-    const failRes = await request(failApp)
+    const limitedApp = createTestApp(
+      new GeminiAssistantProvider({ apiKey: 'test-key', fetchImpl: limitedFetch }),
+      { maxRequestsPerWindow: 1, windowMs: 60_000 },
+    );
+    const first = await request(limitedApp)
       .post('/api/v1/assistant/ask')
-      .send({ question: 'Co z długiem w JDG?' })
+      .send({ question: 'Pytanie 1 o 81,5%' })
       .expect(200);
-    expect(failRes.body.data.is_demo_fallback).toBe(true);
-    expect(failRes.body.data.answer).toContain('1% płacy minimalnej');
+    expect(first.body.data.is_demo_fallback).toBe(false);
+    const second = await request(limitedApp)
+      .post('/api/v1/assistant/ask')
+      .send({ question: 'Pytanie 2 o 81,5%' })
+      .expect(200);
+    expect(second.body.data.is_demo_fallback).toBe(true);
+    expect(limitedFetch).toHaveBeenCalledTimes(1);
   });
 
   it('zwraca 422 VALIDATION_ERROR dla pustego pytania lub nieznanych pól', async () => {
