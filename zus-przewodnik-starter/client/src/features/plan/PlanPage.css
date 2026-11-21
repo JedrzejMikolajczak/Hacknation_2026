@@ -939,3 +939,33 @@
     transition: none;
   }
 }
+
+/* Tryb obliczeń w przeglądarce i stan brakujących danych (CONVENTIONS §7.1) */
+.plan-page__mode-note {
+  display: inline-block;
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-missing-data {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.plan-missing-data__list {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+  color: var(--color-text);
+}
+
+.plan-missing-data__list li + li {
+  margin-top: var(--space-1);
+}

@@ -18,12 +18,7 @@ import type { ScenarioDraft } from '../../app/scenarioDraft';
 import { parseSituation } from '../../app/situation';
 
 export type PlanTabId =
-  | 'entitlements'
-  | 'calculator'
-  | 'leave-plan'
-  | 'documents'
-  | 'applications'
-  | 'support';
+  'entitlements' | 'calculator' | 'leave-plan' | 'documents' | 'applications' | 'support';
 
 export const PLAN_TABS: { id: PlanTabId; label: string }[] = [
   { id: 'entitlements', label: 'Uprawnienia' },
@@ -45,11 +40,13 @@ const VALID_INSURANCE_TITLES: InsuranceTitle[] = [
   'none',
 ];
 
-const DEFAULT_REFERENCE_DATE: IsoDate = '2026-11-21';
-const DEFAULT_BIRTH_DATE: IsoDate = '2026-11-10';
-const DEFAULT_EXPECTED_BIRTH_DATE: IsoDate = '2027-03-10';
-const DEFAULT_BENEFIT_BASE = 6000;
-const DEFAULT_FATHER_BASE = 7500;
+export function todayIsoDate(): IsoDate {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export function defaultSicknessInsurance(title: InsuranceTitle): SicknessInsurance {
   if (title === 'employment') return 'mandatory';
@@ -57,82 +54,30 @@ export function defaultSicknessInsurance(title: InsuranceTitle): SicknessInsuran
   return 'voluntary';
 }
 
-export function buildDefaultMother(partial?: Partial<ParentData> | null): ParentData {
-  const insuranceTitle: InsuranceTitle = partial?.insuranceTitle ?? 'employment';
+export function buildEmptyParent(
+  role: ParentRole,
+  partial?: Partial<ParentData> | null,
+): ParentData {
+  const insuranceTitle: InsuranceTitle = partial?.insuranceTitle ?? 'none';
+  const sicknessInsurance: SicknessInsurance =
+    partial?.sicknessInsurance ??
+    (partial?.insuranceTitle !== undefined ? defaultSicknessInsurance(insuranceTitle) : 'none');
+
   return {
-    role: 'mother',
+    role,
     insuranceTitle,
-    sicknessInsurance: partial?.sicknessInsurance ?? defaultSicknessInsurance(insuranceTitle),
-    insuredSince:
-      partial?.insuredSince !== undefined
-        ? partial.insuredSince
-        : insuranceTitle === 'none'
-          ? null
-          : '2024-01-01',
+    sicknessInsurance,
+    insuredSince: partial?.insuredSince ?? null,
     insuranceEndDate: partial?.insuranceEndDate ?? null,
-    benefitBase:
-      partial?.benefitBase !== undefined
-        ? partial.benefitBase
-        : insuranceTitle === 'none'
-          ? null
-          : DEFAULT_BENEFIT_BASE,
-    employerInsuredCount:
-      partial?.employerInsuredCount !== undefined
-        ? partial.employerInsuredCount
-        : insuranceTitle === 'employment'
-          ? 25
-          : null,
-    age: partial?.age !== undefined ? partial.age : 30,
-    contributionDebt:
-      partial?.contributionDebt !== undefined
-        ? partial.contributionDebt
-        : insuranceTitle === 'selfEmployed'
-          ? 0
-          : null,
+    benefitBase: partial?.benefitBase ?? null,
+    employerInsuredCount: partial?.employerInsuredCount ?? null,
+    age: partial?.age ?? null,
+    contributionDebt: partial?.contributionDebt ?? null,
     wantsLeave: partial?.wantsLeave ?? true,
   };
 }
 
-export function buildDefaultFather(partial?: Partial<ParentData> | null): ParentData | null {
-  if (partial === null) return null;
-  const insuranceTitle: InsuranceTitle = partial?.insuranceTitle ?? 'employment';
-  return {
-    role: 'father',
-    insuranceTitle,
-    sicknessInsurance: partial?.sicknessInsurance ?? defaultSicknessInsurance(insuranceTitle),
-    insuredSince:
-      partial?.insuredSince !== undefined
-        ? partial.insuredSince
-        : insuranceTitle === 'none'
-          ? null
-          : '2024-01-01',
-    insuranceEndDate: partial?.insuranceEndDate ?? null,
-    benefitBase:
-      partial?.benefitBase !== undefined
-        ? partial.benefitBase
-        : insuranceTitle === 'none'
-          ? null
-          : DEFAULT_FATHER_BASE,
-    employerInsuredCount:
-      partial?.employerInsuredCount !== undefined
-        ? partial.employerInsuredCount
-        : insuranceTitle === 'employment'
-          ? 30
-          : null,
-    age: partial?.age !== undefined ? partial.age : 32,
-    contributionDebt:
-      partial?.contributionDebt !== undefined
-        ? partial.contributionDebt
-        : insuranceTitle === 'selfEmployed'
-          ? 0
-          : null,
-    wantsLeave: partial?.wantsLeave ?? true,
-  };
-}
-
-export function buildDefaultSpecial(
-  partial?: Partial<SpecialCircumstances>,
-): SpecialCircumstances {
+export function buildDefaultSpecial(partial?: Partial<SpecialCircumstances>): SpecialCircumstances {
   return {
     zaZyciemCertificate: partial?.zaZyciemCertificate ?? false,
     pregnancyWeekAtBirth: partial?.pregnancyWeekAtBirth ?? null,
@@ -169,13 +114,33 @@ function parseInsuranceTitleParam(value: string | null): InsuranceTitle | null {
     : null;
 }
 
+function parseAdoptionTypeParam(value: string | null): AdoptionType | null {
+  if (value === 'adoption' || value === 'fosterFamily') return value;
+  return null;
+}
+
+export interface ScenarioMeta {
+  /** Czy matka jest uwzględniona w planie (false wyłącznie w ścieżce samodzielnego taty). */
+  hasMotherInPlan: boolean;
+  /** Czy użytkownik (w kreatorze lub URL) wskazał tytuł ubezpieczenia matki. */
+  motherInsuranceKnown: boolean;
+  /** Czy użytkownik wskazał tytuł ubezpieczenia ojca. */
+  fatherInsuranceKnown: boolean;
+}
+
+export interface ResolvedPlanScenario {
+  scenario: ScenarioInput;
+  meta: ScenarioMeta;
+}
+
 /**
- * Buduje kompletny `ScenarioInput` z `ScenarioDraft` oraz parametrów URL (query string ma pierwszeństwo).
+ * Buduje `ScenarioInput` oraz metadane kompletności z `ScenarioDraft` i parametrów URL.
+ * Nie wymyśla fikcyjnych kwot, dat, stażu ani drugiego rodzica.
  */
-export function resolveScenarioInput(
+export function resolvePlanContext(
   draft: ScenarioDraft,
   searchParams: URLSearchParams,
-): ScenarioInput {
+): ResolvedPlanScenario {
   const urlSituation = parseSituation(searchParams.get('situation'));
   const situation: SituationType = urlSituation ?? draft.situation ?? 'afterBirth';
 
@@ -185,17 +150,36 @@ export function resolveScenarioInput(
   const urlChildren =
     parseNumberParam(searchParams.get('dzieci')) ?? parseNumberParam(searchParams.get('children'));
   const urlBirthDate =
-    parseIsoDateParam(searchParams.get('porod')) ?? parseIsoDateParam(searchParams.get('birthDate'));
+    parseIsoDateParam(searchParams.get('porod')) ??
+    parseIsoDateParam(searchParams.get('birthDate'));
   const urlBase =
     parseNumberParam(searchParams.get('podstawa')) ?? parseNumberParam(searchParams.get('base'));
+  const urlFatherBase =
+    parseNumberParam(searchParams.get('podstawaOjca')) ??
+    parseNumberParam(searchParams.get('fatherBase'));
   const urlVariant = searchParams.get('wariant') ?? searchParams.get('variant');
   const urlDebt =
     parseNumberParam(searchParams.get('zadluzenie')) ?? parseNumberParam(searchParams.get('debt'));
   const urlPayerCount = parseNumberParam(searchParams.get('platnik'));
   const urlFather = searchParams.get('ojciec') ?? searchParams.get('father');
   const urlZaZyciem = searchParams.get('zaZyciem');
+  const urlAdoptionType = parseAdoptionTypeParam(searchParams.get('adopcja'));
+  const urlChildAge = parseNumberParam(searchParams.get('wiekDziecka'));
 
-  const baseMother = buildDefaultMother(draft.mother);
+  const isSingleFatherDraft =
+    draft.mother === null &&
+    draft.father !== null &&
+    draft.father !== undefined &&
+    urlEmployment === null;
+
+  const hasMotherInPlan = !isSingleFatherDraft;
+  const motherInsuranceKnown =
+    hasMotherInPlan && (urlEmployment !== null || draft.mother?.insuranceTitle !== undefined);
+
+  const baseMother = isSingleFatherDraft
+    ? { ...buildEmptyParent('mother', null), wantsLeave: false }
+    : buildEmptyParent('mother', draft.mother);
+
   const motherInsuranceTitle = urlEmployment ?? baseMother.insuranceTitle;
   const mother: ParentData = {
     ...baseMother,
@@ -205,28 +189,36 @@ export function resolveScenarioInput(
         ? defaultSicknessInsurance(motherInsuranceTitle)
         : baseMother.sicknessInsurance,
     benefitBase:
-      urlBase !== null
-        ? urlBase
-        : motherInsuranceTitle === 'none'
-          ? null
-          : baseMother.benefitBase,
+      urlBase !== null ? urlBase : motherInsuranceTitle === 'none' ? null : baseMother.benefitBase,
     contributionDebt:
       urlDebt !== null
         ? urlDebt
         : motherInsuranceTitle === 'selfEmployed'
-          ? (baseMother.contributionDebt ?? 0)
+          ? baseMother.contributionDebt
           : null,
-    employerInsuredCount:
-      urlPayerCount !== null ? urlPayerCount : baseMother.employerInsuredCount,
+    employerInsuredCount: urlPayerCount !== null ? urlPayerCount : baseMother.employerInsuredCount,
   };
 
-  let father: ParentData | null;
+  let father: ParentData | null = null;
+  let fatherInsuranceKnown = false;
   if (urlFather === '0' || urlFather === 'false') {
     father = null;
+  } else if (draft.father !== null && draft.father !== undefined) {
+    father = buildEmptyParent('father', draft.father);
+    if (urlFatherBase !== null) {
+      father.benefitBase = urlFatherBase;
+    }
+    fatherInsuranceKnown = draft.father.insuranceTitle !== undefined;
   } else if (urlFather === '1' || urlFather === 'true') {
-    father = buildDefaultFather(draft.father ?? undefined);
-  } else {
-    father = draft.father === null ? null : buildDefaultFather(draft.father);
+    father = {
+      ...buildEmptyParent('father', {
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        benefitBase: urlFatherBase,
+        wantsLeave: true,
+      }),
+    };
+    fatherInsuranceKnown = true;
   }
 
   const special = buildDefaultSpecial(draft.special);
@@ -241,60 +233,182 @@ export function resolveScenarioInput(
       ? urlVariant
       : (draft.rateVariant ?? 'combined');
 
-  const childrenCount = Math.min(Math.max(Math.round(urlChildren ?? draft.childrenCount ?? 1), 1), 5);
+  const childrenCount = Math.min(
+    Math.max(Math.round(urlChildren ?? draft.childrenCount ?? 1), 1),
+    5,
+  );
 
   const expectedBirthDate =
     situation === 'planning' || situation === 'pregnant'
-      ? (urlBirthDate ?? draft.expectedBirthDate ?? DEFAULT_EXPECTED_BIRTH_DATE)
+      ? (urlBirthDate ?? draft.expectedBirthDate ?? null)
       : (draft.expectedBirthDate ?? null);
 
   const birthDate =
     situation === 'afterBirth'
-      ? (urlBirthDate ?? draft.birthDate ?? DEFAULT_BIRTH_DATE)
+      ? (urlBirthDate ?? draft.birthDate ?? null)
       : (draft.birthDate ?? null);
 
   const adoptionType: AdoptionType | null =
-    situation === 'adoption' ? (draft.adoptionType ?? 'adoption') : null;
+    situation === 'adoption' ? (urlAdoptionType ?? draft.adoptionType ?? null) : null;
+
   const childAcceptanceDate =
-    situation === 'adoption'
-      ? (urlBirthDate ?? draft.childAcceptanceDate ?? DEFAULT_BIRTH_DATE)
-      : null;
+    situation === 'adoption' ? (urlBirthDate ?? draft.childAcceptanceDate ?? null) : null;
+
+  const childAgeYears =
+    situation === 'adoption' ? (urlChildAge ?? draft.childAgeYears ?? null) : null;
 
   return {
-    situation,
-    referenceDate: draft.referenceDate ?? DEFAULT_REFERENCE_DATE,
-    expectedBirthDate,
-    birthDate,
-    childrenCount,
-    adoptionType,
-    childAcceptanceDate,
-    childAgeYears: situation === 'adoption' ? (draft.childAgeYears ?? 2) : null,
-    schoolObligationDeferred: draft.schoolObligationDeferred ?? false,
-    rateVariant,
-    mother,
-    father,
-    special,
+    scenario: {
+      situation,
+      referenceDate: draft.referenceDate ?? todayIsoDate(),
+      expectedBirthDate,
+      birthDate,
+      childrenCount,
+      adoptionType,
+      childAcceptanceDate,
+      childAgeYears,
+      schoolObligationDeferred: draft.schoolObligationDeferred ?? false,
+      rateVariant,
+      mother,
+      father,
+      special,
+    },
+    meta: {
+      hasMotherInPlan,
+      motherInsuranceKnown,
+      fatherInsuranceKnown,
+    },
   };
 }
 
 /**
- * Zapisuje kluczowe parametry scenariusza do URL (`/plan/:tab?situation=...&zatrudnienie=...`),
- * aby link do wyliczenia był udostępnialny (CONVENTIONS §7).
+ * Buduje `ScenarioInput` z `ScenarioDraft` oraz parametrów URL (zachowana kompatybilność).
  */
-export function scenarioToSearchParams(scenario: ScenarioInput): URLSearchParams {
+export function resolveScenarioInput(
+  draft: ScenarioDraft,
+  searchParams: URLSearchParams,
+): ScenarioInput {
+  return resolvePlanContext(draft, searchParams).scenario;
+}
+
+/**
+ * Zwraca faktycznie podaną przez użytkownika datę zdarzenia lub `null`, jeśli jej brakuje.
+ */
+export function getExplicitEventDate(scenario: ScenarioInput): IsoDate | null {
+  if (scenario.situation === 'adoption') {
+    return scenario.childAcceptanceDate;
+  }
+  if (scenario.situation === 'afterBirth') {
+    return scenario.birthDate;
+  }
+  return scenario.expectedBirthDate;
+}
+
+/**
+ * Zwraca datę zdarzenia albo `referenceDate` jako bezpieczny fallback dla komponentów osi czasu.
+ */
+export function getScenarioEventDate(scenario: ScenarioInput): IsoDate {
+  return getExplicitEventDate(scenario) ?? scenario.referenceDate;
+}
+
+/**
+ * Wykrywa brakujące dane wymagane do rzetelnego obliczenia w danej zakładce (bez zmyślania domyślnych).
+ */
+export function getMissingFieldsForTab(
+  tab: 'entitlements' | 'calculator' | 'documents',
+  scenario: ScenarioInput,
+  meta: ScenarioMeta,
+): string[] {
+  const missing: string[] = [];
+  const eventDate = getExplicitEventDate(scenario);
+
+  if (!eventDate) {
+    missing.push(
+      scenario.situation === 'adoption'
+        ? 'Data przyjęcia dziecka na wychowanie'
+        : scenario.situation === 'afterBirth'
+          ? 'Data porodu'
+          : 'Przewidywana data porodu',
+    );
+  }
+
+  if (scenario.situation === 'adoption' && scenario.adoptionType === null) {
+    missing.push('Forma przyjęcia dziecka (adopcja lub rodzina zastępcza)');
+  }
+
+  if (meta.hasMotherInPlan && !meta.motherInsuranceKnown) {
+    missing.push('Forma zatrudnienia / tytuł ubezpieczenia matki');
+  }
+
+  if (!meta.hasMotherInPlan && (!scenario.father || !meta.fatherInsuranceKnown)) {
+    missing.push('Forma zatrudnienia / tytuł ubezpieczenia ojca');
+  }
+
+  if (tab === 'calculator') {
+    const motherActive =
+      meta.hasMotherInPlan &&
+      meta.motherInsuranceKnown &&
+      scenario.mother.insuranceTitle !== 'none' &&
+      scenario.mother.sicknessInsurance !== 'none' &&
+      !scenario.special.motherDeceased &&
+      scenario.mother.wantsLeave;
+
+    const fatherActive =
+      scenario.father !== null &&
+      scenario.father.insuranceTitle !== 'none' &&
+      scenario.father.sicknessInsurance !== 'none' &&
+      scenario.father.wantsLeave;
+
+    if (motherActive && scenario.mother.benefitBase === null) {
+      missing.push('Podstawa wymiaru zasiłku matki (lub przeciętne wynagrodzenie brutto)');
+    }
+
+    if (fatherActive && scenario.father && scenario.father.benefitBase === null) {
+      missing.push('Podstawa wymiaru zasiłku ojca (lub przeciętne wynagrodzenie brutto)');
+    }
+
+    if (
+      scenario.special.hospitalizationDays !== null &&
+      scenario.special.hospitalizationDays > 0 &&
+      scenario.special.pregnancyWeekAtBirth === null &&
+      (scenario.special.birthWeightGrams === null || scenario.special.birthWeightGrams > 1000)
+    ) {
+      missing.push('Tydzień ciąży w chwili porodu (dla uzupełniającego urlopu macierzyńskiego)');
+    }
+  }
+
+  return missing;
+}
+
+/**
+ * Zapisuje kluczowe parametry scenariusza do URL (`/plan/:tab?situation=...`),
+ * pomijając pola nieznane (bez wpisywania zmyślonych wartości).
+ */
+export function scenarioToSearchParams(
+  scenario: ScenarioInput,
+  meta?: ScenarioMeta,
+): URLSearchParams {
   const params = new URLSearchParams();
   params.set('situation', scenario.situation);
-  params.set('zatrudnienie', scenario.mother.insuranceTitle);
+  if (!meta || (meta.hasMotherInPlan && meta.motherInsuranceKnown)) {
+    params.set('zatrudnienie', scenario.mother.insuranceTitle);
+  }
   params.set('dzieci', String(scenario.childrenCount));
-  const eventDate = getScenarioEventDate(scenario);
+  const eventDate = getExplicitEventDate(scenario);
   if (eventDate) {
     params.set('porod', eventDate);
   }
   if (scenario.mother.benefitBase !== null) {
     params.set('podstawa', String(scenario.mother.benefitBase));
   }
+  if (scenario.father?.benefitBase !== null && scenario.father?.benefitBase !== undefined) {
+    params.set('podstawaOjca', String(scenario.father.benefitBase));
+  }
   params.set('wariant', scenario.rateVariant);
-  if (scenario.mother.insuranceTitle === 'selfEmployed' && scenario.mother.contributionDebt !== null) {
+  if (
+    scenario.mother.insuranceTitle === 'selfEmployed' &&
+    scenario.mother.contributionDebt !== null
+  ) {
     params.set('zadluzenie', String(scenario.mother.contributionDebt));
   }
   if (scenario.mother.employerInsuredCount !== null) {
@@ -304,10 +418,17 @@ export function scenarioToSearchParams(scenario: ScenarioInput): URLSearchParams
   if (scenario.special.zaZyciemCertificate) {
     params.set('zaZyciem', '1');
   }
+  if (scenario.situation === 'adoption') {
+    if (scenario.adoptionType) params.set('adopcja', scenario.adoptionType);
+    if (scenario.childAgeYears !== null) params.set('wiekDziecka', String(scenario.childAgeYears));
+  }
   return params;
 }
 
-export function scenarioToDraftPatch(scenario: ScenarioInput): Partial<ScenarioDraft> {
+export function scenarioToDraftPatch(
+  scenario: ScenarioInput,
+  meta?: ScenarioMeta,
+): Partial<ScenarioDraft> {
   return {
     situation: scenario.situation,
     referenceDate: scenario.referenceDate,
@@ -319,20 +440,10 @@ export function scenarioToDraftPatch(scenario: ScenarioInput): Partial<ScenarioD
     childAgeYears: scenario.childAgeYears,
     schoolObligationDeferred: scenario.schoolObligationDeferred,
     rateVariant: scenario.rateVariant,
-    mother: scenario.mother,
+    mother: meta && !meta.hasMotherInPlan ? null : scenario.mother,
     father: scenario.father,
     special: scenario.special,
   };
-}
-
-export function getScenarioEventDate(scenario: ScenarioInput): IsoDate {
-  if (scenario.situation === 'adoption') {
-    return scenario.childAcceptanceDate ?? scenario.referenceDate;
-  }
-  if (scenario.situation === 'afterBirth') {
-    return scenario.birthDate ?? scenario.referenceDate;
-  }
-  return scenario.expectedBirthDate ?? DEFAULT_EXPECTED_BIRTH_DATE;
 }
 
 export function addDaysIso(isoDate: IsoDate, days: number): IsoDate {
@@ -423,19 +534,19 @@ export function formatParentRole(role: ParentRole): string {
 
 export function formatPayer(payer: Payer | null): string {
   if (payer === 'employer') {
-    return `Pracodawca (> ${DEFAULT_PARAMS.payerThresholdInsuredCount} ubezpieczonych)`;
+    return `Płatnik składek (> ${DEFAULT_PARAMS.payerThresholdInsuredCount} ubezpieczonych)`;
   }
   if (payer === 'zus') {
     return 'Zakład Ubezpieczeń Społecznych (ZUS)';
   }
-  return 'Nie dotyczy';
+  return 'Zależnie od liczby ubezpieczonych u płatnika (lub nie dotyczy)';
 }
 
 export function isDifficultSituation(scenario: ScenarioInput): boolean {
   return Boolean(
     scenario.special.stillbirth ||
-      scenario.special.childDeathDate ||
-      scenario.special.motherDeceased ||
-      scenario.special.motherIncapableOfIndependentLiving,
+    scenario.special.childDeathDate ||
+    scenario.special.motherDeceased ||
+    scenario.special.motherIncapableOfIndependentLiving,
   );
 }
