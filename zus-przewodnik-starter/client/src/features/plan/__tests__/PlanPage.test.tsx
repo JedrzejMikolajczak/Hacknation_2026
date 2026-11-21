@@ -349,4 +349,120 @@ describe('Twój plan', () => {
     expect(screen.queryByText(/Z-3a –/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ZAS-12 –/)).not.toBeInTheDocument();
   });
+
+  it('pokazuje ryzyka z danych formularza (ubezpieczenie 2 mies. przed porodem) w zakładkach Uprawnienia i Wsparcie', async () => {
+    const riskyFormScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-01-21',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2026-11-21',
+        insuranceEndDate: null,
+        benefitBase: 6000,
+        contributionDebt: null,
+        employerInsuredCount: 50,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/entitlements?situation=pregnant']}>
+        <ScenarioProvider initialScenario={riskyFormScenario}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Możliwa kontrola tytułu ubezpieczenia')).toBeInTheDocument();
+    expect(screen.getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
+
+    fireEvent.click(tabLink('Wsparcie'));
+    expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByText('Możliwa weryfikacja tytułu ubezpieczenia przez ZUS'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
+  });
+
+  it('dla umowy na czas określony przedłużanej do porodu pokazuje w Uprawnieniach i Wsparciu informację o przedłużeniu zamiast alarmu', async () => {
+    const fixedTermScenario: ScenarioDraft = {
+      situation: 'pregnant',
+      referenceDate: '2026-11-21',
+      birthDate: null,
+      expectedBirthDate: '2027-02-01',
+      childrenCount: 1,
+      childAcceptanceDate: null,
+      childAgeYears: null,
+      adoptionType: null,
+      rateVariant: 'standard',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2022-01-01',
+        insuranceEndDate: '2026-12-31',
+        benefitBase: 6000,
+        contributionDebt: null,
+        employerInsuredCount: 50,
+        age: 30,
+        wantsLeave: true,
+      },
+      father: null,
+      special: {
+        zaZyciemCertificate: false,
+        motherHospitalized: false,
+        motherIncapableOfIndependentLiving: false,
+        motherDeceased: false,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/plan/entitlements?situation=pregnant']}>
+        <ScenarioProvider initialScenario={fixedTermScenario}>
+          <Routes>
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/plan/:tab" element={<PlanPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Koniec umowy przed porodem')).not.toBeInTheDocument();
+    expect(screen.getByText(/przedłuża się z mocy prawa do dnia porodu/)).toBeInTheDocument();
+
+    fireEvent.click(tabLink('Wsparcie'));
+    expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Umowa lub ubezpieczenie kończy się przed zdarzeniem'),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/przedłuża się z mocy prawa do dnia porodu/).length).toBeGreaterThan(
+      0,
+    );
+  });
 });
