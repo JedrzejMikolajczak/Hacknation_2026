@@ -3,14 +3,17 @@ import type {
   EligibilityResult,
   Entitlement,
   Explanation,
+  MonthlyBase,
   ParentData,
   Payer,
   WizardScenario,
   SicknessResult,
   Warning,
 } from '../types';
+import { hasPregnancyBaseIncrease } from './benefitBase';
 import {
   addDays,
+  addMonths,
   amount,
   calculateBenefitAmount,
   date,
@@ -27,7 +30,7 @@ export type EligibilityInput = WizardScenario & {
   waitingPeriodExempt?: boolean;
   unlawfulTerminationConfirmedByCourt?: boolean;
   shamContractRiskHint?: boolean;
-  baseIncreasedInPregnancy?: boolean;
+  monthlyBases?: readonly MonthlyBase[];
 };
 
 export type SicknessInput = EligibilityInput & {
@@ -199,26 +202,35 @@ export function checkEligibility(
     const hasSicknessTitle =
       parent.insuranceTitle !== 'none' && parent.sicknessInsurance !== 'none';
     if (isMother && hasSicknessTitle) {
-      const tenureDays = parent.insuredSince !== null ? daysBetween(parent.insuredSince, on) : null;
-      if (
-        input.shamContractRiskHint ||
-        (tenureDays !== null &&
-          tenureDays >= 0 &&
-          tenureDays < params.sickness.waitingPeriodDaysVoluntary)
-      ) {
+      const insuredSince = parent.insuredSince;
+      const risk = params.insuranceRisk;
+      const pregnancyStart = isAdoption ? null : addDays(on, -risk.estimatedPregnancyDays);
+      const riskEvent = isAdoption ? on : (input.sicknessStartDate ?? on);
+      const startedDuringPregnancy =
+        pregnancyStart !== null &&
+        insuredSince !== null &&
+        insuredSince >= pregnancyStart &&
+        insuredSince <= on;
+      const startedShortlyBeforeEvent =
+        insuredSince !== null &&
+        insuredSince <= riskEvent &&
+        insuredSince > addMonths(riskEvent, -risk.shortTitleMonths);
+
+      if (input.shamContractRiskHint || startedDuringPregnancy || startedShortlyBeforeEvent) {
         warnings.push({
           code: 'SHAM_CONTRACT_RISK',
           message:
-            'Krótki okres ubezpieczenia przed porodem może skutkować postępowaniem wyjaśniającym ZUS w sprawie tytułu ubezpieczenia (ocena, czy umowa lub działalność nie zostały podjęte dla pozoru). Warto zachować dokumenty potwierdzające faktyczne wykonywanie pracy lub prowadzenie działalności.',
+            'Przy rozpoczęciu ubezpieczenia w trakcie ciąży lub krótko przed zdarzeniem ZUS może zweryfikować tytuł ubezpieczenia. Warto zachować dokumenty potwierdzające faktyczne wykonywanie pracy lub prowadzenie działalności.',
           legalBasis: 'Ustawa o systemie ubezpieczeń społecznych art. 68, art. 83; KC art. 83',
         });
       }
+      const pregnancyEnd =
+        input.situation === 'pregnant' && input.referenceDate < on ? input.referenceDate : on;
       if (
-        input.baseIncreasedInPregnancy ||
-        (tenureDays !== null &&
-          tenureDays < params.sickness.maxBenefitPeriodDays &&
-          parent.benefitBase !== null &&
-          parent.benefitBase > params.benefitBase.minimumWage * 2)
+        pregnancyStart !== null &&
+        input.situation !== 'planning' &&
+        input.monthlyBases &&
+        hasPregnancyBaseIncrease(input.monthlyBases, pregnancyStart, pregnancyEnd, params)
       ) {
         warnings.push({
           code: 'BASE_INCREASE_IN_PREGNANCY',

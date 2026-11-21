@@ -334,6 +334,36 @@ describe('documentsForPlan (caseDocuments)', () => {
     expect(furtherPeriod.documents.find((d) => d.id === 'ZAS-12')?.submit_to).toBe('ZUS');
   });
 
+  it.each([
+    { count: '<= 20', usedDays: 0, expected: false },
+    { count: '<= 20', usedDays: 30, expected: true },
+    { count: '> 20', usedDays: 30, expected: false },
+  ] as const)('ZAS-12 przy zleceniu (płatnik $count, wykorzystane dni $usedDays)', ({ count, usedDays, expected }) => {
+    const plan = calculateCasePlan(
+      baseInput({
+        stage: 'PREGNANCY',
+        employment_type: 'ZLECENIE',
+        voluntary_sickness_insured: true,
+        payer_insured_count_nov_30: count,
+        sickness_leave_start_date: '2026-09-01',
+        sickness_leave_end_date: '2026-10-20',
+        sickness_benefit_days_already_used: usedDays,
+        sickness_base_changes: [{ effective_date: '2026-10-01', amount_pln: 6500 }],
+      }),
+      params,
+    );
+    const certificate = plan.documents.find((doc) => doc.id === 'ZAS-12');
+
+    if (expected) {
+      expect(certificate).toMatchObject({
+        submit_to: 'ZUS',
+        name_pl: expect.stringContaining('alternatywa dla Z-3a'),
+      });
+    } else {
+      expect(certificate).toBeUndefined();
+    }
+  });
+
   it('rozpoczęcie urlopu macierzyńskiego przed porodem (do 6 tyg.): zawiera zaświadczenie o przewidywanej dacie porodu', () => {
     const plan = calculateCasePlan(
       baseInput({
