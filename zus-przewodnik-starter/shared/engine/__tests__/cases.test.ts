@@ -162,7 +162,272 @@ describe('Sprawy konkursowe ZUS', () => {
       'BASE_INCREASE_IN_PREGNANCY',
       'EMPLOYMENT_CONTEXT_RISK',
     ]);
-    expect(outcome.warnings.every(({ legal_basis }) => legal_basis === null)).toBe(true);
+    expect(outcome.warnings.every(({ legal_basis }) => Boolean(legal_basis))).toBe(true);
+    expect(outcome.warnings.every(({ message_pl }) => message_pl.includes('Co zrobić:'))).toBe(
+      true,
+    );
+  });
+});
+
+describe('Ostrzeżenia i ryzyka (sekcja H i I zadania)', () => {
+  it('sygnalizuje SHAM_CONTRACT_RISK przy ubezpieczeniu rozpoczętym 2 miesiące przed przewidywanym porodem (także bez title_start_date, z insurance_duration_days)', () => {
+    const withTitleDate = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-01-21',
+        reference_date: '2026-11-21',
+        title_start_date: '2026-11-21',
+        insurance_duration_days: 61,
+      }),
+      params,
+    );
+    const sham = withTitleDate.outcome.warnings.find((w) => w.code === 'SHAM_CONTRACT_RISK');
+    expect(sham).toBeDefined();
+    expect(sham?.legal_basis).toBeTruthy();
+    expect(sham?.message_pl).toContain('Co zrobić:');
+    expect(sham?.message_pl).toMatch(/dokumenty/i);
+
+    const withDurationOnly = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-01-21',
+        reference_date: '2026-11-21',
+        title_start_date: undefined,
+        insurance_duration_days: 60,
+      }),
+      params,
+    );
+    expect(withDurationOnly.outcome.warnings.some((w) => w.code === 'SHAM_CONTRACT_RISK')).toBe(
+      true,
+    );
+  });
+
+  it('BASE_INCREASE_IN_PREGNANCY działa dla miesięcznych podstaw ze skokiem w ciąży, a nie zmyśla ostrzeżenia dla stałej średniej z formularza', () => {
+    const fromFormAverage = calculateCasePlan(
+      baseTwoParentInput({
+        benefit_base_amount_pln: null,
+        monthly_bases: [
+          { month: '2026-01', amount_pln: 8000 },
+          { month: '2026-02', amount_pln: 8000 },
+          { month: '2026-06', amount_pln: 8000 },
+          { month: '2026-10', amount_pln: 8000 },
+        ],
+      }),
+      params,
+    );
+    expect(
+      fromFormAverage.outcome.warnings.some((w) => w.code === 'BASE_INCREASE_IN_PREGNANCY'),
+    ).toBe(false);
+
+    const withJumpInPregnancy = calculateCasePlan(
+      baseTwoParentInput({
+        benefit_base_amount_pln: null,
+        monthly_bases: [
+          { month: '2026-01', amount_pln: 5000 },
+          { month: '2026-02', amount_pln: 5000 },
+          { month: '2026-06', amount_pln: 9000 },
+        ],
+      }),
+      params,
+    );
+    const jumpWarning = withJumpInPregnancy.outcome.warnings.find(
+      (w) => w.code === 'BASE_INCREASE_IN_PREGNANCY',
+    );
+    expect(jumpWarning).toBeDefined();
+    expect(jumpWarning?.legal_basis).toBeTruthy();
+    expect(jumpWarning?.message_pl).toContain('Co zrobić:');
+  });
+
+  it('umowa o pracę na czas określony kończąca się po 3. miesiącu ciąży przedłuża się do porodu bez fałszywego alarmu CONTRACT_ENDS_BEFORE_BIRTH', () => {
+    const extended = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-02-01',
+        reference_date: '2026-11-21',
+        contract_type: 'FIXED_TERM',
+        contract_end_date: '2026-12-31',
+      }),
+      params,
+    );
+    expect(extended.outcome.is_qualified).toBe(true);
+    expect(extended.outcome.warnings.some((w) => w.code === 'CONTRACT_ENDS_BEFORE_BIRTH')).toBe(
+      false,
+    );
+    expect(extended.outcome.warnings.some((w) => w.code === 'NO_INSURANCE_ON_BIRTH_DATE')).toBe(
+      false,
+    );
+    const info = extended.outcome.warnings.find((w) => w.code === 'CONTRACT_EXTENDED_TO_BIRTH');
+    expect(info).toBeDefined();
+    expect(info?.legal_basis).toContain('177 § 3');
+    expect(info?.message_pl).toContain('przedłuża się');
+    expect(info?.message_pl).toContain('Co zrobić:');
+  });
+
+  it('umowa o pracę kończąca się przed 3. miesiącem ciąży oraz zlecenie / JDG kończące się przed porodem wywołują CONTRACT_ENDS_BEFORE_BIRTH', () => {
+    const earlyFixedTerm = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-06-01',
+        reference_date: '2026-10-01',
+        contract_type: 'FIXED_TERM',
+        contract_end_date: '2026-10-15',
+      }),
+      params,
+    );
+    expect(
+      earlyFixedTerm.outcome.warnings.some((w) => w.code === 'CONTRACT_ENDS_BEFORE_BIRTH'),
+    ).toBe(true);
+    expect(earlyFixedTerm.outcome.warnings.some((w) => w.code === 'QUALIFICATION_CHECK')).toBe(
+      false,
+    );
+
+    const mandateEnds = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-02-01',
+        reference_date: '2026-11-21',
+        employment_type: 'ZLECENIE',
+        voluntary_sickness_insured: true,
+        contract_type: null,
+        contract_end_date: '2026-12-31',
+      }),
+      params,
+    );
+    const mandateWarning = mandateEnds.outcome.warnings.find(
+      (w) => w.code === 'CONTRACT_ENDS_BEFORE_BIRTH',
+    );
+    expect(mandateWarning).toBeDefined();
+    expect(mandateWarning?.legal_basis).toBeTruthy();
+    expect(mandateWarning?.message_pl).toContain('Co zrobić:');
+  });
+
+  it('niezgłoszenie dobrowolnego ubezpieczenia chorobowego lub brak tytułu wywołuje NO_INSURANCE_ON_BIRTH_DATE', () => {
+    const noVoluntary = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-02-01',
+        reference_date: '2026-11-21',
+        employment_type: 'B2B',
+        voluntary_sickness_insured: false,
+        payer_insured_count_nov_30: null,
+      }),
+      params,
+    );
+    const warning = noVoluntary.outcome.warnings.find(
+      (w) => w.code === 'NO_INSURANCE_ON_BIRTH_DATE',
+    );
+    expect(warning).toBeDefined();
+    expect(warning?.legal_basis).toBeTruthy();
+    expect(warning?.message_pl).toContain('Co zrobić:');
+    expect(noVoluntary.outcome.warnings.some((w) => w.code === 'SHAM_CONTRACT_RISK')).toBe(false);
+    expect(noVoluntary.outcome.warnings.some((w) => w.code === 'QUALIFICATION_CHECK')).toBe(false);
+  });
+
+  it('SELF_EMPLOYED_DEBT wywołuje się wyłącznie powyżej 1% płacy minimalnej z params', () => {
+    const threshold =
+      Math.round(
+        params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
+      ) / 100;
+
+    const atThreshold = calculateCasePlan(
+      baseTwoParentInput({
+        employment_type: 'B2B',
+        voluntary_sickness_insured: true,
+        payer_insured_count_nov_30: null,
+        debt_amount_pln: threshold,
+      }),
+      params,
+    );
+    expect(atThreshold.outcome.warnings.some((w) => w.code === 'SELF_EMPLOYED_DEBT')).toBe(false);
+
+    const aboveThreshold = calculateCasePlan(
+      baseTwoParentInput({
+        employment_type: 'B2B',
+        voluntary_sickness_insured: true,
+        payer_insured_count_nov_30: null,
+        debt_amount_pln: threshold + 0.01,
+      }),
+      params,
+    );
+    const debtWarning = aboveThreshold.outcome.warnings.find(
+      (w) => w.code === 'SELF_EMPLOYED_DEBT',
+    );
+    expect(debtWarning).toBeDefined();
+    expect(debtWarning?.legal_basis).toBe('Ustawa zasiłkowa, art. 2a');
+    expect(debtWarning?.message_pl).toContain('Co zrobić:');
+  });
+
+  it('WAITING_PERIOD_NOT_MET sprawdza 30 dni (obowiązkowe) i 90 dni (dobrowolne) dla chorobowego w ciąży', () => {
+    const uopShort = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-04-01',
+        reference_date: '2026-11-21',
+        employment_type: 'UOP',
+        title_start_date: '2026-11-01',
+      }),
+      params,
+    );
+    const uopWarning = uopShort.outcome.warnings.find((w) => w.code === 'WAITING_PERIOD_NOT_MET');
+    expect(uopWarning).toBeDefined();
+    expect(uopWarning?.message_pl).toContain(`${params.sickness.waitingPeriodDaysMandatory} dni`);
+    expect(uopWarning?.legal_basis).toBeTruthy();
+    expect(uopWarning?.message_pl).toContain('Co zrobić:');
+
+    const uopMet = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-04-01',
+        reference_date: '2026-11-21',
+        employment_type: 'UOP',
+        title_start_date: '2026-10-20',
+      }),
+      params,
+    );
+    expect(uopMet.outcome.warnings.some((w) => w.code === 'WAITING_PERIOD_NOT_MET')).toBe(false);
+
+    const b2bShort = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-04-01',
+        reference_date: '2026-11-21',
+        employment_type: 'B2B',
+        voluntary_sickness_insured: true,
+        payer_insured_count_nov_30: null,
+        title_start_date: '2026-10-01',
+      }),
+      params,
+    );
+    const b2bWarning = b2bShort.outcome.warnings.find((w) => w.code === 'WAITING_PERIOD_NOT_MET');
+    expect(b2bWarning).toBeDefined();
+    expect(b2bWarning?.message_pl).toContain(`${params.sickness.waitingPeriodDaysVoluntary} dni`);
+  });
+
+  it('sortuje ostrzeżenia według ważności, usuwa duplikaty i każde ma podstawę prawną oraz „Co zrobić:”', () => {
+    const plan = calculateCasePlan(
+      baseTwoParentInput({
+        stage: 'PREGNANCY',
+        due_or_birth_date: '2027-01-21',
+        reference_date: '2026-11-21',
+        employment_type: 'B2B',
+        voluntary_sickness_insured: true,
+        payer_insured_count_nov_30: null,
+        debt_amount_pln: 250,
+        title_start_date: '2026-11-01',
+        requested_payment_variant: 'COMBINED_81_5',
+      }),
+      params,
+    );
+    const codes = plan.outcome.warnings.map((w) => w.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes).toEqual([
+      'SELF_EMPLOYED_DEBT',
+      'WAITING_PERIOD_NOT_MET',
+      'SHAM_CONTRACT_RISK',
+      'FATHER_PARENTAL_MOTHER_UNINSURED',
+    ]);
+    expect(plan.outcome.warnings.every((w) => Boolean(w.legal_basis))).toBe(true);
+    expect(plan.outcome.warnings.every((w) => w.message_pl.includes('Co zrobić:'))).toBe(true);
   });
 });
 

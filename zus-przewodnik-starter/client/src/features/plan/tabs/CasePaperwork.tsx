@@ -1,16 +1,26 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import type { BenefitParams, CaseDocument } from '@shared/types';
+import type {
+  ApplicantRole,
+  BenefitParams,
+  CaseDocument,
+  CaseInputs,
+  CasePlan,
+  CaseRecord,
+  EmploymentType,
+} from '@shared/types';
+import { apiGet } from '../../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
 import { parentLabels, roles } from '../caseLabels';
-import { diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
+import { addDaysIso, diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
 import './DocumentsTab.css';
 import './ApplicationsTab.css';
 import './CasePaperwork.css';
 
 const PREGNANCY_SICKNESS_IDS = new Set(['e-ZLA', 'ZAS-53', 'ZAS-12']);
+const PAYER_CERTIFICATE_IDS = new Set(['Z-3', 'Z-3a', 'ZAS-12']);
 const ATTACHMENT_IDS = new Set([
   'BIRTH_CERTIFICATE',
   'USC_COPY',
@@ -19,14 +29,25 @@ const ATTACHMENT_IDS = new Set([
   'ZA_ZYCIEM_CERTIFICATE',
   'STILLBIRTH_CERTIFICATE',
   'DEATH_CERTIFICATE',
+  'EXPECTED_BIRTH_CERTIFICATE',
 ]);
 
 const documentKey = (doc: CaseDocument) =>
   `${doc.parent_role}-${doc.id}-${doc.start_date ?? ''}-${doc.end_date ?? ''}`;
 
-function formatSubmitBadge(doc: CaseDocument): string {
+function isMandateEntitledRole(
+  documents: CaseDocument[],
+  role: CaseDocument['parent_role'],
+): boolean {
+  return documents.some(
+    (doc) =>
+      doc.parent_role === role && doc.submit_to === 'EMPLOYER' && /zleceniodawc/i.test(doc.name_pl),
+  );
+}
+
+function formatSubmitBadge(doc: CaseDocument, mandateEntitled: boolean): string {
   if (doc.id === 'e-ZLA') return 'Automatycznie (e-ZLA)';
-  if (doc.submit_to === 'EMPLOYER') return 'Pracodawca';
+  if (doc.submit_to === 'EMPLOYER') return mandateEntitled ? 'Zleceniodawca' : 'Pracodawca';
   if (doc.submit_to === 'ZUS') return 'ZUS (PUE/eZUS)';
   if (doc.submit_to === 'USC') return 'USC (gov.pl)';
   return 'Do ustalenia';
@@ -38,15 +59,20 @@ function submitBadgeClass(doc: CaseDocument): string {
   return 'plan-badge plan-badge--code';
 }
 
-function formatSubmitMethod(doc: CaseDocument): string {
+function formatSubmitMethod(doc: CaseDocument, mandateEntitled: boolean): string {
   if (doc.id === 'e-ZLA') {
     return 'Lekarz przekazuje elektronicznie do ZUS i na profil płatnika (PUE/eZUS).';
   }
-  if (doc.id === 'Z-3' || doc.id === 'Z-3a' || doc.id === 'ZAS-12') {
-    return 'Przekazuje do ZUS płatnik składek (pracodawca lub zleceniodawca) przez PUE/eZUS.';
+  if (doc.id === 'Z-3' || doc.id === 'ZAS-12') {
+    return 'Przekazuje do ZUS pracodawca przez PUE/eZUS.';
+  }
+  if (doc.id === 'Z-3a') {
+    return 'Przekazuje do ZUS zleceniodawca przez PUE/eZUS.';
   }
   if (doc.submit_to === 'EMPLOYER') {
-    return 'Papierowo lub elektronicznie u pracodawcy / płatnika składek.';
+    return mandateEntitled
+      ? 'Papierowo lub elektronicznie u płatnika składek (zleceniodawcy).'
+      : 'Papierowo lub elektronicznie w kadrach u pracodawcy.';
   }
   if (doc.submit_to === 'ZUS') {
     return 'Elektronicznie przez PUE/eZUS (symulacja) lub papierowo w placówce ZUS.';
@@ -57,8 +83,10 @@ function formatSubmitMethod(doc: CaseDocument): string {
   return 'Zależnie od formy zatrudnienia i wielkości płatnika (uzupełnij dane rodzica).';
 }
 
-function formatTargetPhrase(doc: CaseDocument): string {
-  if (doc.submit_to === 'EMPLOYER') return ' u pracodawcy';
+function formatTargetPhrase(doc: CaseDocument, mandateEntitled: boolean): string {
+  if (doc.submit_to === 'EMPLOYER') {
+    return mandateEntitled ? ' u zleceniodawcy' : ' u pracodawcy';
+  }
   if (doc.submit_to === 'ZUS') return ' w ZUS (PUE/eZUS)';
   if (doc.submit_to === 'USC') return ' w Urzędzie Stanu Cywilnego';
   return ' u właściwego płatnika';
@@ -68,6 +96,7 @@ function describeDocumentDetails(
   doc: CaseDocument,
   effectiveDate: string,
   params: BenefitParams,
+  mandateEntitled: boolean,
 ): string {
   const threshold = params.payerThresholdInsuredCount;
   const deadlines = params.applicationDeadlinesDays;
@@ -76,21 +105,29 @@ function describeDocumentDetails(
 
   switch (doc.id) {
     case 'ZAM':
-      return `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany.`;
+      return mandateEntitled
+        ? `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany. Zleceniodawca zgłaszający powyżej ${threshold} ubezpieczonych sam ustala i wypłaca zasiłek na podstawie ZAM (bez Z-3a do ZUS).`
+        : `Od ${formatPolishDate(effectiveDate)} r. jeden formularz ZUS ZAM zastępuje dawne druki ZUR i ZAO, a druk Z-3b został zlikwidowany.`;
     case 'Z-3':
-      return `Zaświadczenie wypełnia i przesyła do ZUS pracodawca zgłaszający do ${threshold} ubezpieczonych – Ty składasz wniosek o urlop i zasiłek w kadrach.`;
+      return `Zaświadczenie wypełnia i przesyła do ZUS pracodawca zgłaszający do ${threshold} ubezpieczonych – Ty składasz dokumenty w kadrach. Na dalszy okres zasiłku chorobowego pracodawca przekazuje ZAS-12.`;
     case 'Z-3a':
-      return `Zaświadczenie wypełnia i przesyła do ZUS zleceniodawca zgłaszający do ${threshold} ubezpieczonych.`;
+      return `Zaświadczenie wypełnia i przesyła do ZUS zleceniodawca zgłaszający do ${threshold} ubezpieczonych – zasiłek wypłaca ZUS.`;
     case 'ZAS-53':
       return 'Wniosek o zasiłek chorobowy składany bezpośrednio do ZUS przez osobę prowadzącą działalność gospodarczą (JDG).';
     case 'ZAS-12':
-      return 'Zaświadczenie płatnika składek na dalszy okres zasiłku chorobowego, gdy świadczenie wypłaca ZUS.';
+      return 'Zaświadczenie płatnika składek składane przez pracodawcę wyłącznie na dalszy okres nieprzerwanego zasiłku chorobowego, gdy świadczenie wypłaca ZUS.';
     case 'e-ZLA':
-      return `Zaświadczenie lekarskie w ciąży z kodem literowym „B” daje zasiłek w wysokości ${formatRate(params.rates.sicknessPregnancy)} podstawy wymiaru. Trafia elektronicznie do ZUS i na profil płatnika – pracownik powinien poinformować pracodawcę o nieobecności.`;
+      return `Zaświadczenie lekarskie w ciąży z kodem literowym „B” daje zasiłek w wysokości ${formatRate(params.rates.sicknessPregnancy)} podstawy wymiaru. Trafia elektronicznie do ZUS i na profil płatnika – pracownik informuje pracodawcę o nieobecności, a zleceniobiorca lub osoba na JDG powstrzymuje się od pracy zawodowej.`;
     case 'BIRTH_CERTIFICATE':
-      return 'Skrócony odpis aktu urodzenia dziecka. W przypadku martwego urodzenia dołącza się odpis skrócony z adnotacją o martwym urodzeniu lub zaświadczenie lekarskie o martwym urodzeniu.';
+      return 'Skrócony odpis aktu urodzenia dziecka dołączany do wniosku o zasiłek macierzyński.';
+    case 'STILLBIRTH_CERTIFICATE':
+      return 'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu (wydawany bezpłatnie przez USC) lub zaświadczenie o martwym urodzeniu. Dokument jest potrzebny do ustalenia prawa do zasiłku macierzyńskiego po stracie dziecka.';
+    case 'DEATH_CERTIFICATE':
+      return 'Skrócony odpis aktu zgonu dziecka wydawany przez Urząd Stanu Cywilnego. Pozwala ustalić właściwy wymiar zasiłku macierzyńskiego.';
+    case 'EXPECTED_BIRTH_CERTIFICATE':
+      return `Zaświadczenie lekarskie o przewidywanej dacie porodu jest wymagane, gdy urlop lub zasiłek macierzyński rozpoczyna się przed porodem (maksymalnie ${params.maternityLeave.maxWeeksBeforeBirth} tygodni przed przewidywaną datą porodu).`;
     case 'USC_COPY':
-      return 'Odpis aktu urodzenia do celów zasiłkowych uzyskasz bez opłaty skarbowej w Urzędzie Stanu Cywilnego lub online przez gov.pl.';
+      return 'Odpis aktu stanu cywilnego do celów zasiłkowych uzyskasz bez opłaty skarbowej w Urzędzie Stanu Cywilnego lub online przez gov.pl.';
     case 'ADOPTION_ORDER':
       return 'Oświadczenie o dacie przyjęcia dziecka na wychowanie oraz zaświadczenie sądu o wystąpieniu o przysposobienie albo orzeczenie o ustanowieniu rodziny zastępczej niezawodowej.';
     case 'HOSPITAL_CERTIFICATE':
@@ -132,12 +169,11 @@ function resolveParentsFiling(
     const roleDocs = documents.filter((doc) => doc.parent_role === role);
     const hasZ3 = roleDocs.some((doc) => doc.id === 'Z-3');
     const hasZ3a = roleDocs.some((doc) => doc.id === 'Z-3a');
-    const hasEmployerDoc = roleDocs.some(
-      (doc) => doc.submit_to === 'EMPLOYER' && doc.id !== 'e-ZLA',
-    );
+    const hasMaternityDocs = roleDocs.some((doc) => doc.id === 'ZAM');
+    const mandateEntitled = isMandateEntitledRole(documents, role);
+    const hasEmployerDoc = roleDocs.some((doc) => doc.submit_to === 'EMPLOYER');
     const hasZusDoc = roleDocs.some(
-      (doc) =>
-        doc.submit_to === 'ZUS' && doc.id !== 'Z-3' && doc.id !== 'Z-3a' && doc.id !== 'ZAS-12',
+      (doc) => doc.submit_to === 'ZUS' && !PAYER_CERTIFICATE_IDS.has(doc.id),
     );
 
     const label =
@@ -150,15 +186,29 @@ function resolveParentsFiling(
         role,
         label,
         summary: `U pracodawcy → pracodawca przekazuje Z-3 do ZUS (wypłaca ZUS)`,
-        method: `Pracodawca zgłasza do ${threshold} ubezpieczonych: złóż wniosek w kadrach, a pracodawca przekaże Z-3 do ZUS.`,
+        method: hasMaternityDocs
+          ? `Pracodawca zgłasza do ${threshold} ubezpieczonych: złóż wniosek w kadrach, a pracodawca przekaże Z-3 do ZUS.`
+          : `Pracodawca zgłasza do ${threshold} ubezpieczonych: e-ZLA trafia automatycznie, a pracodawca przekazuje Z-3 do ZUS (ZAS-12 tylko na dalszy okres).`,
       };
     }
     if (hasZ3a) {
       return {
         role,
         label,
-        summary: `Zleceniodawca przekazuje Z-3a do ZUS (wypłaca ZUS)`,
-        method: `Płatnik zgłasza do ${threshold} ubezpieczonych: złóż ZAM (u zleceniodawcy lub przez PUE/eZUS), a płatnik przekaże Z-3a do ZUS.`,
+        summary: `W ZUS (PUE/eZUS) – zleceniodawca przekazuje Z-3a do ZUS (wypłaca ZUS)`,
+        method: hasMaternityDocs
+          ? `Zleceniodawca zgłasza do ${threshold} ubezpieczonych: złóż ZAM w ZUS (PUE/eZUS), a zleceniodawca przekaże Z-3a do ZUS.`
+          : `Zleceniodawca zgłasza do ${threshold} ubezpieczonych: e-ZLA trafia automatycznie, a zleceniodawca przekazuje Z-3a do ZUS.`,
+      };
+    }
+    if (mandateEntitled) {
+      return {
+        role,
+        label,
+        summary: `U zleceniodawcy (> ${threshold} ubezpieczonych – wypłaca zleceniodawca)`,
+        method: hasMaternityDocs
+          ? 'Uprawniony płatnik składek (zleceniodawca) sam ustala i wypłaca zasiłek – złóż ZAM i załączniki u zleceniodawcy (bez Z-3a do ZUS).'
+          : 'Uprawniony płatnik składek (zleceniodawca) sam ustala i wypłaca zasiłek na podstawie e-ZLA (bez Z-3a do ZUS).',
       };
     }
     if (hasEmployerDoc) {
@@ -166,7 +216,7 @@ function resolveParentsFiling(
         role,
         label,
         summary: `U pracodawcy (> ${threshold} ubezpieczonych – wypłaca pracodawca)`,
-        method: 'Papierowo lub elektronicznie w kadrach / u płatnika składek.',
+        method: 'Papierowo lub elektronicznie w kadrach u pracodawcy.',
       };
     }
     if (hasZusDoc) {
@@ -181,7 +231,7 @@ function resolveParentsFiling(
       role,
       label,
       summary: 'Do ustalenia (brak danych o wielkości płatnika)',
-      method: `Jeśli płatnik zgłasza powyżej ${threshold} ubezpieczonych, zasiłek wypłaca pracodawca; w pozostałych przypadkach – ZUS.`,
+      method: `Jeśli płatnik zgłasza powyżej ${threshold} ubezpieczonych, zasiłek wypłaca pracodawca lub zleceniodawca; w pozostałych przypadkach – ZUS.`,
     };
   });
 }
@@ -199,9 +249,16 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
   const mother: CaseDocument[] = [];
   const father: CaseDocument[] = [];
   const attachments: CaseDocument[] = [];
+  const hasMaternityDocs = documents.some((doc) => doc.id === 'ZAM');
+  const hasLossDocs = documents.some(
+    (doc) => doc.id === 'STILLBIRTH_CERTIFICATE' || doc.id === 'DEATH_CERTIFICATE',
+  );
 
   for (const doc of documents) {
-    if (PREGNANCY_SICKNESS_IDS.has(doc.id)) {
+    if (
+      PREGNANCY_SICKNESS_IDS.has(doc.id) ||
+      (!hasMaternityDocs && PAYER_CERTIFICATE_IDS.has(doc.id))
+    ) {
       pregnancySickness.push(doc);
     } else if (ATTACHMENT_IDS.has(doc.id)) {
       attachments.push(doc);
@@ -216,7 +273,7 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
     {
       id: 'pregnancy-sickness',
       title: 'Zwolnienie lekarskie w ciąży (e-ZLA, kod „B”)',
-      description: `Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika. Pracodawca (do ${threshold} ubezpieczonych) przekazuje Z-3 i ZAS-12, zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.`,
+      description: `Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika (PUE/eZUS). Gdy płatnik nie wypłaca zasiłków (do ${threshold} ubezpieczonych), pracodawca przekazuje Z-3 (a ZAS-12 tylko na dalszy okres zasiłku chorobowego), zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.`,
       documents: pregnancySickness,
     },
     {
@@ -234,8 +291,9 @@ function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): D
     {
       id: 'attachments',
       title: 'Załączniki i dokumenty stanu cywilnego',
-      description:
-        'Dokumenty potwierdzające prawo do świadczenia lub wpływające na jego wymiar (odpis aktu urodzenia, zaświadczenie ze szpitala, „Za życiem”).',
+      description: hasLossDocs
+        ? 'Dokumenty stanu cywilnego i zaświadczenia potwierdzające prawo do zasiłku.'
+        : 'Dokumenty potwierdzające prawo do świadczenia lub wpływające na jego wymiar (odpis aktu urodzenia, zaświadczenie ze szpitala, „Za życiem”).',
       documents: attachments,
     },
   ];
@@ -262,19 +320,52 @@ function selectNextStep(
       return Number(ATTACHMENT_IDS.has(a.id)) - Number(ATTACHMENT_IDS.has(b.id));
     });
 
-  const next = withDeadline[0] ?? unchecked[0] ?? null;
+  const isPassive = (doc: CaseDocument) => doc.id === 'e-ZLA' || PAYER_CERTIFICATE_IDS.has(doc.id);
+  const next = withDeadline[0] ?? unchecked.find((doc) => !isPassive(doc)) ?? unchecked[0] ?? null;
 
   if (next) {
+    const mandateEntitled = isMandateEntitledRole(documents, next.parent_role);
     if (next.id === 'e-ZLA') {
+      const roleDocs = documents.filter((doc) => doc.parent_role === next.parent_role);
+      const hasZ3 = roleDocs.some((doc) => doc.id === 'Z-3');
+      const hasZ3a = roleDocs.some((doc) => doc.id === 'Z-3a');
+      if (hasZ3) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj pracodawcę o nieobecności, a pracodawca przekaże Z-3 do ZUS.',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
+      if (hasZ3a) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – powstrzymaj się od pracy, a zleceniodawca przekaże Z-3a do ZUS.',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
+      if (mandateEntitled) {
+        return {
+          text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – powstrzymaj się od pracy i poinformuj zleceniodawcę (wypłaca zasiłek).',
+          isOverdue: false,
+          overdueHint: null,
+        };
+      }
       return {
-        text: `Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj płatnika o nieobecności.`,
+        text: 'Następny krok: lekarz wystawia elektroniczne zwolnienie „e-ZLA” (kod „B”) automatycznie – poinformuj pracodawcę o nieobecności.',
+        isOverdue: false,
+        overdueHint: null,
+      };
+    }
+    if (PAYER_CERTIFICATE_IDS.has(next.id)) {
+      return {
+        text: `Następny krok: płatnik składek przekazuje „${next.name_pl}” (${parentLabels[next.parent_role]}) do ZUS (PUE/eZUS).`,
         isOverdue: false,
         overdueHint: null,
       };
     }
     const deadlinePhrase = next.deadline ? ` (do ${formatPolishDate(next.deadline)})` : '';
     return {
-      text: `Następny krok: złóż „${next.name_pl}” (${parentLabels[next.parent_role]})${formatTargetPhrase(next)}${deadlinePhrase}.`,
+      text: `Następny krok: złóż „${next.name_pl}” (${parentLabels[next.parent_role]})${formatTargetPhrase(next, mandateEntitled)}${deadlinePhrase}.`,
       isOverdue: next.is_overdue,
       overdueHint:
         next.is_overdue && next.deadline
@@ -455,6 +546,7 @@ export function CaseDocuments({
                   const key = documentKey(doc);
                   const isChecked = Boolean(checkedMap[key]);
                   const showOverdue = !isChecked && doc.is_overdue;
+                  const mandateEntitled = isMandateEntitledRole(documents, doc.parent_role);
                   return (
                     <li
                       key={key}
@@ -484,7 +576,9 @@ export function CaseDocuments({
                                 </span>
                               )}
                             </span>
-                            <span className={submitBadgeClass(doc)}>{formatSubmitBadge(doc)}</span>
+                            <span className={submitBadgeClass(doc)}>
+                              {formatSubmitBadge(doc, mandateEntitled)}
+                            </span>
                           </span>
 
                           {(doc.start_date || doc.deadline) && (
@@ -518,7 +612,7 @@ export function CaseDocuments({
                           )}
 
                           <span className="docs-compact-item__method">
-                            {formatSubmitMethod(doc)}
+                            {formatSubmitMethod(doc, mandateEntitled)}
                           </span>
                         </span>
                       </label>
@@ -529,7 +623,9 @@ export function CaseDocuments({
                             Szczegóły i podstawa prawna
                           </summary>
                           <div className="docs-details__body">
-                            <p>{describeDocumentDetails(doc, effectiveDate, params)}</p>
+                            <p>
+                              {describeDocumentDetails(doc, effectiveDate, params, mandateEntitled)}
+                            </p>
                             <p className="docs-details__sub">
                               <strong>Podstawa prawna:</strong> {doc.legal_basis}
                             </p>
@@ -572,8 +668,8 @@ export function CaseDocuments({
               jednego wniosku ZUS ZAM, a druk Z-3b został zlikwidowany.
             </p>
             <p className="docs-details__sub">
-              Gdy zasiłek wypłaca ZUS: pracodawca składa Z-3 (oraz ZAS-12 na dalszy okres zasiłku
-              chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
+              Gdy zasiłek wypłaca ZUS: pracodawca składa Z-3 (oraz ZAS-12 wyłącznie na dalszy okres
+              zasiłku chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
               chorobowy) lub ZUS ZAM (zasiłek macierzyński).
             </p>
           </div>
@@ -592,9 +688,9 @@ export function CaseDocuments({
               </p>
               <p className="docs-details__sub">
                 Pracownik informuje pracodawcę o nieobecności. Gdy płatnik nie wypłaca zasiłków (do{' '}
-                {params.payerThresholdInsuredCount} ubezpieczonych), przekazuje do ZUS zaświadczenie
-                Z-3 i ZAS-12 (umowa o pracę) albo Z-3a (umowa zlecenie). Osoba prowadząca JDG składa
-                do ZUS wniosek ZAS-53.
+                {params.payerThresholdInsuredCount} ubezpieczonych), pracodawca przekazuje do ZUS
+                zaświadczenie Z-3 (a ZAS-12 wyłącznie na dalszy okres zasiłku chorobowego),
+                zleceniodawca przekazuje Z-3a, a osoba prowadząca JDG składa do ZUS wniosek ZAS-53.
               </p>
             </div>
           </details>
@@ -747,106 +843,636 @@ function isActionableApplication(doc: CaseDocument): boolean {
   return APPLICATION_IDS.has(doc.id) || doc.id.endsWith('_REQUEST');
 }
 
-function applicationCode(doc: CaseDocument): string {
-  if (doc.id === 'ZAM') return 'ZUS ZAM';
-  if (doc.id === 'ZAS-53') return 'ZUS ZAS-53';
-  if (doc.id === 'USC_COPY') return 'USC / AKT';
-  if (doc.id === 'COMBINED_RATE') {
-    return `WNIOSEK-${formatRate(DEFAULT_PARAMS.rates.combined)}`;
-  }
-  return 'WNIOSEK-KP';
+interface ParentApplicationContext {
+  employmentType: EmploymentType | null;
+  isEmployee: boolean;
+  isNonEmployee: boolean;
+  hasZ3: boolean;
+  hasZ3a: boolean;
 }
 
-function requiredFieldsForApplication(doc: CaseDocument): PersonalFieldKey[] {
-  if (doc.id === 'USC_COPY') return ['name'];
-  if (doc.id === 'ZAM' || doc.id === 'ZAS-53') return ['name', 'pesel', 'bank'];
-  return ['name', 'pesel'];
+interface ApplicationItem {
+  key: string;
+  doc: CaseDocument;
+  parentCtx: ParentApplicationContext;
+  sharedWithBothParents: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  partNumber: number | null;
+  partTotal: number;
+  workFraction: number;
+  workExtensionStart: string | null;
+  workExtensionEnd: string | null;
+  workExtensionDays: number;
+  stillbirthOnly: boolean;
+  relatedParentalRange: { start: string; end: string; weeksLabel: string | null } | null;
 }
 
-function recipientShort(submitTo: CaseDocument['submit_to']): string {
-  if (submitTo === 'EMPLOYER') return 'Pracodawca';
-  if (submitTo === 'ZUS') return 'ZUS (PUE / eZUS)';
-  if (submitTo === 'USC') return 'Urząd Stanu Cywilnego';
-  return 'Do ustalenia';
+function resolveParentApplicationContext(
+  role: ApplicantRole,
+  documents: CaseDocument[],
+  input: CaseInputs | null,
+): ParentApplicationContext {
+  const roleDocs = documents.filter((doc) => doc.parent_role === role);
+  const hasZ3 = roleDocs.some((doc) => doc.id === 'Z-3');
+  const hasZ3a = roleDocs.some((doc) => doc.id === 'Z-3a');
+
+  const person = input ? (role === input.applicant_role ? input : input.other_parent) : undefined;
+  let employmentType: EmploymentType | null = person ? person.employment_type : null;
+
+  if (!employmentType) {
+    if (hasZ3a) employmentType = 'ZLECENIE';
+    else if (roleDocs.some((doc) => doc.id === 'ZAS-53')) employmentType = 'B2B';
+    else if (hasZ3 || roleDocs.some((doc) => doc.id === 'ZAS-12' || doc.id === 'ADOPTION_LEAVE')) {
+      employmentType = 'UOP';
+    } else if (
+      roleDocs.some(
+        (doc) => doc.submit_to === 'EMPLOYER' && doc.id !== 'e-ZLA' && doc.id !== 'USC_COPY',
+      )
+    ) {
+      employmentType = 'UOP';
+    }
+  }
+
+  const hasNonEmployeeDestination = roleDocs.some(
+    (doc) =>
+      doc.submit_to === 'ZUS' &&
+      doc.id !== 'Z-3' &&
+      doc.id !== 'Z-3a' &&
+      doc.id !== 'ZAS-12' &&
+      doc.id !== 'e-ZLA',
+  );
+  const isEmployee = employmentType === 'UOP';
+  const isNonEmployee =
+    employmentType === 'ZLECENIE' ||
+    employmentType === 'B2B' ||
+    (!isEmployee && hasNonEmployeeDestination);
+
+  return { employmentType, isEmployee, isNonEmployee, hasZ3, hasZ3a };
 }
 
-function recipientFull(submitTo: CaseDocument['submit_to']): string {
-  if (submitTo === 'EMPLOYER') return 'Pracodawca (płatnik składek)';
-  if (submitTo === 'ZUS') return 'Zakład Ubezpieczeń Społecznych (PUE / eZUS)';
-  if (submitTo === 'USC') return 'Urząd Stanu Cywilnego (RSC / gov.pl)';
-  return 'Do ustalenia';
-}
-
-function applicationChannel(doc: CaseDocument): string {
-  if (doc.submit_to === 'EMPLOYER') return 'Dział kadr / system pracodawcy (symulacja)';
-  if (doc.submit_to === 'ZUS') return 'Wysyłka elektroniczna przez PUE / eZUS (symulacja)';
-  if (doc.submit_to === 'USC') return 'Rejestr Stanu Cywilnego / mObywatel (symulacja)';
-  return 'Uzupełnij dane płatnika, aby określić kanał złożenia';
-}
-
-function applicationLegalNote(doc: CaseDocument): string {
-  if (doc.submit_to === 'EMPLOYER' && doc.id !== 'ZAM') {
-    return `${doc.legal_basis}; Rozporządzenie MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322)`;
-  }
-  if (doc.id === 'ZAM' || doc.id === 'ZAS-53') {
-    return `${doc.legal_basis}; Rozporządzenie MRPiPS z 27.09.2026 r. (Dz.U. z 2026 r. poz. 1316)`;
-  }
-  return doc.legal_basis;
-}
-
-function attachmentsForApplication(doc: CaseDocument, allDocuments: CaseDocument[]): string {
-  const hasHospital = allDocuments.some((item) => item.id === 'HOSPITAL_CERTIFICATE');
-  const hasZaZyciem = allDocuments.some((item) => item.id === 'ZA_ZYCIEM_CERTIFICATE');
-  const hasAdoption = allDocuments.some((item) => item.id === 'ADOPTION_ORDER');
-
-  if (doc.id === 'USC_COPY') {
-    return 'Brak załączników – wniosek o odpis skrócony do celów zasiłkowych (bez opłaty skarbowej).';
-  }
-  if (doc.id === 'SUPPLEMENTARY_REQUEST') {
-    return 'Zaświadczenie ze szpitala o okresie hospitalizacji, tygodniu ciąży i masie urodzeniowej dziecka (poz. 322).';
-  }
-  if (doc.id === 'PARENTAL_REQUEST') {
-    const items = [
-      'skrócony odpis aktu urodzenia dziecka',
-      'oświadczenie o liczbie wykorzystanych części i braku jednoczesnego przekroczenia puli przez drugiego rodzica (poz. 322)',
-    ];
-    if (hasZaZyciem) items.push('zaświadczenie lekarskie „Za życiem” (art. 4 ust. 3)');
-    return items.join('; ') + '.';
-  }
-  if (doc.id === 'PATERNITY_REQUEST') {
-    return 'Skrócony odpis aktu urodzenia dziecka oraz oświadczenie ojca o niewykorzystaniu pełnego wymiaru urlopu ojcowskiego (poz. 322).';
-  }
-  if (doc.id === 'TAKEOVER') {
-    return 'Skrócony odpis aktu urodzenia dziecka, kopia wniosku/rezygnacji matki lub dokument potwierdzający podstawę wcześniejszego przejęcia (poz. 322).';
-  }
-  if (doc.id === 'ADOPTION_LEAVE') {
-    return 'Oświadczenie o dacie przyjęcia dziecka oraz zaświadczenie sądu o wystąpieniu o przysposobienie albo orzeczenie o rodzinie zastępczej (poz. 322).';
-  }
-  if (doc.id === 'COMBINED_RATE') {
-    const items = ['skrócony odpis aktu urodzenia dziecka'];
-    if (hasZaZyciem) items.push('zaświadczenie lekarskie „Za życiem”');
-    return items.join('; ') + '.';
-  }
-  if (doc.id === 'ZAS-53') {
-    return 'Elektroniczne zwolnienie lekarskie e-ZLA z kodem „B” (trafia do ZUS automatycznie).';
-  }
-  const items = [
-    hasAdoption ? 'dokument przyjęcia dziecka na wychowanie' : 'skrócony odpis aktu urodzenia',
-  ];
-  if (hasHospital) items.push('zaświadczenie ze szpitala (dla urlopu uzupełniającego)');
-  if (hasZaZyciem) items.push('zaświadczenie „Za życiem”');
-  return items.join('; ') + '.';
-}
-
-function formatDurationNote(doc: CaseDocument, daysPerWeek: number): string | null {
-  if (!doc.start_date || !doc.end_date) return null;
-  const days = diffDaysIso(doc.start_date, doc.end_date) + 1;
+function formatDurationRange(
+  startDate: string | null,
+  endDate: string | null,
+  daysPerWeek: number,
+): string | null {
+  if (!startDate || !endDate) return null;
+  const days = diffDaysIso(startDate, endDate) + 1;
   if (days <= 0) return null;
   if (days % daysPerWeek === 0) {
     const weeks = days / daysPerWeek;
     return `${weeks} tyg. (${days} dni)`;
   }
   return `${days} dni`;
+}
+
+function formatWorkFraction(fraction: number): string {
+  const percent = Math.round(fraction * 100);
+  if (Math.abs(fraction - 0.5) < 0.001) return `1/2 etatu (${percent}%)`;
+  if (Math.abs(fraction - 0.25) < 0.001) return `1/4 etatu (${percent}%)`;
+  if (Math.abs(fraction - 0.2) < 0.001) return `1/5 etatu (${percent}%)`;
+  if (Math.abs(fraction - 0.4) < 0.001) return `2/5 etatu (${percent}%)`;
+  if (Math.abs(fraction - 0.3) < 0.001) return `3/10 etatu (${percent}%)`;
+  return `${percent}% etatu`;
+}
+
+function resolveWorkFraction(
+  doc: CaseDocument,
+  input: CaseInputs | null,
+  plan: CasePlan | null,
+  isEmployee: boolean,
+): number {
+  if (!isEmployee || doc.id !== 'PARENTAL_REQUEST') return 0;
+  if (plan && doc.start_date) {
+    const matched = plan.outcome.periods.find(
+      (period) =>
+        !period.denied &&
+        period.parent_role === doc.parent_role &&
+        period.start_date === doc.start_date &&
+        (period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION'),
+    );
+    if (matched) return matched.work_fraction;
+  }
+  if (!input) return 0;
+  if (input.parental_leave_parts && doc.start_date) {
+    const part = input.parental_leave_parts.find(
+      (item) =>
+        item.start_date === doc.start_date &&
+        (item.parent_role ?? input.applicant_role) === doc.parent_role,
+    );
+    if (part) return part.work_fraction ?? 0;
+  }
+  if (doc.parent_role === input.applicant_role && input.part_time_work_fraction > 0) {
+    return input.part_time_work_fraction;
+  }
+  return 0;
+}
+
+function inferMaternityDatesForZam(
+  role: ApplicantRole,
+  documents: CaseDocument[],
+  input: CaseInputs | null,
+  plan: CasePlan | null,
+  params: BenefitParams,
+): { start: string | null; end: string | null } {
+  if (plan) {
+    const period = plan.outcome.periods.find(
+      (item) =>
+        !item.denied &&
+        item.parent_role === role &&
+        (item.leave_type === 'MATERNITY' || item.leave_type === 'ADOPTION_MATERNITY'),
+    );
+    if (period) return { start: period.start_date, end: period.end_date };
+  }
+  if (!input) return { start: null, end: null };
+  const isAdoption = input.stage === 'ADOPTION';
+  const event = isAdoption
+    ? (input.adopted_or_foster_child_acceptance_date ?? null)
+    : input.due_or_birth_date;
+  const start = event ? (isAdoption ? event : (input.maternity_leave_start_date ?? event)) : null;
+  if (!start) return { start: null, end: null };
+
+  const roleFollowUpStarts = documents
+    .filter(
+      (doc) =>
+        doc.parent_role === role &&
+        (doc.id === 'SUPPLEMENTARY_REQUEST' || doc.id === 'PARENTAL_REQUEST') &&
+        doc.start_date &&
+        doc.start_date > start,
+    )
+    .map((doc) => doc.start_date as string)
+    .sort((a, b) => a.localeCompare(b));
+  if (roleFollowUpStarts.length > 0) {
+    return { start, end: addDaysIso(roleFollowUpStarts[0], -1) };
+  }
+
+  const childLoss = input.special_circumstances.stillbirth_or_child_death;
+  const living =
+    input.living_children_count ??
+    (childLoss !== 'NONE' && input.children_count <= 1 ? 0 : input.children_count);
+  const daysPerWeek = params.calendar.daysPerWeek;
+  if (childLoss === 'BEFORE_8_WEEKS' && living <= 0) {
+    const days = params.childDeath.weeksAfterBirthIfBeforeThreshold * daysPerWeek;
+    return { start, end: addDaysIso(start, days - 1) };
+  }
+  const availableCounts = Object.keys(params.maternityLeave.weeksByChildrenCount)
+    .map(Number)
+    .filter((value) => Number.isFinite(value));
+  const maxCount = availableCounts.length > 0 ? Math.max(...availableCounts) : 1;
+  const countKey = String(
+    Math.min(maxCount, Math.max(1, living)),
+  ) as keyof typeof params.maternityLeave.weeksByChildrenCount;
+  const weeks = params.maternityLeave.weeksByChildrenCount[countKey];
+  if (!weeks) return { start, end: null };
+  return { start, end: addDaysIso(start, weeks * daysPerWeek - 1) };
+}
+
+function buildApplications(
+  documents: CaseDocument[],
+  input: CaseInputs | null,
+  plan: CasePlan | null,
+  params: BenefitParams,
+): ApplicationItem[] {
+  const actionable = documents.filter(isActionableApplication);
+  if (actionable.length === 0) return [];
+
+  const contexts: Record<ApplicantRole, ParentApplicationContext> = {
+    MOTHER: resolveParentApplicationContext('MOTHER', documents, input),
+    FATHER: resolveParentApplicationContext('FATHER', documents, input),
+  };
+
+  const uscRoles = new Set(
+    actionable.filter((doc) => doc.id === 'USC_COPY').map((doc) => doc.parent_role),
+  );
+  let uscIncluded = false;
+
+  const parentalSorted = actionable
+    .filter((doc) => doc.id === 'PARENTAL_REQUEST')
+    .sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''));
+  const parentalIndexMap = new Map<CaseDocument, number>();
+  parentalSorted.forEach((doc, idx) => parentalIndexMap.set(doc, idx + 1));
+
+  const childLoss = input?.special_circumstances.stillbirth_or_child_death ?? 'NONE';
+  const living = input
+    ? (input.living_children_count ??
+      (childLoss !== 'NONE' && input.children_count <= 1 ? 0 : input.children_count))
+    : null;
+  const stillbirthAllLost = Boolean(
+    input &&
+    childLoss !== 'NONE' &&
+    ((living !== null && living <= 0) || !actionable.some((doc) => doc.id === 'PARENTAL_REQUEST')),
+  );
+
+  const items: ApplicationItem[] = [];
+
+  for (const doc of actionable) {
+    if (doc.id === 'USC_COPY') {
+      if (uscIncluded) continue;
+      uscIncluded = true;
+    }
+
+    const parentCtx = contexts[doc.parent_role];
+
+    if (doc.id === 'ZAM') {
+      const roleActionable = actionable.filter((item) => item.parent_role === doc.parent_role);
+      const hasMaternityCoveringDoc = roleActionable.some(
+        (item) =>
+          item.id === 'COMBINED_RATE' || item.id === 'ADOPTION_LEAVE' || item.id === 'TAKEOVER',
+      );
+      const hasSpecificRequest = roleActionable.some(
+        (item) => item.id !== 'ZAM' && item.id !== 'USC_COPY' && item.id !== 'ZAS-53',
+      );
+
+      let needsStandaloneMaternity = false;
+      if (input) {
+        const motherDeceased = Boolean(input.special_circumstances.mother_deceased);
+        const roleHasMaternity =
+          !input.parental_only &&
+          ((doc.parent_role === input.applicant_role &&
+            (doc.parent_role === 'MOTHER' || input.stage === 'ADOPTION') &&
+            !motherDeceased) ||
+            (doc.parent_role === 'FATHER' && motherDeceased && input.stage !== 'ADOPTION'));
+        needsStandaloneMaternity = roleHasMaternity && !hasMaternityCoveringDoc;
+      } else {
+        needsStandaloneMaternity = !hasSpecificRequest;
+      }
+
+      if (!needsStandaloneMaternity && hasSpecificRequest) {
+        continue;
+      }
+    }
+
+    let startDate = doc.start_date;
+    let endDate = doc.end_date;
+    if (doc.id === 'ZAM' && !startDate && !endDate) {
+      const inferred = inferMaternityDatesForZam(doc.parent_role, documents, input, plan, params);
+      startDate = inferred.start;
+      endDate = inferred.end;
+    }
+
+    const workFraction = resolveWorkFraction(doc, input, plan, parentCtx.isEmployee);
+    let workExtensionStart: string | null = null;
+    let workExtensionEnd: string | null = null;
+    let workExtensionDays = 0;
+
+    if (workFraction > 0 && startDate && endDate) {
+      const baseDays = diffDaysIso(startDate, endDate) + 1;
+      if (baseDays > 0) {
+        workExtensionDays = Math.floor(baseDays / (1 - workFraction)) - baseDays;
+        if (workExtensionDays > 0) {
+          workExtensionStart = addDaysIso(endDate, 1);
+          workExtensionEnd = addDaysIso(endDate, workExtensionDays);
+        }
+      }
+    }
+
+    let relatedParentalRange: ApplicationItem['relatedParentalRange'] = null;
+    if (doc.id === 'COMBINED_RATE' && !stillbirthAllLost) {
+      const roleParental = parentalSorted.filter((item) => item.parent_role === doc.parent_role);
+      const firstParental = roleParental[0];
+      const lastParental = roleParental[roleParental.length - 1];
+      if (firstParental?.start_date && lastParental?.end_date) {
+        relatedParentalRange = {
+          start: firstParental.start_date,
+          end: lastParental.end_date,
+          weeksLabel: formatDurationRange(
+            firstParental.start_date,
+            lastParental.end_date,
+            params.calendar.daysPerWeek,
+          ),
+        };
+      }
+    }
+
+    items.push({
+      key: documentKey(doc),
+      doc,
+      parentCtx,
+      sharedWithBothParents: doc.id === 'USC_COPY' && uscRoles.size > 1,
+      startDate,
+      endDate,
+      partNumber: parentalIndexMap.get(doc) ?? null,
+      partTotal: parentalSorted.length,
+      workFraction,
+      workExtensionStart,
+      workExtensionEnd,
+      workExtensionDays,
+      stillbirthOnly:
+        stillbirthAllLost &&
+        (doc.id === 'COMBINED_RATE' || doc.id === 'ZAM' || doc.id === 'USC_COPY'),
+      relatedParentalRange,
+    });
+  }
+
+  const nonUsc = items.filter((item) => item.doc.id !== 'USC_COPY');
+  const usc = items.filter((item) => item.doc.id === 'USC_COPY');
+  return [...nonUsc, ...usc];
+}
+
+function applicationCode(item: ApplicationItem, params: BenefitParams): string {
+  const { doc, parentCtx, stillbirthOnly } = item;
+  if (doc.id === 'USC_COPY') return 'USC / AKT';
+  if (doc.id === 'ZAS-53') return 'ZUS ZAS-53';
+  if (parentCtx.isNonEmployee) return 'ZUS ZAM';
+  if (doc.id === 'COMBINED_RATE' && !stillbirthOnly) {
+    return `WNIOSEK-${formatRate(params.rates.combined)}`;
+  }
+  if (parentCtx.isEmployee) return 'WNIOSEK-KP';
+  return doc.id === 'ZAM' ? 'ZUS ZAM' : 'WNIOSEK';
+}
+
+function applicationTitle(item: ApplicationItem, params: BenefitParams): string {
+  const { doc, parentCtx, partNumber, partTotal, stillbirthOnly } = item;
+  const combinedRate = formatRate(params.rates.combined);
+  const partSuffix =
+    partNumber !== null
+      ? partTotal > 1
+        ? ` (część ${partNumber} z ${partTotal})`
+        : ' (część 1)'
+      : '';
+
+  if (doc.id === 'USC_COPY') return 'Wniosek do USC o wydanie odpisu aktu urodzenia';
+  if (doc.id === 'ZAS-53') return 'ZAS-53 – wniosek o zasiłek chorobowy';
+
+  if (parentCtx.isNonEmployee) {
+    if (stillbirthOnly) {
+      return 'ZAM – wniosek o zasiłek macierzyński po stracie dziecka';
+    }
+    if (doc.id === 'COMBINED_RATE') {
+      return `ZAM – wniosek o zasiłek macierzyński (stawka ${combinedRate})`;
+    }
+    if (doc.id === 'PARENTAL_REQUEST') {
+      const extSuffix =
+        doc.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION' ? ' – przedłużenie „Za życiem”' : '';
+      return `ZAM – zasiłek za okres odpowiadający urlopowi rodzicielskiemu${partSuffix}${extSuffix}`;
+    }
+    if (doc.id === 'SUPPLEMENTARY_REQUEST') {
+      return 'ZAM – zasiłek za okres odpowiadający uzupełniającemu urlopowi macierzyńskiemu';
+    }
+    if (doc.id === 'PATERNITY_REQUEST') {
+      return 'ZAM – zasiłek za okres odpowiadający urlopowi ojcowskiemu';
+    }
+    if (doc.id === 'TAKEOVER') {
+      return 'ZAM – wniosek ojca o zasiłek za przejęty okres macierzyńskiego';
+    }
+    return 'ZAM – wniosek o zasiłek macierzyński';
+  }
+
+  if (parentCtx.isEmployee) {
+    if (stillbirthOnly) {
+      return 'Wniosek o urlop macierzyński po stracie dziecka';
+    }
+    if (doc.id === 'COMBINED_RATE') {
+      return doc.leave_type === 'ADOPTION_MATERNITY'
+        ? `Wniosek o urlop na warunkach macierzyńskiego i rodzicielski (stawka ${combinedRate})`
+        : `Wniosek o urlop macierzyński i rodzicielski (stawka ${combinedRate})`;
+    }
+    if (doc.id === 'ADOPTION_LEAVE') {
+      return 'Wniosek o urlop na warunkach urlopu macierzyńskiego';
+    }
+    if (doc.id === 'TAKEOVER') {
+      return 'Wniosek ojca o przejęcie części urlopu macierzyńskiego';
+    }
+    if (doc.id === 'SUPPLEMENTARY_REQUEST') {
+      return 'Wniosek o uzupełniający urlop macierzyński';
+    }
+    if (doc.id === 'PARENTAL_REQUEST') {
+      const extSuffix =
+        doc.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION' ? ' – przedłużenie „Za życiem”' : '';
+      return `Wniosek o urlop rodzicielski${partSuffix}${extSuffix}`;
+    }
+    if (doc.id === 'PATERNITY_REQUEST') {
+      return 'Wniosek o urlop ojcowski';
+    }
+    if (doc.id === 'ZAM') {
+      return 'Wniosek o urlop macierzyński';
+    }
+  }
+
+  if (doc.id === 'PARENTAL_REQUEST') {
+    return `${doc.name_pl}${partSuffix}`;
+  }
+  return doc.name_pl;
+}
+
+function requiredFieldsForApplication(item: ApplicationItem): PersonalFieldKey[] {
+  const { doc, parentCtx } = item;
+  if (doc.id === 'USC_COPY') return ['name'];
+  if (
+    doc.id === 'ZAM' ||
+    doc.id === 'ZAS-53' ||
+    parentCtx.isNonEmployee ||
+    parentCtx.hasZ3 ||
+    doc.submit_to === 'ZUS'
+  ) {
+    return ['name', 'pesel', 'bank'];
+  }
+  return ['name', 'pesel'];
+}
+
+function recipientShort(item: ApplicationItem): string {
+  const { doc, parentCtx } = item;
+  if (doc.submit_to === 'USC') return 'Urząd Stanu Cywilnego';
+  if (doc.submit_to === 'ZUS') return 'ZUS (PUE / eZUS)';
+  if (doc.submit_to === 'EMPLOYER') {
+    if (parentCtx.isNonEmployee) return 'Płatnik składek (zleceniodawca)';
+    if (parentCtx.hasZ3) return 'Pracodawca (przekazuje Z-3 do ZUS)';
+    return 'Pracodawca';
+  }
+  return 'Do ustalenia';
+}
+
+function recipientFull(item: ApplicationItem, params: BenefitParams): string {
+  const { doc, parentCtx } = item;
+  const threshold = params.payerThresholdInsuredCount;
+  if (doc.submit_to === 'USC') return 'Urząd Stanu Cywilnego (Rejestr Stanu Cywilnego / gov.pl)';
+  if (doc.submit_to === 'ZUS') {
+    if (parentCtx.hasZ3a) {
+      return `Zakład Ubezpieczeń Społecznych (PUE / eZUS) – zleceniodawca (do ${threshold} ubezpieczonych) przekazuje Z-3a`;
+    }
+    return 'Zakład Ubezpieczeń Społecznych (PUE / eZUS)';
+  }
+  if (doc.submit_to === 'EMPLOYER') {
+    if (parentCtx.isNonEmployee) {
+      return `Uprawniony płatnik składek – zleceniodawca (> ${threshold} ubezpieczonych)`;
+    }
+    if (parentCtx.hasZ3) {
+      return `Pracodawca (do ${threshold} ubezpieczonych – przekazuje wniosek i Z-3 do ZUS, wypłaca ZUS)`;
+    }
+    return `Pracodawca (płatnik składek > ${threshold} ubezpieczonych – ustala i wypłaca zasiłek)`;
+  }
+  return 'Do ustalenia (uzupełnij formę zatrudnienia i wielkość płatnika rodzica)';
+}
+
+function applicationChannel(item: ApplicationItem): string {
+  const { doc, parentCtx } = item;
+  if (doc.submit_to === 'USC') return 'Rejestr Stanu Cywilnego / gov.pl (symulacja)';
+  if (doc.submit_to === 'ZUS') return 'Wysyłka elektroniczna przez PUE / eZUS (symulacja)';
+  if (doc.submit_to === 'EMPLOYER') {
+    if (parentCtx.isNonEmployee) {
+      return 'Złożenie wniosku ZUS ZAM u uprawnionego płatnika składek (symulacja)';
+    }
+    return parentCtx.hasZ3
+      ? 'Dział kadr pracodawcy – pracodawca przekazuje Z-3 do ZUS (symulacja)'
+      : 'Dział kadr / system pracodawcy (symulacja)';
+  }
+  return 'Uzupełnij dane płatnika, aby określić kanał złożenia';
+}
+
+function applicationLegalNote(item: ApplicationItem): string {
+  const { doc, parentCtx } = item;
+  if (doc.id === 'USC_COPY') return doc.legal_basis;
+  if (parentCtx.isEmployee) {
+    return `${doc.legal_basis}; Rozporządzenie MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322)`;
+  }
+  if (parentCtx.isNonEmployee || doc.id === 'ZAM' || doc.id === 'ZAS-53') {
+    return `${doc.legal_basis}; Rozporządzenie MRPiPS z 27.09.2026 r. (Dz.U. z 2026 r. poz. 1316)`;
+  }
+  return doc.legal_basis;
+}
+
+function applicationVerificationNote(item: ApplicationItem, params: BenefitParams): string | null {
+  const { doc, parentCtx } = item;
+  if (doc.id === 'USC_COPY') return null;
+  if (parentCtx.isEmployee) {
+    return 'Wzór zgodny z rozporządzeniem MRPiPS 2025 poz. 322 – do weryfikacji.';
+  }
+  if (parentCtx.isNonEmployee || doc.id === 'ZAM' || doc.id === 'ZAS-53') {
+    return `Wzór formularza ZUS (od ${formatPolishDate(params.forms2026EffectiveDate)} r. ZAM zastępuje druki ZUR i ZAO; Z-3b zlikwidowany) zgodny z rozporządzeniem MRPiPS 2026 poz. 1316 – do weryfikacji na www.zus.pl.`;
+  }
+  return 'Zakres danych i wzór wniosku zależą od formy zatrudnienia rodzica – do weryfikacji.';
+}
+
+function rateAndVariantDescription(
+  item: ApplicationItem,
+  allDocuments: CaseDocument[],
+  input: CaseInputs | null,
+  params: BenefitParams,
+): string | null {
+  const { doc, stillbirthOnly } = item;
+  if (doc.id === 'USC_COPY') return null;
+
+  const r = params.rates;
+  const nonTransferable = params.parentalLeave.nonTransferableWeeksPerParent;
+  const applicantRole = input?.applicant_role ?? 'MOTHER';
+  const hasCombinedForApplicant =
+    !stillbirthOnly &&
+    allDocuments.some(
+      (candidate) => candidate.id === 'COMBINED_RATE' && candidate.parent_role === applicantRole,
+    );
+
+  if (doc.id === 'ZAS-53') {
+    return `${formatRate(r.sicknessPregnancy)} podstawy wymiaru (ciąża – kod literowy „B” na e-ZLA)`;
+  }
+  if (doc.id === 'PATERNITY_REQUEST') {
+    return `${formatRate(r.paternity)} podstawy wymiaru (urlop ojcowski)`;
+  }
+  if (doc.id === 'SUPPLEMENTARY_REQUEST') {
+    return `${formatRate(r.supplementaryMaternity)} podstawy wymiaru (uzupełniający urlop macierzyński)`;
+  }
+  if (doc.id === 'TAKEOVER') {
+    return `${formatRate(r.maternity)} podstawy wymiaru (przejęta część urlopu macierzyńskiego)`;
+  }
+  if (stillbirthOnly) {
+    return `${formatRate(r.maternity)} podstawy wymiaru (${params.childDeath.weeksAfterBirthIfBeforeThreshold} tyg. po porodzie, bez urlopu rodzicielskiego)`;
+  }
+  if (doc.id === 'COMBINED_RATE') {
+    return `${formatRate(r.combined)} za cały okres macierzyńskiego i rodzicielskiego (wniosek do ${params.combinedRateApplicationDeadlineDays} dni; nieprzenoszalne ${nonTransferable} tyg. drugiego rodzica: ${formatRate(r.secondParentNonTransferableInCombined)})`;
+  }
+  if (doc.id === 'ADOPTION_LEAVE') {
+    return hasCombinedForApplicant
+      ? `${formatRate(r.combined)} przy łącznym wniosku złożonym do ${params.combinedRateApplicationDeadlineDays} dni (inaczej ${formatRate(r.adoptionMaternity)})`
+      : `${formatRate(r.adoptionMaternity)} podstawy wymiaru`;
+  }
+  if (doc.id === 'ZAM') {
+    return `${formatRate(r.maternity)} podstawy wymiaru (wariant standardowy ${formatRate(r.maternity)} + ${formatRate(r.parental)})`;
+  }
+  if (doc.id === 'PARENTAL_REQUEST') {
+    if (hasCombinedForApplicant && doc.parent_role === applicantRole) {
+      return `${formatRate(r.combined)} podstawy wymiaru (wariant łączny)`;
+    }
+    if (hasCombinedForApplicant && doc.parent_role !== applicantRole) {
+      return `${formatRate(r.secondParentNonTransferableInCombined)} podstawy wymiaru (wyłączna, nieprzenoszalna część drugiego rodzica – ${nonTransferable} tyg.)`;
+    }
+    return `${formatRate(r.parental)} podstawy wymiaru (wariant standardowy)`;
+  }
+  return null;
+}
+
+function employmentFormLabel(ctx: ParentApplicationContext): string | null {
+  if (ctx.employmentType === 'UOP')
+    return 'Umowa o pracę (pracownik – wniosek o urlop z Kodeksu pracy)';
+  if (ctx.employmentType === 'ZLECENIE') {
+    return 'Umowa zlecenie (niebędący pracownikiem – wniosek ZUS ZAM o zasiłek za okres odpowiadający urlopowi)';
+  }
+  if (ctx.employmentType === 'B2B') {
+    return 'Działalność gospodarcza / JDG (niebędący pracownikiem – wniosek ZUS ZAM o zasiłek za okres odpowiadający urlopowi)';
+  }
+  if (ctx.isNonEmployee) {
+    return 'Ubezpieczony niebędący pracownikiem (wniosek ZUS ZAM o zasiłek za okres odpowiadający urlopowi)';
+  }
+  return null;
+}
+
+function attachmentsForApplication(item: ApplicationItem, allDocuments: CaseDocument[]): string {
+  const { doc, stillbirthOnly, parentCtx } = item;
+  const hasHospital = allDocuments.some((candidate) => candidate.id === 'HOSPITAL_CERTIFICATE');
+  const hasZaZyciem = allDocuments.some((candidate) => candidate.id === 'ZA_ZYCIEM_CERTIFICATE');
+  const hasAdoption = allDocuments.some((candidate) => candidate.id === 'ADOPTION_ORDER');
+
+  if (doc.id === 'USC_COPY') {
+    return stillbirthOnly
+      ? 'Brak załączników – odpis skrócony aktu urodzenia z adnotacją o martwym urodzeniu (do celów zasiłkowych bez opłaty skarbowej).'
+      : 'Brak załączników – wniosek o skrócony odpis aktu urodzenia do celów zasiłkowych (bez opłaty skarbowej).';
+  }
+  if (doc.id === 'ZAS-53') {
+    return 'Elektroniczne zaświadczenie lekarskie e-ZLA z kodem literowym „B” (lekarz przekazuje do ZUS automatycznie).';
+  }
+  if (stillbirthOnly) {
+    return 'Skrócony odpis aktu urodzenia z adnotacją o martwym urodzeniu lub zaświadczenie lekarskie o martwym urodzeniu.';
+  }
+  if (doc.id === 'SUPPLEMENTARY_REQUEST') {
+    return 'Zaświadczenie wydane przez szpital stanowiące podstawę do uzupełniającego urlopu macierzyńskiego.';
+  }
+  if (doc.id === 'ADOPTION_LEAVE') {
+    return 'Dokument przyjęcia dziecka na wychowanie (zaświadczenie sądu o wystąpieniu o przysposobienie albo orzeczenie o rodzinie zastępczej niezawodowej).';
+  }
+  if (doc.id === 'TAKEOVER') {
+    return 'Skrócony odpis aktu urodzenia dziecka oraz rezygnacja matki z dalszej części urlopu lub dokument potwierdzający podstawę wcześniejszego przejęcia.';
+  }
+  if (doc.id === 'PARENTAL_REQUEST') {
+    const items = [
+      hasAdoption
+        ? 'dokument przyjęcia dziecka na wychowanie'
+        : 'skrócony odpis aktu urodzenia dziecka',
+    ];
+    if (hasZaZyciem) items.push('zaświadczenie lekarskie „Za życiem” (art. 4 ust. 3)');
+    if (parentCtx.hasZ3a)
+      items.push('zaświadczenie płatnika składek Z-3a (przekazuje zleceniodawca do ZUS)');
+    return items.join('; ') + '.';
+  }
+  if (doc.id === 'PATERNITY_REQUEST') {
+    const items = [
+      hasAdoption
+        ? 'dokument przyjęcia dziecka na wychowanie'
+        : 'skrócony odpis aktu urodzenia dziecka',
+    ];
+    if (parentCtx.hasZ3a)
+      items.push('zaświadczenie płatnika składek Z-3a (przekazuje zleceniodawca do ZUS)');
+    return items.join('; ') + '.';
+  }
+  const items = [
+    hasAdoption
+      ? 'dokument przyjęcia dziecka na wychowanie'
+      : 'skrócony odpis aktu urodzenia dziecka',
+  ];
+  if (hasHospital && doc.id === 'ZAM') {
+    items.push('zaświadczenie wydane przez szpital (dla okresu uzupełniającego)');
+  }
+  if (hasZaZyciem) items.push('zaświadczenie lekarskie „Za życiem” (art. 4 ust. 3)');
+  if (parentCtx.hasZ3a)
+    items.push('zaświadczenie płatnika składek Z-3a (przekazuje zleceniodawca do ZUS)');
+  return items.join('; ') + '.';
 }
 
 interface SentReceipt {
@@ -859,12 +1485,30 @@ interface SentReceipt {
 interface PreviewModalState {
   title: string;
   recipient: string;
+  code: string;
   fields: { label: string; value: string }[];
+  legalNote: string;
+  verificationNote?: string;
 }
 
-export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
+export interface CaseApplicationsProps {
+  documents: CaseDocument[];
+  input?: CaseInputs | null;
+  plan?: CasePlan | null;
+  params?: BenefitParams;
+}
+
+export function CaseApplications({
+  documents,
+  input: inputProp,
+  plan: planProp,
+  params: paramsProp,
+}: CaseApplicationsProps) {
   const { search } = useLocation();
-  const { scenario } = useScenario();
+  const { scenario, planInputs } = useScenario();
+  const [fetchedCase, setFetchedCase] = useState<{ caseId: string; input: CaseInputs } | null>(
+    null,
+  );
   const [name, setName] = useState('');
   const [pesel, setPesel] = useState('');
   const [bank, setBank] = useState('');
@@ -878,7 +1522,33 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
   const peselRef = useRef<HTMLInputElement>(null);
   const bankRef = useRef<HTMLInputElement>(null);
 
-  const forms = documents.filter(isActionableApplication);
+  const caseId = useMemo(() => new URLSearchParams(search).get('case'), [search]);
+  const params = paramsProp ?? DEFAULT_PARAMS;
+
+  useEffect(() => {
+    if (inputProp || planInputs || !caseId) return;
+    let active = true;
+    void apiGet<CaseRecord>(`/cases/${encodeURIComponent(caseId)}`)
+      .then((record) => {
+        if (active && record?.inputs) {
+          setFetchedCase({ caseId, input: record.inputs });
+        }
+      })
+      .catch(() => {
+        // W środowisku bez API (np. test jednostkowy) korzystamy z danych z documents.
+      });
+    return () => {
+      active = false;
+    };
+  }, [inputProp, planInputs, caseId]);
+
+  const effectiveInput =
+    inputProp ?? planInputs ?? (fetchedCase?.caseId === caseId ? fetchedCase.input : null);
+
+  const forms = useMemo(
+    () => buildApplications(documents, effectiveInput, planProp ?? null, params),
+    [documents, effectiveInput, planProp, params],
+  );
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
 
   if (forms.length === 0) {
@@ -914,7 +1584,7 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
   const trimmedBank = bank.trim();
   const todayIso = todayIsoDate();
   const refYear = todayIso.slice(0, 4);
-  const daysPerWeek = DEFAULT_PARAMS.calendar.daysPerWeek;
+  const daysPerWeek = params.calendar.daysPerWeek;
 
   function findMissing(required: PersonalFieldKey[]): PersonalFieldKey[] {
     const missing: PersonalFieldKey[] = [];
@@ -938,16 +1608,29 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
     if (next.length === 0) setValidationError(null);
   }
 
-  function buildFields(doc: CaseDocument): { label: string; value: string; missing?: boolean }[] {
-    const required = requiredFieldsForApplication(doc);
+  function buildFields(
+    item: ApplicationItem,
+  ): { label: string; value: string; missing?: boolean }[] {
+    const { doc, parentCtx } = item;
+    const required = requiredFieldsForApplication(item);
+    const parentRoleValue = item.sharedWithBothParents
+      ? 'Matka / Ojciec (jeden wniosek dla obojga rodziców)'
+      : parentLabels[doc.parent_role];
+
     const fields: { label: string; value: string; missing?: boolean }[] = [
-      { label: 'Wnioskodawca (rola)', value: parentLabels[doc.parent_role] },
-      {
-        label: 'Imię i nazwisko',
-        value: trimmedName || 'Do uzupełnienia',
-        missing: !trimmedName,
-      },
+      { label: 'Wnioskodawca (rola)', value: parentRoleValue },
     ];
+
+    const formLabel = doc.id === 'USC_COPY' ? null : employmentFormLabel(parentCtx);
+    if (formLabel) {
+      fields.push({ label: 'Forma ubezpieczenia', value: formLabel });
+    }
+
+    fields.push({
+      label: 'Imię i nazwisko',
+      value: trimmedName || 'Do uzupełnienia',
+      missing: !trimmedName,
+    });
     if (required.includes('pesel')) {
       fields.push({
         label: 'PESEL',
@@ -962,54 +1645,107 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         missing: !trimmedBank,
       });
     }
-    fields.push({ label: 'Adresat', value: recipientFull(doc.submit_to) });
-    if (doc.start_date && doc.end_date) {
-      const duration = formatDurationNote(doc, daysPerWeek);
+
+    fields.push({ label: 'Adresat', value: recipientFull(item, params) });
+
+    if (item.startDate && item.endDate) {
+      const duration = formatDurationRange(item.startDate, item.endDate, daysPerWeek);
       fields.push({
-        label: 'Wnioskowany okres',
-        value: `${formatPolishDate(doc.start_date)}–${formatPolishDate(doc.end_date)}${duration ? ` (${duration})` : ''}`,
+        label: parentCtx.isNonEmployee ? 'Wnioskowany okres zasiłku' : 'Wnioskowany okres',
+        value: `${formatPolishDate(item.startDate)}–${formatPolishDate(item.endDate)}${duration ? ` (${duration})` : ''}`,
       });
     }
+
+    if (item.relatedParentalRange) {
+      const { start, end, weeksLabel } = item.relatedParentalRange;
+      fields.push({
+        label: 'Łącznie z pełnym rodzicielskim',
+        value: `${formatPolishDate(start)}–${formatPolishDate(end)}${weeksLabel ? ` (${weeksLabel})` : ''}`,
+      });
+    }
+
+    if (item.partNumber !== null) {
+      const partLabel =
+        item.partTotal > 1
+          ? `Część ${item.partNumber} z ${item.partTotal} (limit w puli: maks. ${params.parentalLeave.maxParts} części)`
+          : `Część 1 z 1 (limit w puli: maks. ${params.parentalLeave.maxParts} części)`;
+      fields.push({
+        label: parentCtx.isNonEmployee ? 'Część okresu rodzicielskiego' : 'Część urlopu',
+        value: partLabel,
+      });
+    }
+
+    if (item.workFraction > 0) {
+      const workDesc = formatWorkFraction(item.workFraction);
+      fields.push({
+        label: 'Łączenie urlopu z pracą',
+        value: `Tak – wymiar pracy ${workDesc} (maks. ${formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)}; zasiłek pomniejszony proporcjonalnie)`,
+      });
+      if (item.workExtensionStart && item.workExtensionEnd && item.startDate) {
+        const extDuration = formatDurationRange(
+          item.workExtensionStart,
+          item.workExtensionEnd,
+          daysPerWeek,
+        );
+        const totalDuration = formatDurationRange(
+          item.startDate,
+          item.workExtensionEnd,
+          daysPerWeek,
+        );
+        fields.push({
+          label: 'Proporcjonalne wydłużenie urlopu',
+          value: `${formatPolishDate(item.workExtensionStart)}–${formatPolishDate(item.workExtensionEnd)}${extDuration ? ` (+${extDuration})` : ''}${totalDuration ? `, łącznie ${totalDuration}` : ''}`,
+        });
+      }
+    }
+
+    const rateInfo = rateAndVariantDescription(item, documents, effectiveInput, params);
+    if (rateInfo) {
+      fields.push({ label: 'Wariant i stawka zasiłku', value: rateInfo });
+    }
+
     if (doc.deadline) {
       fields.push({
         label: 'Termin złożenia',
         value: `${formatPolishDate(doc.deadline)}${doc.is_overdue ? ' (Termin minął)' : ''}`,
       });
     }
+
     fields.push({
       label: 'Załączniki',
-      value: attachmentsForApplication(doc, documents),
+      value: attachmentsForApplication(item, documents),
     });
+
     return fields;
   }
 
-  function sendOne(doc: CaseDocument) {
+  function sendOne(item: ApplicationItem) {
+    const { doc } = item;
     if (!doc.submit_to) return;
-    const code = applicationCode(doc);
-    const missing = findMissing(requiredFieldsForApplication(doc));
+    const code = applicationCode(item, params);
+    const missing = findMissing(requiredFieldsForApplication(item));
     if (missing.length > 0) {
       setInvalidFields(missing);
       setStatusMessage(null);
       setValidationError(
         `Aby wysłać wniosek ${code}, uzupełnij dane osobowe: ${missing
-          .map((item) => PERSONAL_FIELD_LABELS[item])
+          .map((field) => PERSONAL_FIELD_LABELS[field])
           .join(', ')}.`,
       );
       focusFirst(missing);
       return;
     }
 
-    const key = documentKey(doc);
     const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
     const seq = String(Object.keys(receipts).length + 1).padStart(3, '0');
     const ref = `UPO-${refYear}-${cleanCode}-${seq}`;
-    const recipient = recipientFull(doc.submit_to);
+    const recipient = recipientFull(item, params);
 
     setInvalidFields([]);
     setValidationError(null);
     setReceipts((prev) => ({
       ...prev,
-      [key]: {
+      [item.key]: {
         referenceNumber: ref,
         sentAt: formatPolishDate(todayIso),
         recipient,
@@ -1020,12 +1756,12 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
   }
 
   function sendAll() {
-    const pending = forms.filter((doc) => doc.submit_to !== null && !receipts[documentKey(doc)]);
+    const pending = forms.filter((item) => item.doc.submit_to !== null && !receipts[item.key]);
     if (pending.length === 0) return;
 
     const requiredSet = new Set<PersonalFieldKey>();
-    for (const doc of pending) {
-      for (const field of requiredFieldsForApplication(doc)) {
+    for (const item of pending) {
+      for (const field of requiredFieldsForApplication(item)) {
         requiredSet.add(field);
       }
     }
@@ -1035,7 +1771,7 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
       setStatusMessage(null);
       setValidationError(
         `Aby wysłać wszystkie wnioski, uzupełnij dane osobowe: ${missing
-          .map((item) => PERSONAL_FIELD_LABELS[item])
+          .map((field) => PERSONAL_FIELD_LABELS[field])
           .join(', ')}.`,
       );
       focusFirst(missing);
@@ -1043,33 +1779,81 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
     }
 
     const nextReceipts: Record<string, SentReceipt> = { ...receipts };
+    const refs: string[] = [];
     let seq = Object.keys(receipts).length + 1;
-    for (const doc of pending) {
-      const code = applicationCode(doc);
+    for (const item of pending) {
+      const code = applicationCode(item, params);
       const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      nextReceipts[documentKey(doc)] = {
-        referenceNumber: `UPO-${refYear}-${cleanCode}-${String(seq).padStart(3, '0')}`,
+      const ref = `UPO-${refYear}-${cleanCode}-${String(seq).padStart(3, '0')}`;
+      refs.push(ref);
+      nextReceipts[item.key] = {
+        referenceNumber: ref,
         sentAt: formatPolishDate(todayIso),
-        recipient: recipientFull(doc.submit_to),
+        recipient: recipientFull(item, params),
         applicantName: trimmedName,
       };
       seq += 1;
     }
 
-    const skippedCount = forms.filter((doc) => doc.submit_to === null).length;
+    const skippedCount = forms.filter((item) => item.doc.submit_to === null).length;
+    const refSummary =
+      refs.length === 1 ? ` (${refs[0]})` : ` (${refs[0]} … ${refs[refs.length - 1]})`;
     setInvalidFields([]);
     setValidationError(null);
     setReceipts(nextReceipts);
     setStatusMessage(
       skippedCount > 0
-        ? `Zakończono symulację wysyłki ${pending.length} wniosków. Pozostałe (${skippedCount}) wymagają ustalenia płatnika.`
-        : `Zakończono symulację wysyłki pakietu ${pending.length} wniosków.`,
+        ? `Zakończono symulację wysyłki ${pending.length} wniosków${refSummary}. Pozostałe (${skippedCount}) wymagają ustalenia płatnika.`
+        : `Zakończono symulację wysyłki pakietu ${pending.length} wniosków${refSummary}.`,
     );
   }
 
-  const sendableForms = forms.filter((doc) => doc.submit_to !== null);
-  const allSent =
-    sendableForms.length > 0 && sendableForms.every((doc) => Boolean(receipts[documentKey(doc)]));
+  const sendableForms = forms.filter((item) => item.doc.submit_to !== null);
+  const remainingSendable = sendableForms.filter((item) => !receipts[item.key]);
+  const allSent = sendableForms.length > 0 && remainingSendable.length === 0;
+  const anyNonEmployee = forms.some((item) => item.parentCtx.isNonEmployee);
+  const anyEmployee = forms.some((item) => item.parentCtx.isEmployee);
+  const hasTwoParents =
+    new Set(forms.filter((item) => !item.sharedWithBothParents).map((item) => item.doc.parent_role))
+      .size > 1;
+
+  const deadlineItems = forms
+    .filter((item) => item.doc.deadline !== null)
+    .sort((a, b) => (a.doc.deadline ?? '').localeCompare(b.doc.deadline ?? ''));
+  const nearestDeadline =
+    deadlineItems.find((item) => !item.doc.is_overdue) ?? deadlineItems[0] ?? null;
+  const hasOverdue = deadlineItems.some((item) => item.doc.is_overdue);
+
+  const uniqueAddressees = Array.from(
+    new Set(
+      forms
+        .map((item): string | null => {
+          if (item.doc.submit_to === 'EMPLOYER') {
+            return item.parentCtx.isNonEmployee ? 'płatnika składek' : 'pracodawcy';
+          }
+          if (item.doc.submit_to === 'ZUS') return 'ZUS';
+          if (item.doc.submit_to === 'USC') return 'USC';
+          return null;
+        })
+        .filter((value): value is string => value !== null),
+    ),
+  );
+
+  const introSummaryParts: string[] = [
+    `Przygotowaliśmy ${forms.length === 1 ? '1 wniosek' : `${forms.length} wniosków`}${
+      uniqueAddressees.length > 0 ? ` (do: ${uniqueAddressees.join(', ')})` : ''
+    }.`,
+  ];
+  if (nearestDeadline?.doc.deadline) {
+    introSummaryParts.push(
+      `${nearestDeadline.doc.is_overdue ? 'Uwaga – termin minął' : 'Najbliższy termin'}: ${formatPolishDate(nearestDeadline.doc.deadline)} (${applicationTitle(nearestDeadline, params)}).`,
+    );
+  }
+  if (anyNonEmployee && !anyEmployee) {
+    introSummaryParts.push(
+      'Przy umowie zlecenia lub JDG składasz formularze ZUS (ZAM / ZAS-53), a nie wnioski o urlop z Kodeksu pracy.',
+    );
+  }
 
   return (
     <div className="plan-tab-content">
@@ -1081,10 +1865,12 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
             <h3 id="apps-intro-heading" className="plan-section__title">
               Gotowe wnioski do wysłania
             </h3>
-            <p className="apps-intro__lead">
-              Na podstawie Twojego planu przygotowaliśmy listę wymaganych wniosków. Uzupełnij dane
-              osobowe poniżej i wyślij je razem lub pojedynczo (wysyłka jest symulowana).
-            </p>
+            <p className="apps-intro__lead">{introSummaryParts.join(' ')}</p>
+            {hasOverdue && (
+              <p className="docs-compact-item__overdue">
+                Co najmniej jeden termin złożenia wniosku już minął – sprawdź daty poniżej.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -1092,7 +1878,11 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
             disabled={allSent || sendableForms.length === 0}
             onClick={sendAll}
           >
-            {allSent ? 'Wszystkie wnioski wysłane' : `Wyślij wszystkie (${sendableForms.length}) ›`}
+            {allSent
+              ? 'Wszystkie wnioski wysłane'
+              : remainingSendable.length === sendableForms.length
+                ? `Wyślij wszystkie (${sendableForms.length}) ›`
+                : `Wyślij pozostałe (${remainingSendable.length}) ›`}
           </button>
         </div>
       </section>
@@ -1109,37 +1899,56 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         </h3>
 
         <div className="apps-compact-list">
-          {forms.map((doc) => {
-            const key = documentKey(doc);
-            const code = applicationCode(doc);
-            const receipt = receipts[key];
-            const fields = buildFields(doc);
+          {forms.map((item) => {
+            const { doc } = item;
+            const code = applicationCode(item, params);
+            const title = applicationTitle(item, params);
+            const receipt = receipts[item.key];
+            const fields = buildFields(item);
+            const legalNote = applicationLegalNote(item);
+            const verificationNote = applicationVerificationNote(item, params);
+            const parentBadge = item.sharedWithBothParents
+              ? 'Matka / Ojciec'
+              : parentLabels[doc.parent_role];
+            const duration = formatDurationRange(item.startDate, item.endDate, daysPerWeek);
+
             return (
-              <article key={key} className={receipt ? 'apps-card apps-card--sent' : 'apps-card'}>
+              <article
+                key={item.key}
+                className={receipt ? 'apps-card apps-card--sent' : 'apps-card'}
+              >
                 <div className="apps-card__header">
                   <div className="apps-card__info">
                     <div className="apps-card__badges">
                       <span className="plan-badge plan-badge--code">{code}</span>
-                      <span className="plan-badge plan-badge--navy">
-                        {parentLabels[doc.parent_role]}
-                      </span>
+                      <span className="plan-badge plan-badge--navy">{parentBadge}</span>
                       <span
                         className={
-                          receipt ? 'plan-badge plan-badge--yes' : 'plan-badge plan-badge--navy'
+                          receipt
+                            ? 'plan-badge plan-badge--yes'
+                            : doc.submit_to
+                              ? 'plan-badge plan-badge--navy'
+                              : 'plan-badge plan-badge--no'
                         }
                       >
                         {receipt ? 'Wysłano' : doc.submit_to ? 'Do wysłania' : 'Uzupełnij płatnika'}
                       </span>
                     </div>
-                    <h4 className="apps-card__title">{doc.name_pl}</h4>
+                    <h4 className="apps-card__title">{title}</h4>
                     <p className="apps-card__recipient">
-                      Do: <strong>{recipientShort(doc.submit_to)}</strong>
-                      {doc.start_date && doc.end_date && (
+                      Do: <strong>{recipientShort(item)}</strong>
+                      {item.startDate && item.endDate && (
                         <>
                           {' · '}Okres:{' '}
                           <strong>
-                            {formatPolishDate(doc.start_date)}–{formatPolishDate(doc.end_date)}
+                            {formatPolishDate(item.startDate)}–{formatPolishDate(item.endDate)}
                           </strong>
+                          {duration && <> ({duration})</>}
+                        </>
+                      )}
+                      {item.workFraction > 0 && (
+                        <>
+                          {' · '}Praca: <strong>{formatWorkFraction(item.workFraction)}</strong>
                         </>
                       )}
                       {doc.deadline && (
@@ -1160,8 +1969,8 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
                     <button
                       type="button"
                       className="plan-btn plan-btn--secondary apps-card__action"
-                      aria-label={`Wyślij ${doc.name_pl} (${parentLabels[doc.parent_role]})`}
-                      onClick={() => sendOne(doc)}
+                      aria-label={`Wyślij ${title} (${parentBadge})`}
+                      onClick={() => sendOne(item)}
                     >
                       Wyślij ›
                     </button>
@@ -1197,17 +2006,34 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
                         </div>
                       ))}
                     </dl>
-                    <p className="plan-legal">Kanał: {applicationChannel(doc)}</p>
-                    <p className="plan-legal">Podstawa prawna: {applicationLegalNote(doc)}</p>
+                    {doc.id === 'PARENTAL_REQUEST' &&
+                      item.parentCtx.isEmployee &&
+                      item.partNumber === 1 &&
+                      documents.some(
+                        (d) => d.id === 'COMBINED_RATE' && d.parent_role === doc.parent_role,
+                      ) && (
+                        <p className="apps-preview__subtitle">
+                          Jeśli wniosek złożony do {params.combinedRateApplicationDeadlineDays} dni
+                          po porodzie obejmował od razu pełny urlop rodzicielski bezpośrednio po
+                          macierzyńskim, ten wniosek dotyczy tylko sytuacji dzielenia urlopu lub
+                          zmiany terminu.
+                        </p>
+                      )}
+                    <p className="plan-legal">Kanał: {applicationChannel(item)}</p>
+                    <p className="plan-legal">Podstawa prawna: {legalNote}</p>
+                    {verificationNote && <p className="plan-legal">{verificationNote}</p>}
                     <div>
                       <button
                         type="button"
                         className="plan-btn plan-btn--secondary"
                         onClick={() =>
                           setPreviewModal({
-                            title: `${doc.name_pl} (${parentLabels[doc.parent_role]})`,
-                            recipient: recipientFull(doc.submit_to),
+                            title: `${title} (${parentBadge})`,
+                            recipient: recipientFull(item, params),
+                            code,
                             fields: fields.map(({ label, value }) => ({ label, value })),
+                            legalNote,
+                            verificationNote: verificationNote ?? undefined,
                           })
                         }
                       >
@@ -1229,6 +2055,8 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         <p className="apps-personal-note">
           Dane osobowe uzupełnisz po zalogowaniu przez mObywatela (symulacja) albo wpiszesz ręcznie
           – nie wysyłamy ich na serwer.
+          {hasTwoParents &&
+            ' W planie obojga rodziców każdy rodzic składa własne wnioski na swoje dane.'}
         </p>
 
         {validationError && (
@@ -1314,7 +2142,10 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         <ApplicationPreview
           title={previewModal.title}
           recipient={previewModal.recipient}
+          code={previewModal.code}
           fields={previewModal.fields}
+          legalNote={previewModal.legalNote}
+          verificationNote={previewModal.verificationNote}
           onClose={() => setPreviewModal(null)}
         />
       )}

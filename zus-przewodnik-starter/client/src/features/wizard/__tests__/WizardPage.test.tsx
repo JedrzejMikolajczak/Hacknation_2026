@@ -192,8 +192,10 @@ describe('family wizard', () => {
     await view.choice('Mama zmarła');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
+    // Mama zmarła: nie pytamy o jej plany; dziecko ma ponad 21 dni, więc 81,5% jest niedostępne.
+    expect(screen.queryByRole('radio', { name: /^81,5%/ })).not.toBeInTheDocument();
     await view.choice('Tak');
-    await view.choice('Jeszcze nie wiemy – pokażcie porównanie');
+    await view.choice(/^100%, a potem 70%/);
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
@@ -208,7 +210,7 @@ describe('family wizard', () => {
       childDeathDate: null,
       motherDeceased: true,
     });
-    expect(stored).not.toHaveProperty('rateVariant');
+    expect(stored.rateVariant).toBe('standard');
   });
 
   it('after a stillbirth skips hospital, „Za życiem” and rate questions and records it', async () => {
