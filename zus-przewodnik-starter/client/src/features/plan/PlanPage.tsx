@@ -265,6 +265,7 @@ export function PlanPage() {
                     scenario={effectiveScenario}
                     params={bundle.params}
                     maternity={bundle.maternity}
+                    usingApi={bundle.usingApi}
                   />
                 )}
                 {activeTab === 'documents' && (
