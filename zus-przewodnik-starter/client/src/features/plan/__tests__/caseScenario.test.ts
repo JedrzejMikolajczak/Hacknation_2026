@@ -46,6 +46,49 @@ const bothParentsDraft: ScenarioDraft = {
 };
 
 describe('wizardCase', () => {
+  it('planuje przejęcie macierzyńskiego od dnia po zgonie mamy', () => {
+    const input = wizardCase(
+      {
+        ...bothParentsDraft,
+        mother: null,
+        motherDeathDate: '2026-11-15',
+        special: { motherDeceased: true },
+      },
+      params,
+    )!;
+    const plan = calculateCasePlan(input, params);
+    expect(input).toMatchObject({ applicant_role: 'FATHER', father_takeover_date: '2026-11-16' });
+    expect(plan.outcome.periods).toContainEqual(
+      expect.objectContaining({
+        parent_role: 'FATHER',
+        leave_type: 'MATERNITY',
+        start_date: '2026-11-16',
+      }),
+    );
+    expect(plan.outcome.periods.some((period) => period.parent_role === 'MOTHER')).toBe(false);
+    expect(plan.documents).toContainEqual(
+      expect.objectContaining({
+        parent_role: 'FATHER',
+        id: 'TAKEOVER',
+        start_date: '2026-11-16',
+        deadline: null,
+      }),
+    );
+    const periods = [...plan.outcome.periods].sort((a, b) =>
+      a.start_date.localeCompare(b.start_date),
+    );
+    expect(periods.map((period) => period.leave_type)).toEqual([
+      'MATERNITY',
+      'PATERNITY',
+      'PARENTAL',
+    ]);
+    expect(
+      periods.every(
+        (period, index) => index === 0 || periods[index - 1].end_date < period.start_date,
+      ),
+    ).toBe(true);
+  });
+
   it('dla obojga rodziców tworzy okresy matki i ojca (9 tyg. 70% + 2 tyg. ojcowskiego 100%) oraz 81,5% z terminem', () => {
     const input = wizardCase(bothParentsDraft, params);
     expect(input).not.toBeNull();

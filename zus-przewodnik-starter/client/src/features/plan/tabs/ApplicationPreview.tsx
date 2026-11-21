@@ -6,10 +6,19 @@ interface ApplicationPreviewProps {
   title: string;
   recipient: string;
   fields: { label: string; value: string }[];
+  attachments: string[];
+  legalBasis: string;
   onClose: () => void;
 }
 
-export function ApplicationPreview({ title, recipient, fields, onClose }: ApplicationPreviewProps) {
+export function ApplicationPreview({
+  title,
+  recipient,
+  fields,
+  attachments,
+  legalBasis,
+  onClose,
+}: ApplicationPreviewProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
 
@@ -42,6 +51,17 @@ export function ApplicationPreview({ title, recipient, fields, onClose }: Applic
           </div>
         ))}
       </dl>
+      <h3>Załączniki</h3>
+      {attachments.length > 0 ? (
+        <ul>
+          {attachments.map((attachment) => (
+            <li key={attachment}>{attachment}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>Brak wymaganych załączników.</p>
+      )}
+      <p>{legalBasis}</p>
       <footer>
         <button type="button" className="plan-btn plan-btn--primary" onClick={() => window.print()}>
           Drukuj lub zapisz PDF

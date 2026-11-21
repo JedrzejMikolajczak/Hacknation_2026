@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import type { BenefitParams, CaseDocument } from '@shared/types';
+import type { ApplicantRole, BenefitParams, CaseDocument, CaseInputs, CasePeriod } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
 import { parentLabels, roles } from '../caseLabels';
 import { diffDaysIso, formatPolishDate, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
+import { leaveApplication } from './leaveApplication';
 import './DocumentsTab.css';
 import './ApplicationsTab.css';
 import './CasePaperwork.css';
@@ -106,7 +107,9 @@ function describeDocumentDetails(
     case 'SUPPLEMENTARY_REQUEST':
       return `Jednorazowy wniosek składany najpóźniej ${deadlines.supplementaryMaternityLeave} dni przed zakończeniem podstawowego urlopu macierzyńskiego wraz z zaświadczeniem ze szpitala.`;
     case 'TAKEOVER':
-      return `Wniosek ojca o przejęcie części urlopu macierzyńskiego składa się co najmniej ${deadlines.fatherTakeoverPart} dni przed planowanym rozpoczęciem.`;
+      return doc.deadline
+        ? `Wniosek ojca o przejęcie części urlopu macierzyńskiego składa się co najmniej ${deadlines.fatherTakeoverPart} dni przed planowanym rozpoczęciem.`
+        : 'Sprawdź wymagane oświadczenia i załączniki w zakładce Wnioski.';
     case 'ADOPTION_LEAVE':
       return `Wniosek pracownika o urlop na warunkach urlopu macierzyńskiego składany w ciągu ${deadlines.fosterFamilyAfterAcceptance} dni od przyjęcia dziecka.`;
     default:
@@ -729,9 +732,9 @@ export function CaseDocuments({
 type PersonalFieldKey = 'name' | 'pesel' | 'bank';
 
 const PERSONAL_FIELD_LABELS: Record<PersonalFieldKey, string> = {
-  name: 'imię i nazwisko',
+  name: 'Imię i nazwisko',
   pesel: 'PESEL',
-  bank: 'numer rachunku bankowego',
+  bank: 'Numer rachunku',
 };
 
 const APPLICATION_IDS = new Set([
@@ -758,7 +761,7 @@ function applicationCode(doc: CaseDocument): string {
 }
 
 function requiredFieldsForApplication(doc: CaseDocument): PersonalFieldKey[] {
-  if (doc.id === 'USC_COPY') return ['name'];
+  if (doc.id === 'USC_COPY' || leaveApplication(doc, null, [], {})) return ['name'];
   if (doc.id === 'ZAM' || doc.id === 'ZAS-53') return ['name', 'pesel', 'bank'];
   return ['name', 'pesel'];
 }
@@ -784,9 +787,9 @@ function applicationChannel(doc: CaseDocument): string {
   return 'Uzupełnij dane płatnika, aby określić kanał złożenia';
 }
 
-function applicationLegalNote(doc: CaseDocument): string {
-  if (doc.submit_to === 'EMPLOYER' && doc.id !== 'ZAM') {
-    return `${doc.legal_basis}; Rozporządzenie MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322)`;
+function applicationLegalNote(doc: CaseDocument, section?: string): string {
+  if (section) {
+    return `${section} rozporządzenia MRPiPS z 11.03.2025 r. (Dz.U. z 2025 r. poz. 322). ${doc.legal_basis}`;
   }
   if (doc.id === 'ZAM' || doc.id === 'ZAS-53') {
     return `${doc.legal_basis}; Rozporządzenie MRPiPS z 27.09.2026 r. (Dz.U. z 2026 r. poz. 1316)`;
@@ -801,26 +804,6 @@ function attachmentsForApplication(doc: CaseDocument, allDocuments: CaseDocument
 
   if (doc.id === 'USC_COPY') {
     return 'Brak załączników – wniosek o odpis skrócony do celów zasiłkowych (bez opłaty skarbowej).';
-  }
-  if (doc.id === 'SUPPLEMENTARY_REQUEST') {
-    return 'Zaświadczenie ze szpitala o okresie hospitalizacji, tygodniu ciąży i masie urodzeniowej dziecka (poz. 322).';
-  }
-  if (doc.id === 'PARENTAL_REQUEST') {
-    const items = [
-      'skrócony odpis aktu urodzenia dziecka',
-      'oświadczenie o liczbie wykorzystanych części i braku jednoczesnego przekroczenia puli przez drugiego rodzica (poz. 322)',
-    ];
-    if (hasZaZyciem) items.push('zaświadczenie lekarskie „Za życiem” (art. 4 ust. 3)');
-    return items.join('; ') + '.';
-  }
-  if (doc.id === 'PATERNITY_REQUEST') {
-    return 'Skrócony odpis aktu urodzenia dziecka oraz oświadczenie ojca o niewykorzystaniu pełnego wymiaru urlopu ojcowskiego (poz. 322).';
-  }
-  if (doc.id === 'TAKEOVER') {
-    return 'Skrócony odpis aktu urodzenia dziecka, kopia wniosku/rezygnacji matki lub dokument potwierdzający podstawę wcześniejszego przejęcia (poz. 322).';
-  }
-  if (doc.id === 'ADOPTION_LEAVE') {
-    return 'Oświadczenie o dacie przyjęcia dziecka oraz zaświadczenie sądu o wystąpieniu o przysposobienie albo orzeczenie o rodzinie zastępczej (poz. 322).';
   }
   if (doc.id === 'COMBINED_RATE') {
     const items = ['skrócony odpis aktu urodzenia dziecka'];
@@ -860,23 +843,28 @@ interface PreviewModalState {
   title: string;
   recipient: string;
   fields: { label: string; value: string }[];
+  attachments: string[];
+  legalBasis: string;
 }
 
-export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
-  const { search } = useLocation();
-  const { scenario } = useScenario();
-  const [name, setName] = useState('');
-  const [pesel, setPesel] = useState('');
-  const [bank, setBank] = useState('');
+export function CaseApplications({
+  documents,
+  input = null,
+  periods = [],
+}: {
+  documents: CaseDocument[];
+  input?: CaseInputs | null;
+  periods?: CasePeriod[];
+}) {
+  const { pathname, search } = useLocation();
+  const { scenario, simulatedIdentities } = useScenario();
+  const [personal, setPersonal] = useState<Partial<Record<ApplicantRole, Partial<Record<PersonalFieldKey, string>>>>>({});
+  const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
   const [receipts, setReceipts] = useState<Record<string, SentReceipt>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [invalidFields, setInvalidFields] = useState<PersonalFieldKey[]>([]);
+  const [invalidField, setInvalidField] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<PreviewModalState | null>(null);
-
-  const nameRef = useRef<HTMLInputElement>(null);
-  const peselRef = useRef<HTMLInputElement>(null);
-  const bankRef = useRef<HTMLInputElement>(null);
 
   const forms = documents.filter(isActionableApplication);
   const wizardHref = scenario.situation ? `/wizard?situation=${scenario.situation}` : '/wizard';
@@ -909,66 +897,41 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
     );
   }
 
-  const trimmedName = name.trim();
-  const trimmedPesel = pesel.trim();
-  const trimmedBank = bank.trim();
   const todayIso = todayIsoDate();
   const refYear = todayIso.slice(0, 4);
   const daysPerWeek = DEFAULT_PARAMS.calendar.daysPerWeek;
 
-  function findMissing(required: PersonalFieldKey[]): PersonalFieldKey[] {
-    const missing: PersonalFieldKey[] = [];
-    if (required.includes('name') && !trimmedName) missing.push('name');
-    if (required.includes('pesel') && !trimmedPesel) missing.push('pesel');
-    if (required.includes('bank') && !trimmedBank) missing.push('bank');
-    return missing;
+  function personalValue(role: ApplicantRole, field: PersonalFieldKey) {
+    const imported = field === 'bank' ? '' : simulatedIdentities[role]?.[field];
+    return personal[role]?.[field] ?? imported ?? '';
   }
 
-  function focusFirst(missing: PersonalFieldKey[]) {
-    const first = missing[0];
-    if (first === 'name') nameRef.current?.focus();
-    else if (first === 'pesel') peselRef.current?.focus();
-    else if (first === 'bank') bankRef.current?.focus();
+  function personalId(role: ApplicantRole, field: PersonalFieldKey) {
+    return 'application-' + role + '-' + field;
   }
 
-  function clearError(field: PersonalFieldKey) {
-    if (!invalidFields.includes(field)) return;
-    const next = invalidFields.filter((item) => item !== field);
-    setInvalidFields(next);
-    if (next.length === 0) setValidationError(null);
+  function applicationDetails(doc: CaseDocument) {
+    const draft = answers[documentKey(doc)] ?? {};
+    return leaveApplication(doc, input, periods, draft);
   }
 
-  function buildFields(doc: CaseDocument): { label: string; value: string; missing?: boolean }[] {
-    const required = requiredFieldsForApplication(doc);
-    const fields: { label: string; value: string; missing?: boolean }[] = [
+  function buildFields(doc: CaseDocument) {
+    const fields = [
       { label: 'Wnioskodawca (rola)', value: parentLabels[doc.parent_role] },
-      {
-        label: 'Imię i nazwisko',
-        value: trimmedName || 'Do uzupełnienia',
-        missing: !trimmedName,
-      },
+      ...requiredFieldsForApplication(doc).map((field) => ({
+        label: PERSONAL_FIELD_LABELS[field],
+        value: personalValue(doc.parent_role, field).trim(),
+      })),
     ];
-    if (required.includes('pesel')) {
-      fields.push({
-        label: 'PESEL',
-        value: trimmedPesel || 'Do uzupełnienia',
-        missing: !trimmedPesel,
-      });
-    }
-    if (required.includes('bank')) {
-      fields.push({
-        label: 'Numer rachunku do wypłaty',
-        value: trimmedBank || 'Do uzupełnienia',
-        missing: !trimmedBank,
-      });
-    }
-    fields.push({ label: 'Adresat', value: recipientFull(doc.submit_to) });
     if (doc.start_date && doc.end_date) {
       const duration = formatDurationNote(doc, daysPerWeek);
-      fields.push({
-        label: 'Wnioskowany okres',
-        value: `${formatPolishDate(doc.start_date)}–${formatPolishDate(doc.end_date)}${duration ? ` (${duration})` : ''}`,
-      });
+      const start = formatPolishDate(doc.start_date);
+      const startOnly = doc.id === 'PRE_BIRTH_REQUEST' ||
+        (doc.id === 'TAKEOVER' && (input?.special_circumstances.mother_deceased ||
+          answers[documentKey(doc)]?.takeoverBasis === 'hospital'));
+      fields.push(startOnly
+        ? { label: 'Data rozpoczęcia urlopu', value: start }
+        : { label: 'Wnioskowany okres', value: `${start}–${formatPolishDate(doc.end_date)}${duration ? ` (${duration})` : ''}` });
     }
     if (doc.deadline) {
       fields.push({
@@ -976,95 +939,65 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         value: `${formatPolishDate(doc.deadline)}${doc.is_overdue ? ' (Termin minął)' : ''}`,
       });
     }
-    fields.push({
-      label: 'Załączniki',
-      value: attachmentsForApplication(doc, documents),
-    });
     return fields;
   }
 
-  function sendOne(doc: CaseDocument) {
-    if (!doc.submit_to) return;
-    const code = applicationCode(doc);
-    const missing = findMissing(requiredFieldsForApplication(doc));
-    if (missing.length > 0) {
-      setInvalidFields(missing);
-      setStatusMessage(null);
-      setValidationError(
-        `Aby wysłać wniosek ${code}, uzupełnij dane osobowe: ${missing
-          .map((item) => PERSONAL_FIELD_LABELS[item])
-          .join(', ')}.`,
-      );
-      focusFirst(missing);
-      return;
-    }
-
-    const key = documentKey(doc);
-    const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-    const seq = String(Object.keys(receipts).length + 1).padStart(3, '0');
-    const ref = `UPO-${refYear}-${cleanCode}-${seq}`;
-    const recipient = recipientFull(doc.submit_to);
-
-    setInvalidFields([]);
+  function clearError() {
+    setInvalidField(null);
     setValidationError(null);
-    setReceipts((prev) => ({
-      ...prev,
-      [key]: {
-        referenceNumber: ref,
-        sentAt: formatPolishDate(todayIso),
-        recipient,
-        applicantName: trimmedName,
-      },
-    }));
-    setStatusMessage(`Zakończono symulację złożenia wniosku ${code} do: ${recipient} (${ref}).`);
   }
 
-  function sendAll() {
-    const pending = forms.filter((doc) => doc.submit_to !== null && !receipts[documentKey(doc)]);
-    if (pending.length === 0) return;
+  function showError(id: string, message: string) {
+    setStatusMessage(null);
+    setInvalidField(id);
+    setValidationError(message);
+    const element = document.getElementById(id);
+    element?.closest('details')?.setAttribute('open', '');
+    element?.focus();
+  }
 
-    const requiredSet = new Set<PersonalFieldKey>();
+  function send(requested: CaseDocument[]) {
+    const pending = requested.filter((doc) => doc.submit_to && !receipts[documentKey(doc)]);
+    if (!pending.length) return;
+
     for (const doc of pending) {
+      const role = doc.parent_role;
       for (const field of requiredFieldsForApplication(doc)) {
-        requiredSet.add(field);
+        const value = personalValue(role, field).trim();
+        const valid = field === 'pesel' ? /^\d{11}$/.test(value) : field === 'bank' ? /^\d{26}$/.test(value) : !!value;
+        if (!valid) {
+          showError(personalId(role, field), `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`);
+          return;
+        }
+      }
+      const key = documentKey(doc);
+      for (const field of applicationDetails(doc)?.fields ?? []) {
+        const value = (field.value ?? answers[key]?.[field.id] ?? '').trim();
+        if (!value || (field.type === 'number' && !/^\d+$/.test(value))) {
+          showError(`${key}-${field.id}`, `Uzupełnij pole „${field.label}” we wniosku „${doc.name_pl}”.`);
+          return;
+        }
       }
     }
-    const missing = findMissing(Array.from(requiredSet));
-    if (missing.length > 0) {
-      setInvalidFields(missing);
-      setStatusMessage(null);
-      setValidationError(
-        `Aby wysłać wszystkie wnioski, uzupełnij dane osobowe: ${missing
-          .map((item) => PERSONAL_FIELD_LABELS[item])
-          .join(', ')}.`,
-      );
-      focusFirst(missing);
-      return;
-    }
 
-    const nextReceipts: Record<string, SentReceipt> = { ...receipts };
+    const nextReceipts = { ...receipts };
     let seq = Object.keys(receipts).length + 1;
     for (const doc of pending) {
-      const code = applicationCode(doc);
-      const cleanCode = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const code = applicationCode(doc).replace(/[^A-Z0-9]/gi, '').toUpperCase();
       nextReceipts[documentKey(doc)] = {
-        referenceNumber: `UPO-${refYear}-${cleanCode}-${String(seq).padStart(3, '0')}`,
+        referenceNumber: `UPO-${refYear}-${code}-${String(seq).padStart(3, '0')}`,
         sentAt: formatPolishDate(todayIso),
         recipient: recipientFull(doc.submit_to),
-        applicantName: trimmedName,
+        applicantName: personalValue(doc.parent_role, 'name').trim(),
       };
       seq += 1;
     }
-
-    const skippedCount = forms.filter((doc) => doc.submit_to === null).length;
-    setInvalidFields([]);
-    setValidationError(null);
+    clearError();
     setReceipts(nextReceipts);
-    setStatusMessage(
-      skippedCount > 0
-        ? `Zakończono symulację wysyłki ${pending.length} wniosków. Pozostałe (${skippedCount}) wymagają ustalenia płatnika.`
-        : `Zakończono symulację wysyłki pakietu ${pending.length} wniosków.`,
-    );
+    const skipped = requested.filter((doc) => doc.submit_to === null).length;
+    setStatusMessage(skipped
+      ? `Zakończono symulację wysyłki ${pending.length} wniosków. Pozostałe (${skipped}) wymagają ustalenia płatnika.`
+      : `Zakończono symulację wysyłki ${requested.length === 1 ? 'wniosku' : `pakietu ${pending.length} wniosków`}.`);
   }
 
   const sendableForms = forms.filter((doc) => doc.submit_to !== null);
@@ -1079,18 +1012,18 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
         <div className="apps-intro__top">
           <div className="apps-intro__copy">
             <h3 id="apps-intro-heading" className="plan-section__title">
-              Gotowe wnioski do wysłania
+              Przygotuj wnioski
             </h3>
             <p className="apps-intro__lead">
-              Na podstawie Twojego planu przygotowaliśmy listę wymaganych wniosków. Uzupełnij dane
-              osobowe poniżej i wyślij je razem lub pojedynczo (wysyłka jest symulowana).
+              Uzupełnij dane wnioskodawców, a potem rozwiń wnioski, aby wpisać wymagane informacje
+              i sprawdzić załączniki. Wysyłka jest symulowana.
             </p>
           </div>
           <button
             type="button"
             className="plan-btn plan-btn--primary apps-intro__cta"
             disabled={allSent || sendableForms.length === 0}
-            onClick={sendAll}
+            onClick={() => send(forms)}
           >
             {allSent ? 'Wszystkie wnioski wysłane' : `Wyślij wszystkie (${sendableForms.length}) ›`}
           </button>
@@ -1114,6 +1047,9 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
             const code = applicationCode(doc);
             const receipt = receipts[key];
             const fields = buildFields(doc);
+            const details = applicationDetails(doc);
+            const attachments = details?.attachments ?? [attachmentsForApplication(doc, documents)];
+            const legalBasis = applicationLegalNote(doc, details?.section);
             return (
               <article key={key} className={receipt ? 'apps-card apps-card--sent' : 'apps-card'}>
                 <div className="apps-card__header">
@@ -1161,7 +1097,7 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
                       type="button"
                       className="plan-btn plan-btn--secondary apps-card__action"
                       aria-label={`Wyślij ${doc.name_pl} (${parentLabels[doc.parent_role]})`}
-                      onClick={() => sendOne(doc)}
+                      onClick={() => send([doc])}
                     >
                       Wyślij ›
                     </button>
@@ -1191,14 +1127,49 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
                       {fields.map((field) => (
                         <div key={field.label}>
                           <dt>{field.label}</dt>
-                          <dd className={field.missing ? 'apps-preview__empty-value' : undefined}>
-                            {field.value}
+                          <dd className={!field.value ? 'apps-preview__empty-value' : undefined}>
+                            {field.value || 'Do uzupełnienia'}
                           </dd>
                         </div>
                       ))}
                     </dl>
+                    {details?.fields.map((field) => {
+                      const id = `${key}-${field.id}`;
+                      const value = field.value ?? answers[key]?.[field.id] ?? '';
+                      const update = (value: string) => {
+                        setAnswers((current) => ({
+                          ...current,
+                          [key]: { ...current[key], [field.id]: value },
+                        }));
+                        clearError();
+                      };
+                      return field.value !== undefined ? (
+                        <p key={id} className="plan-legal"><strong>{field.label}</strong><br />{value}</p>
+                      ) : (
+                        <label key={id} className="plan-field">
+                          <span className="plan-field__label">{field.label}</span>
+                          {field.options ? (
+                            <select id={id} className="plan-field__input" aria-invalid={invalidField === id}
+                              value={value} onChange={(event) => update(event.target.value)}>
+                              <option value="">Wybierz odpowiedź</option>
+                              {field.options.map((option) => (
+                                <option value={option.value} key={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input id={id} className="plan-field__input" aria-invalid={invalidField === id}
+                              type={field.type ?? 'text'} min={field.type === 'number' ? 0 : undefined}
+                              autoComplete="off" value={value} onChange={(event) => update(event.target.value)} />
+                          )}
+                        </label>
+                      );
+                    })}
+                    <p className="plan-field__label">Załączniki</p>
+                    {attachments.length > 0 ? (
+                      <ul>{attachments.map((item) => <li key={item}>{item}</li>)}</ul>
+                    ) : <p>Brak wymaganych załączników.</p>}
                     <p className="plan-legal">Kanał: {applicationChannel(doc)}</p>
-                    <p className="plan-legal">Podstawa prawna: {applicationLegalNote(doc)}</p>
+                    <p className="plan-legal">Podstawa prawna: {legalBasis}</p>
                     <div>
                       <button
                         type="button"
@@ -1207,7 +1178,18 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
                           setPreviewModal({
                             title: `${doc.name_pl} (${parentLabels[doc.parent_role]})`,
                             recipient: recipientFull(doc.submit_to),
-                            fields: fields.map(({ label, value }) => ({ label, value })),
+                            fields: [
+                              ...fields,
+                              ...(details?.fields.map((field) => {
+                                const value = field.value ?? answers[key]?.[field.id] ?? '';
+                                return {
+                                  label: field.label,
+                                  value: field.options?.find((option) => option.value === value)?.label ?? value,
+                                };
+                              }) ?? []),
+                            ],
+                            attachments,
+                            legalBasis,
                           })
                         }
                       >
@@ -1227,9 +1209,13 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
           Dane osobowe do wniosków
         </h3>
         <p className="apps-personal-note">
-          Dane osobowe uzupełnisz po zalogowaniu przez mObywatela (symulacja) albo wpiszesz ręcznie
-          – nie wysyłamy ich na serwer.
+          Imię i nazwisko oraz PESEL uzupełnisz po zalogowaniu przez mObywatela (symulacja) lub ręcznie.
+          Dane są używane tylko w bieżącej sesji przeglądarki.
         </p>
+        <Link to="/login" state={{ returnTo: `${pathname}${search}` }}
+          className="plan-btn plan-btn--secondary">
+          Pobierz dane z mObywatela (symulacja)
+        </Link>
 
         {validationError && (
           <div className="plan-callout plan-callout--warning apps-validation-alert" role="alert">
@@ -1237,71 +1223,40 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
           </div>
         )}
 
-        <div className="plan-controls__grid">
-          <label className="plan-field">
-            <span className="plan-field__label">Imię i nazwisko</span>
-            <input
-              ref={nameRef}
-              type="text"
-              autoComplete="off"
-              className={
-                invalidFields.includes('name')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz imię i nazwisko"
-              aria-invalid={invalidFields.includes('name') || undefined}
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                clearError('name');
-              }}
-            />
-          </label>
-
-          <label className="plan-field">
-            <span className="plan-field__label">PESEL</span>
-            <input
-              ref={peselRef}
-              type="text"
-              autoComplete="off"
-              inputMode="numeric"
-              className={
-                invalidFields.includes('pesel')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz 11-cyfrowy numer PESEL"
-              aria-invalid={invalidFields.includes('pesel') || undefined}
-              value={pesel}
-              onChange={(event) => {
-                setPesel(event.target.value);
-                clearError('pesel');
-              }}
-            />
-          </label>
-
-          <label className="plan-field">
-            <span className="plan-field__label">Numer rachunku</span>
-            <input
-              ref={bankRef}
-              type="text"
-              autoComplete="off"
-              className={
-                invalidFields.includes('bank')
-                  ? 'plan-field__input apps-field-error'
-                  : 'plan-field__input'
-              }
-              placeholder="Wpisz 26-cyfrowy numer rachunku"
-              aria-invalid={invalidFields.includes('bank') || undefined}
-              value={bank}
-              onChange={(event) => {
-                setBank(event.target.value);
-                clearError('bank');
-              }}
-            />
-          </label>
-        </div>
+        {roles.map((role) => {
+          const fields = [...new Set(forms.filter((doc) => doc.parent_role === role)
+            .flatMap(requiredFieldsForApplication))];
+          if (!fields.length) return null;
+          return (
+            <fieldset key={role} className="plan-section">
+              <legend>{parentLabels[role]}</legend>
+              <div className="plan-controls__grid">
+                {fields.map((field) => {
+                  const id = personalId(role, field);
+                  return (
+                    <label key={field} className="plan-field">
+                      <span className="plan-field__label">{PERSONAL_FIELD_LABELS[field]}</span>
+                      <input id={id} type="text" autoComplete="off"
+                        inputMode={field === 'name' ? undefined : 'numeric'}
+                        className={invalidField === id ? 'plan-field__input apps-field-error' : 'plan-field__input'}
+                        aria-invalid={invalidField === id || undefined}
+                        value={personalValue(role, field)}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setPersonal((current) => ({
+                            ...current,
+                            [role]: { ...current[role], [field]: value },
+                          }));
+                          clearError();
+                        }}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          );
+        })}
       </section>
 
       <nav className="apps-next-nav" aria-label="Następny krok planu">
@@ -1315,6 +1270,8 @@ export function CaseApplications({ documents }: { documents: CaseDocument[] }) {
           title={previewModal.title}
           recipient={previewModal.recipient}
           fields={previewModal.fields}
+          attachments={previewModal.attachments}
+          legalBasis={previewModal.legalBasis}
           onClose={() => setPreviewModal(null)}
         />
       )}

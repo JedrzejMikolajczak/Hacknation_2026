@@ -13,9 +13,10 @@ Kreator zbiera dane rodziny do późniejszego sprawdzania uprawnień, wyliczeń 
 - Ubezpieczenie: pytania zależą od formy zatrudnienia każdego rodzica. Podstawa wymiaru jest opcjonalna; formularz nie utożsamia jej z wynagrodzeniem.
 - Po porodzie: pytanie o szczególne okoliczności (martwe urodzenie, zgon dziecka z datą). Po stracie dziecka formularz pomija pytania o szpital, „Za życiem” i wariant stawki.
 - „Za życiem” jest zadawane w ciąży i po porodzie. Gdy w planie jest tata, formularz pyta o sytuację mamy (szpital, niezdolność do samodzielnej egzystencji, a po porodzie także zgon).
+- Pobyt mamy w szpitalu i orzeczenie można wskazać jednocześnie. Po wskazaniu zgonu kreator pyta o jego datę i przechodzi do danych taty. Wcześniejsze odpowiedzi o ubezpieczeniu, urlopie i kwotach mamy są usuwane ze szkicu.
 - Umowa o pracę i zlecenie: liczba osób zgłaszanych przez płatnika (kto wypłaca zasiłek). Mama na umowie o pracę: wiek (wynagrodzenie chorobowe) oraz, w ciąży i po porodzie, upadłość lub likwidacja pracodawcy.
 - Mama z ubezpieczeniem chorobowym, w ciąży lub po porodzie: zwolnienie lekarskie w ciąży – od kiedy i czy trwało (potrwa) do porodu, a jeśli nie – do kiedy.
-- Plany i kwoty: gdy podstawa wymiaru jest nieznana – przeciętne wynagrodzenie brutto i wynagrodzenie z umowy (umowa o pracę, zlecenie) albo zadeklarowana podstawa składek (JDG). Na końcu wariant stawki (81,5% albo 100% + 70%).
+- Plany i kwoty: gdy podstawa wymiaru jest nieznana – przeciętne wynagrodzenie brutto i wynagrodzenie z umowy (umowa o pracę, zlecenie) albo zadeklarowana podstawa składek (JDG). Dla nowego wniosku 81,5% można wybrać do końca 21. dnia od porodu lub przyjęcia dziecka. Później kreator wybiera stawki rozdzielone i pokazuje datę upływu terminu.
 
 Jedno główne pytanie jest wyświetlane na ekranie. Pasek postępu odnosi się do pięciu stałych etapów: rodzina, dziecko, ubezpieczenie, plany i kwoty, podsumowanie. Rozwinięcie pytań dodatkowych nie zmienia liczby etapów. Podsumowanie pozwala edytować dowolną odpowiedź; nowo wymagane pytania trzeba uzupełnić przed zapisaniem.
 

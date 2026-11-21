@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BenefitParams } from '@shared/types';
 import paramsJson from '@shared/params.json';
-import { buildScenario, changeAnswer, getQuestions, validateAnswer } from '../wizardModel';
+import { buildScenario, changeAnswer, getQuestions, todayLocal, validateAnswer } from '../wizardModel';
+import { addDaysIso } from '../../plan/planScenario';
 
 const ids = (...args: Parameters<typeof getQuestions>) =>
   getQuestions(...args).map((question) => question.id);
@@ -161,6 +162,38 @@ describe('conditional family paths', () => {
     });
     expect(draft.mother).toMatchObject({ employerInsuredCount: 12, age: null });
     expect(draft.special).not.toHaveProperty('employerBankruptcyOrLiquidation');
+  });
+
+  it('accepts hospital and incapacity together and drops obsolete answers after maternal death', () => {
+    const answers = {
+      family: 'both',
+      motherSituation: 'hospitalized,incapable',
+      'mother.insuranceTitle': 'employment',
+      'mother.wantsLeave': 'yes',
+      rateVariant: 'combined',
+    };
+    const situation = getQuestions('afterBirth', answers).find((item) => item.id === 'motherSituation')!;
+    expect(validateAnswer(situation, answers.motherSituation)).toBeNull();
+    expect(validateAnswer(situation, 'deceased,hospitalized')).not.toBeNull();
+    expect(buildScenario('afterBirth', answers).special).toMatchObject({
+      motherHospitalized: true,
+      motherIncapableOfIndependentLiving: true,
+    });
+    const changed = changeAnswer('afterBirth', answers, 'motherSituation', 'deceased');
+    expect(changed).toEqual({ family: 'both', motherSituation: 'deceased' });
+    expect(ids('afterBirth', changed)).toContain('father.wantsLeave');
+    expect(buildScenario('afterBirth', changed).mother).toBeNull();
+  });
+
+  it('offers the combined rate until the last day and replaces a stale choice on day 22', () => {
+    const deadline = (paramsJson as BenefitParams).combinedRateApplicationDeadlineDays;
+    const onTime = { family: 'motherOnly', birthDate: addDaysIso(todayLocal(), -deadline), rateVariant: 'combined' };
+    const late = changeAnswer('afterBirth', onTime, 'birthDate', addDaysIso(onTime.birthDate, -1));
+    expect(buildScenario('afterBirth', onTime).rateVariant).toBe('combined');
+    expect(late.rateVariant).toBe('standard');
+    const rate = getQuestions('afterBirth', late).find((item) => item.id === 'rateVariant')!;
+    expect(validateAnswer(rate, 'combined')).not.toBeNull();
+    expect(buildScenario('afterBirth', { ...late, rateVariant: 'combined' }).rateVariant).toBe('standard');
   });
 
   it('builds benefit base input from earnings only when the base is unknown', () => {

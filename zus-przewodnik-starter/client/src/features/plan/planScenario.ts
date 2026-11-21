@@ -1,4 +1,4 @@
-import type { IsoDate } from '@shared/types';
+import type { BenefitParams, CaseInputs, IsoDate } from '@shared/types';
 
 export const PLAN_TABS = [
   { id: 'entitlements', label: 'Uprawnienia' },
@@ -31,6 +31,26 @@ export function addDaysIso(iso: IsoDate, days: number): IsoDate {
 
 export function diffDaysIso(from: IsoDate, to: IsoDate): number {
   return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+}
+
+export function combinedRateUnavailable(input: CaseInputs, params: BenefitParams): boolean {
+  if (
+    input.special_circumstances.mother_deceased ||
+    (input.applicant_role === 'FATHER' && input.stage !== 'ADOPTION')
+  )
+    return true;
+  if (input.stage !== 'ADOPTION' && input.stage !== 'POST_BIRTH') return false;
+  const event =
+    input.stage === 'ADOPTION'
+      ? input.adopted_or_foster_child_acceptance_date
+      : input.due_or_birth_date;
+  if (!event) return false;
+  const filing = input.application_to_payer_date ?? input.application_date;
+  const elapsed = filing ? diffDaysIso(event, filing) : input.days_from_birth_to_application;
+  return elapsed === null
+    ? !!input.reference_date &&
+        input.reference_date > addDaysIso(event, params.combinedRateApplicationDeadlineDays)
+    : elapsed < 0 || elapsed > params.combinedRateApplicationDeadlineDays;
 }
 
 const PLN = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' });

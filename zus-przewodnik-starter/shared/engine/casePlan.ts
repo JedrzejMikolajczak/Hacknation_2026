@@ -77,6 +77,19 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
   const deadline = event
     ? endOfYearChildTurnsAge(event, parentalLeave.deadlineChildTurnsAgeYears)
     : null;
+  const paternityEnd = event
+    ? addDays(
+        addMonths(
+          event,
+          adoption
+            ? paternityLeave.adoptionDeadlineMonthsFromAdoption
+            : paternityLeave.deadlineChildAgeMonths,
+        ),
+        -1,
+      )
+    : null;
+  const paternityDays = paternityLeave.weeks * week;
+  let paternityStart = input.paternity_leave_start_date;
   const warnings = insuranceRisks(input, params);
   const validation_errors: CaseWarning[] = [];
   const periods: CasePeriod[] = [];
@@ -109,7 +122,11 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
 
   const plans = input.parental_leave_parts;
   const firstPart = [...(plans ?? [])].sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
-  const rightOn = input.parental_only ? (firstPart?.start_date ?? input.application_date) : event;
+  const rightOn = input.parental_only
+    ? (firstPart?.start_date ?? input.application_date)
+    : role === 'FATHER' && motherDeceased
+      ? (input.father_takeover_date ?? event)
+      : event;
   const denial = rightOn
     ? ((adoption ? adoptionDenial(input, params) : null) ?? applicantDenial(input, rightOn, params))
     : 'Uzupełnij datę zdarzenia i dane ubezpieczenia.';
@@ -126,8 +143,16 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
   const combinedDeadline = event
     ? addDays(event, params.combinedRateApplicationDeadlineDays)
     : null;
+  const missedCombinedDeadline =
+    elapsed === null &&
+    combinedDeadline !== null &&
+    !!input.reference_date &&
+    (input.stage === 'POST_BIRTH' || adoption) &&
+    input.reference_date > combinedDeadline;
   const withinCombinedDeadline =
-    elapsed === null || (elapsed >= 0 && elapsed <= params.combinedRateApplicationDeadlineDays);
+    elapsed === null
+      ? !missedCombinedDeadline
+      : elapsed >= 0 && elapsed <= params.combinedRateApplicationDeadlineDays;
   const eligibleCombined = canUseCombined && withinCombinedDeadline;
   const variant =
     input.requested_payment_variant === COMBINED && eligibleCombined ? COMBINED : SPLIT;
@@ -145,10 +170,10 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         code: 'COMBINED_RATE_DEADLINE',
         legal_basis: KP.combined,
         message_pl:
-          elapsed !== null &&
-          elapsed > params.combinedRateApplicationDeadlineDays &&
+          (missedCombinedDeadline ||
+            (elapsed !== null && elapsed > params.combinedRateApplicationDeadlineDays)) &&
           combinedDeadline
-            ? `Wniosek złożono po terminie ${params.combinedRateApplicationDeadlineDays} dni (termin upłynął ${formatDatePl(combinedDeadline)}). Zastosowano wariant ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}.`
+            ? `Termin ${params.combinedRateApplicationDeadlineDays} dni na wniosek upłynął ${formatDatePl(combinedDeadline)}. Zastosowano wariant ${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}.`
             : `Dla podanych danych obowiązują stawki odrębne (${formatPercentPl(rates.maternity)} i ${formatPercentPl(rates.parental)}). Sprawdź termin ${params.combinedRateApplicationDeadlineDays} dni u właściwego płatnika.`,
       });
     }
@@ -237,12 +262,21 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         KP.maternity,
       );
     } else if (motherDeceased && !adoption) {
+      const start = input.father_takeover_date ?? maturityStart;
       const fatherQualifiedForTakeover =
-        role === 'FATHER' ? !denial : otherInsuredOn(maturityStart) === true;
+        role === 'FATHER' ? !denial : otherInsuredOn(start) === true;
+      const end = addDays(maturityStart, length.days - 1);
+      parentalStart = addDays(end, 1);
       if (fatherQualifiedForTakeover) {
-        const end = addDays(maturityStart, length.days - 1);
-        put('MATERNITY', maturityStart, length.days, 'FATHER', rates.maternity, KP.maternity);
-        parentalStart = addDays(end, 1);
+        put(
+          'MATERNITY',
+          start,
+          daysBetween(start, end) + 1,
+          'FATHER',
+          rates.maternity,
+          KP.maternity,
+        );
+        parentalStart = parentalStart < start ? start : parentalStart;
         if (living > 0 && input.special_circumstances.premature_or_hospitalized_newborn) {
           const supplementary = supplementaryDays(input, event, end, params);
           parentalStart = put(
@@ -340,6 +374,27 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
     }
   }
 
+  if (
+    motherDeceased &&
+    role === 'FATHER' &&
+    !plans &&
+    !denial &&
+    living > 0 &&
+    input.father_takeover_date &&
+    paternityStart &&
+    paternityEnd &&
+    parentalStart &&
+    addDays(paternityStart, paternityDays - 1) >= input.father_takeover_date
+  ) {
+    // Ojcowski przypada po przejętym macierzyńskim i przed automatycznie planowanym rodzicielskim.
+    paternityStart = paternityStart < parentalStart ? parentalStart : paternityStart;
+    if (
+      addDays(paternityStart, paternityDays - 1) <= paternityEnd &&
+      !applicantDenial(input, paternityStart, params)
+    )
+      parentalStart = addDays(paternityStart, paternityDays);
+  }
+
   if (parentalStart && deadline && pool > 0) {
     const existingPeriods = periods.length;
     const workValid = (work: number, parent: ApplicantRole) =>
@@ -370,7 +425,8 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         }
         const extra = extendedDays(days, work);
         const end = addDays(part.end_date, extra);
-        const earliest = input.parental_only || role === 'FATHER' ? event! : parentalStart;
+        const earliest =
+          input.parental_only || (role === 'FATHER' && !motherDeceased) ? event! : parentalStart;
         if (
           days <= 0 ||
           part.start_date < earliest ||
@@ -526,27 +582,29 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
     if (validation_errors.length) periods.splice(existingPeriods);
   }
 
-  const paternityEnd = event
-    ? addDays(
-        addMonths(
-          event,
-          adoption
-            ? paternityLeave.adoptionDeadlineMonthsFromAdoption
-            : paternityLeave.deadlineChildAgeMonths,
-        ),
-        -1,
-      )
-    : null;
-  const paternityStart = input.paternity_leave_start_date;
   const fatherInsured =
-    role === 'FATHER' ? !denial : otherInsuredOn(paternityStart ?? event) === true;
+    role === 'FATHER'
+      ? motherDeceased && paternityStart
+        ? !applicantDenial(input, paternityStart, params)
+        : !denial
+      : otherInsuredOn(paternityStart ?? event) === true;
   if (paternityStart) {
+    const start = paternityStart;
+    const end = addDays(start, paternityDays - 1);
+    const overlaps =
+      motherDeceased &&
+      input.father_takeover_date &&
+      periods.some(
+        (period) =>
+          period.parent_role === 'FATHER' && start <= period.end_date && end >= period.start_date,
+      );
     if (
       !event ||
       !paternityEnd ||
       fosterFamily ||
       paternityStart < event ||
-      addDays(paternityStart, paternityLeave.weeks * week - 1) > paternityEnd ||
+      end > paternityEnd ||
+      overlaps ||
       !fatherInsured ||
       !living ||
       (adoption &&
@@ -557,22 +615,21 @@ export function calculateCasePlan(input: CaseInputs, params: BenefitParams): Cas
         'PATERNITY_DATES',
         fosterFamily
           ? 'Urlop ojcowski nie przysługuje w ramach rodziny zastępczej.'
-          : 'Sprawdź ubezpieczenie ojca i termin wykorzystania ojcowskiego.',
+          : overlaps
+            ? 'Urlop ojcowski nie może pokrywać się z innym urlopem taty.'
+            : 'Sprawdź ubezpieczenie ojca i termin wykorzystania ojcowskiego.',
         KP.paternity,
       );
-    } else
-      put(
-        'PATERNITY',
-        paternityStart,
-        paternityLeave.weeks * week,
-        'FATHER',
-        rates.paternity,
-        KP.paternity,
-      );
+    } else put('PATERNITY', paternityStart, paternityDays, 'FATHER', rates.paternity, KP.paternity);
   }
   const sickness = sicknessPeriods(input, input.parental_only ? null : maturityStart, params);
   periods.unshift(...sickness.sickness);
-  const documents = documentsForPlan(input, periods, event, params);
+  const documents = documentsForPlan(
+    { ...input, requested_payment_variant: variant },
+    periods,
+    event,
+    params,
+  );
   const subject = periods.filter((period) => period.parent_role === role && !period.denied);
   const maternity = subject.filter((period) => period.leave_type !== 'SICKNESS');
   const counted = maternity.length ? maternity : subject;

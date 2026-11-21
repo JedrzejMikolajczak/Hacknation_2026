@@ -39,7 +39,7 @@ function renderWizard(situation = 'pregnant') {
   const user = userEvent.setup();
   const next = () => user.click(screen.getByRole('button', { name: /^Dalej/ }));
   const choice = async (name: string | RegExp) => {
-    await user.click(screen.getByRole('radio', { name }));
+    await user.click(screen.queryByRole('radio', { name }) ?? screen.getByRole('checkbox', { name }));
     await next();
   };
   const skip = async () => {
@@ -177,9 +177,9 @@ describe('family wizard', () => {
     ).toBe('unknown');
   });
 
-  it('completes the postbirth path for a single father without inventing a mother', async () => {
+  it('completes the surviving father’s path after starting a joint family plan', async () => {
     const view = renderWizard('afterBirth');
-    await view.choice(/^Samodzielnie — tata/);
+    await view.choice(/^Dwoje rodziców/);
     await view.input('2026-01-10');
     await view.input('1');
     await view.choice('Nie dotyczy');
@@ -190,14 +190,16 @@ describe('family wizard', () => {
     await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
     await view.choice('Mama zmarła');
+    await view.input('2026-01-14');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     await view.choice('Tak');
-    await view.choice('Jeszcze nie wiemy – pokażcie porównanie');
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    expect(screen.queryByText('Plan urlopu mamy')).not.toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
     expect(stored.mother).toBeNull();
+    expect(stored.motherDeathDate).toBe('2026-01-14');
     expect(stored.father).toMatchObject({ role: 'father', wantsLeave: true });
     expect(stored.special).toMatchObject({
       pregnancyWeekAtBirth: 35,

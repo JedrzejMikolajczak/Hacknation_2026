@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { CaseDocument } from '@shared/types';
 import { ScenarioProvider } from '../../../../app/ScenarioContext';
+import { LoginPage } from '../../../login/LoginPage';
 import { CaseApplications, CaseDocuments } from '../CasePaperwork';
 
 function renderWithRouter(ui: React.ReactElement, initialEntry = '/plan/documents?case=case-04') {
@@ -181,21 +182,33 @@ describe('CaseApplications', () => {
     // Brak wymyślonych danych osobowych
     expect(screen.queryByText(/Anna Przykładowa/i)).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('00000000000')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Imię i nazwisko')).toHaveValue('');
-    expect(screen.getByLabelText('PESEL')).toHaveValue('');
-    expect(screen.getByLabelText('Numer rachunku')).toHaveValue('');
+    const mother = within(screen.getByRole('group', { name: 'Matka' }));
+    const father = within(screen.getByRole('group', { name: 'Ojciec' }));
+    expect(mother.getByLabelText('Imię i nazwisko')).toHaveValue('');
+    expect(father.getByLabelText('Imię i nazwisko')).toHaveValue('');
+    expect(mother.getByLabelText('PESEL')).toHaveValue('');
+    expect(mother.getByLabelText('Numer rachunku')).toHaveValue('');
+    expect(father.queryByLabelText('PESEL')).not.toBeInTheDocument();
 
     // Walidacja przy pustych polach
     fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
-    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/i);
 
     // Uzupełnienie i symulowana wysyłka wszystkich
-    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), {
+    fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Janina Nowak' },
     });
-    fireEvent.change(screen.getByLabelText('PESEL'), { target: { value: '90010112345' } });
-    fireEvent.change(screen.getByLabelText('Numer rachunku'), {
+    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '90010112345' } });
+    fireEvent.change(mother.getByLabelText('Numer rachunku'), {
       target: { value: '12345678901234567890123456' },
+    });
+    fireEvent.change(father.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Nowak' } });
+    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/dotychczas wykorzystanego urlopu/);
+    fireEvent.change(screen.getByLabelText(/Okres dotychczas/), { target: { value: 'Nie korzystałem' } });
+    fireEvent.change(screen.getByLabelText(/Liczba wykorzystanych/), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/Oświadczenie pracownika o urlopie/), {
+      target: { value: 'Drugi rodzic nie korzysta w tym okresie.' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
     expect(screen.getByRole('status')).toHaveTextContent(/Zakończono symulację wysyłki pakietu/);
@@ -205,5 +218,33 @@ describe('CaseApplications', () => {
     expect(screen.getAllByText(/Dz\.U\. z 2025 r\. poz\. 322/).length).toBeGreaterThan(0);
     const nextLink = screen.getByRole('link', { name: 'Dalej: Wsparcie ›' });
     expect(nextLink).toHaveAttribute('href', '/plan/support?case=case-04');
+  });
+
+  it('przenosi dane testowe mObywatela tylko do wybranego wnioskodawcy i drukuje załączniki', () => {
+    render(
+      <MemoryRouter initialEntries={['/plan/applications?case=case-04']}>
+        <ScenarioProvider>
+          <Routes>
+            <Route path="/plan/applications" element={<CaseApplications documents={sampleDocuments} />} />
+            <Route path="/login" element={<LoginPage />} />
+          </Routes>
+        </ScenarioProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Pobierz dane z mObywatela (symulacja)' }));
+    fireEvent.change(screen.getByLabelText('Wnioskodawca'), { target: { value: 'FATHER' } });
+    fireEvent.change(screen.getByLabelText('Imię i nazwisko'), { target: { value: 'Jan Testowy' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Przekaż dane testowe' }));
+    expect(within(screen.getByRole('group', { name: 'Ojciec' })).getByLabelText('Imię i nazwisko'))
+      .toHaveValue('Jan Testowy');
+    expect(within(screen.getByRole('group', { name: 'Matka' })).getByLabelText('Imię i nazwisko'))
+      .toHaveValue('');
+    const card = screen.getByRole('heading', { name: 'Wniosek o okres rodzicielskiego' }).closest('article')!;
+    fireEvent.click(within(card).getByText('Podgląd wniosku'));
+    fireEvent.click(within(card).getByRole('button', { name: 'Drukuj lub zapisz PDF' }));
+    const preview = within(screen.getByRole('dialog'));
+    expect(preview.getByText('Jan Testowy')).toBeInTheDocument();
+    expect(preview.getByText(/Skrócony odpis aktu urodzenia/)).toBeInTheDocument();
+    expect(preview.getByText(/§ 15 rozporządzenia/)).toBeInTheDocument();
   });
 });
