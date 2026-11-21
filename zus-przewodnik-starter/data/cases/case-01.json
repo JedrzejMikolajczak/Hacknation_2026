@@ -58,12 +58,7 @@
     "granted_duration_days": 532,
     "granted_duration_weeks": 76,
     "calculated_amount_pln": null,
-    "mapped_forms_2026": [
-      "Z-3",
-      "ZAS-12",
-      "e-ZLA",
-      "ZAM"
-    ],
+    "mapped_forms_2026": ["Z-3", "ZAS-12", "e-ZLA", "ZAM"],
     "legal_basis_cited": [
       "art. 92 Kodeksu pracy",
       "art. 180 § 1 pkt 1 Kodeksu pracy",

@@ -34,10 +34,7 @@
       "is_professional_foster_family": false
     },
     "pregnancy_week_at_birth": "28+5",
-    "birth_weight_grams": [
-      1150,
-      1290
-    ],
+    "birth_weight_grams": [1150, 1290],
     "newborn_hospitalization_start": "2025-07-20",
     "newborn_hospitalization_end": "2025-11-02",
     "application_to_payer_date": "2025-08-04"
@@ -51,11 +48,7 @@
     "granted_duration_days": 679,
     "granted_duration_weeks": 97,
     "calculated_amount_pln": null,
-    "mapped_forms_2026": [
-      "Z-3",
-      "POG",
-      "ZAM"
-    ],
+    "mapped_forms_2026": ["Z-3", "POG", "ZAM"],
     "legal_basis_cited": [
       "art. 180 § 1 pkt 2 Kodeksu pracy",
       "art. 180(2) § 1 pkt 2 Kodeksu pracy",
