@@ -134,6 +134,37 @@ Frontend woła API **tylko** przez `client/src/api/client.ts` (jedno miejsce z `
 - Funkcje AI oznaczone komponentem `<AiBadge />`.
 - Teksty dla użytkownika: prosty, empatyczny polski; przy trudnych sytuacjach (śmierć dziecka) bez wykrzykników i bez „gratulacji”.
 
+### 7.1 Wygląd: zgodny z www.zus.pl
+
+Aplikacja ma wyglądać jak część serwisu ZUS, żeby jury i użytkownik od razu rozpoznali „urzędowy” styl zus.pl.
+**Jedyne źródło wartości:** `client/src/styles/tokens.css`. W CSS komponentów używaj tylko zmiennych `var(--...)`, bez wpisanych kolorów, odstępów i fontów.
+
+| Element | Jak na zus.pl | Token |
+|---|---|---|
+| Font | **Lato** 400 / 700 (lokalnie w `client/public/fonts`, bez Google Fonts) | `--font-family-base` |
+| Tło | białe; sekcje wyróżnione szarym pasem `#f3f3f3` | `--color-bg`, `--color-surface-muted` |
+| Tekst, nagłówki | prawie czarne `#1a1a1a`, nagłówki pogrubione; tekst pomocniczy `#4d4d4d` | `--color-text`, `--color-text-muted` |
+| Zieleń ZUS | `#007834`: ikony, akcenty, zaznaczenie; linki `#11783b`; hover `#025a28` | `--color-primary`, `--color-link`, `--color-primary-hover` |
+| Granat ZUS | `#00416e`: przyciski drugorzędne, etykiety informacyjne | `--color-navy` |
+| Pomarańcz ZUS | `#fab856`: **tylko** tło głównego CTA z granatowym tekstem (jak „Zaloguj do PUE/eZUS”) | `--color-cta`, `--color-on-cta` |
+| Błąd | `#cd0000` | `--color-error` |
+| Pasy | gruby zielony pas 7 px (karty, stopka, wyróżnienia), szary pas 8 px pod nagłówkiem | `--accent-bar-width`, `--divider-bar-width` |
+| Promienie | 3 px (przyciski, kafelki); bez „pigułek” poza znacznikami okrągłymi | `--radius-sm/md/lg` |
+| Fokus | pomarańczowy obrys 3 px + granatowa obwódka | `--color-focus`, `--focus-ring-shadow` |
+| Ikony | liniowe, zielone, inline SVG (bez bibliotek ikon) | `--icon-size-*` |
+
+**Przyciski (wzór z nagłówka zus.pl):**
+- główny (`.button--primary`): pomarańczowe tło, granatowy tekst, strzałka „›”; hover: granatowe tło, pomarańczowy tekst;
+- drugorzędny (`.button--secondary`): biały, granatowa ramka i tekst, strzałka „›”; hover: granatowe tło, biały tekst;
+- na telefonie na pełną szerokość, cel klikalny ≥ 44×44 px.
+
+**Zasady:**
+- Bez gradientów, bez dużych cieni, bez animacji poza subtelnym hover/focus (respektuj `prefers-reduced-motion`).
+- WCAG 2.1 AA ma pierwszeństwo przed zgodnością kolorów: tekst ≥ 4.5:1, granice kontrolek ≥ 3:1. Pomarańczu `#fab856` **nie używaj** jako koloru tekstu ani jedynego obrysu na białym (1.7:1).
+- **Nie kopiuj logo ZUS, godła ani grafik z zus.pl** i nie udawaj oficjalnego serwisu: przejmujemy tylko styl (kolory, typografię, układ). Etykieta „Wersja demonstracyjna – dane i logowanie są symulowane” zostaje na stronie startowej.
+- Nowy kolor lub rozmiar? Najpierw dodaj token w `tokens.css` (z komentarzem o kontraście), dopiero potem go użyj.
+- Wzorcowa implementacja: `client/src/features/landing/` (kafelki, przyciski, pasy, stopka).
+
 ## 8. Backend
 
 - `server/src/routes/*.ts` → walidacja (zod) → wywołanie `shared/engine` → koperta.
@@ -158,3 +189,4 @@ Frontend woła API **tylko** przez `client/src/api/client.ts` (jedno miejsce z `
 |---|---|---|
 | 2026-11-21 | Wersja początkowa | zespół |
 | 2026-11-21 | Dodano GET /api/v1/health – endpoint techniczny | JedrzejMikolajczak |
+| 2026-11-21 | Dodano §7.1 Wygląd: zgodność z www.zus.pl (tokeny w `client/src/styles/tokens.css`) | JedrzejMikolajczak |
