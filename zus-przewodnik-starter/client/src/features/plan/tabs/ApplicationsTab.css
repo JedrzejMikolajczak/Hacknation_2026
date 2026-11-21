@@ -1,0 +1,270 @@
+/*
+ * Zakładka „Wnioski” – styl zgodny z www.zus.pl (CONVENTIONS §7.1).
+ * Wyłącznie tokeny z client/src/styles/tokens.css; mobile-first (640 / 1024 px).
+ */
+
+.apps-intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+}
+
+.apps-intro__top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.apps-intro__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.apps-intro__lead {
+  color: var(--color-text);
+}
+
+.apps-intro__cta {
+  width: 100%;
+}
+
+/* Kompaktowe karty wniosków */
+.apps-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.apps-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-top: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.apps-card--sent {
+  border-color: var(--color-primary);
+}
+
+.apps-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.apps-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.apps-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.apps-card__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.apps-card__recipient {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.apps-card__recipient strong {
+  color: var(--color-text);
+}
+
+.apps-card__action {
+  width: 100%;
+}
+
+.apps-card__receipt {
+  padding: var(--space-3);
+  border: var(--border-width-control) solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.apps-card__receipt-title {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+/* Podgląd wniosku w <details> */
+.apps-preview {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.apps-preview__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  list-style: none;
+  cursor: pointer;
+}
+
+.apps-preview__summary::-webkit-details-marker {
+  display: none;
+}
+
+.apps-preview__summary::after {
+  content: '▸';
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.apps-preview[open] > .apps-preview__summary::after {
+  content: '▾';
+}
+
+.apps-preview__summary:hover {
+  color: var(--color-primary-hover);
+}
+
+.apps-preview__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.apps-preview__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.apps-preview__fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.apps-preview__fields dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.apps-preview__fields dd {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.apps-preview__empty-value {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+/* Dane osobowe */
+.apps-personal-note {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.apps-field-error {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.apps-validation-alert {
+  margin-bottom: var(--space-4);
+}
+
+/* Nawigacja do kolejnego kroku */
+.apps-next-nav {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+}
+
+.apps-next-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width-control) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.apps-next-link:hover {
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+@media (min-width: 640px) {
+  .apps-intro__top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .apps-intro__cta {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .apps-card__header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .apps-card__action {
+    flex-shrink: 0;
+    width: auto;
+  }
+
+  .apps-preview__fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .apps-next-link {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apps-next-link,
+  .apps-preview__summary {
+    transition: none;
+  }
+}

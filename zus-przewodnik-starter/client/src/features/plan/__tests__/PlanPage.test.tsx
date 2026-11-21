@@ -385,24 +385,68 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(screen.getByText(/Powrót do pracy po tej części:/i)).toBeInTheDocument();
   });
 
-  it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy oraz pokazuje płatnika i terminy', async () => {
-    const { user } = renderPlan('/plan/documents?zatrudnienie=uop&porod=2026-11-10&platnik=12');
+  it('pozwala odhaczać dokumenty w zakładce Dokumenty i terminy, pokazuje płatnika dla rodziców, najbliższy krok i link dalej', async () => {
+    window.localStorage.clear();
+    const bothParentsDraft: ScenarioDraft = {
+      situation: 'afterBirth',
+      referenceDate: '2026-11-21',
+      birthDate: '2026-11-10',
+      childrenCount: 1,
+      rateVariant: 'combined',
+      mother: {
+        role: 'mother',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2020-01-01',
+        benefitBase: 6903.2,
+        employerInsuredCount: 150,
+        wantsLeave: true,
+      },
+      father: {
+        role: 'father',
+        insuranceTitle: 'employment',
+        sicknessInsurance: 'mandatory',
+        insuredSince: '2019-01-01',
+        benefitBase: 5000,
+        employerInsuredCount: 10,
+        wantsLeave: true,
+      },
+      special: {},
+    };
+
+    const { user } = renderPlan('/plan/documents?situation=afterBirth', bothParentsDraft);
+
+    expect(screen.getByRole('heading', { level: 2, name: /Co zrobić teraz/i })).toBeInTheDocument();
+    expect(screen.getByText(/Następny krok:/i)).toBeInTheDocument();
+    expect(screen.getByText(/U pracodawcy \(wypłaca zasiłek\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/W ZUS \(najwygodniej przez PUE\/eZUS\)/i)).toBeInTheDocument();
 
     expect(
-      screen.getByRole('heading', { level: 2, name: /Lista dokumentów do skompletowania/i }),
+      screen.getByRole('heading', { level: 2, name: /Lista dokumentów/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Skompletowano: 0 z/i)).toBeInTheDocument();
 
     const checkboxes = screen.getAllByRole('checkbox');
     await user.click(checkboxes[0]);
     expect(screen.getByText(/Skompletowano: 1 z/i)).toBeInTheDocument();
-    // 2026-11-10 + 21 dni = 01.12.2026
+
+    // Najbliższy termin wyróżniony (2026-11-10 + 21 dni = 01.12.2026), pozostałe na liście (09.03.2027)
+    expect(screen.getByText(/Najbliższy termin/i)).toBeInTheDocument();
     expect(screen.getAllByText(/01\.12\.2026/i).length).toBeGreaterThanOrEqual(1);
-    // Urlop rodzicielski: 2026-11-10 + 140 dni - 21 dni = 09.03.2027
     expect(screen.getAllByText(/09\.03\.2027/i).length).toBeGreaterThanOrEqual(1);
+
+    // Uwagi i podstawy prawne zwinięte w <details>
+    const detailSummaries = screen.getAllByText(/Szczegóły i wskazówki/i);
+    expect(detailSummaries[0].closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText(/Podstawa prawna terminów/i).closest('details')).not.toHaveAttribute(
+      'open',
+    );
+
+    const nextLink = screen.getByRole('link', { name: /Dalej: Wnioski/i });
+    expect(nextLink).toHaveAttribute('href', '/plan/applications?situation=afterBirth');
   });
 
-  it('w zakładce Wnioski automatycznie wypełnia formularze (w tym odpis aktu urodzenia) i symuluje wysyłkę z UPO', async () => {
+  it('w zakładce Wnioski nie ma zmyślonych danych osobowych, waliduje puste pola, zwija podgląd i symuluje wysyłkę z UPO', async () => {
     const { user } = renderPlan(
       '/plan/applications?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
     );
@@ -412,28 +456,93 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     ).toBeInTheDocument();
     expect(screen.getByText(/Wniosek o zasiłek macierzyński \(ZUS ZAM\)/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Wyślij wniosek ZUS ZAM/i }));
+    // Brak zmyślonych danych osobowych i obecność informacji o mObywatelu / ręcznym wpisie
+    expect(screen.queryByDisplayValue(/Anna Kowalska/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Anna Kowalska/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue(/940512/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue(/PL 61/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Dane osobowe uzupełnisz po zalogowaniu przez mObywatela \(symulacja\) albo wpiszesz ręcznie – nie wysyłamy ich na serwer\./i,
+      ),
+    ).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText(/Imię i nazwisko wnioskodawcy/i);
+    const peselInput = screen.getByLabelText(/PESEL \(symulacja\)/i);
+    const bankInput = screen.getByLabelText(/Numer rachunku do wypłaty zasiłku/i);
+    expect(nameInput).toHaveValue('');
+    expect(peselInput).toHaveValue('');
+    expect(bankInput).toHaveValue('');
+
+    // Podgląd wniosku zwinięty w <details>
+    const previews = screen.getAllByText(/Podgląd wniosku/i);
+    expect(previews.length).toBeGreaterThanOrEqual(2);
+    expect(previews[0].closest('details')).not.toHaveAttribute('open');
+
+    // Próba wysłania z pustymi danymi prosi o uzupełnienie i nie kończy się błędem
+    await user.click(screen.getByRole('button', { name: /Wyślij ZUS ZAM/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/uzupełnij dane osobowe/i);
+    expect(screen.queryByRole('region', { name: /Potwierdzenie wysłania ZUS ZAM/i })).toBeNull();
+
+    // Po uzupełnieniu danych osobowych wysyłka pojedyncza i zbiorcza działają
+    await user.type(nameInput, 'Janina Nowak');
+    await user.type(peselInput, '90010112345');
+    await user.type(bankInput, '12345678901234567890123456');
+
+    await user.click(screen.getByRole('button', { name: /Wyślij ZUS ZAM/i }));
     const receipt = screen.getByRole('region', { name: /Potwierdzenie wysłania ZUS ZAM/i });
     expect(within(receipt).getByText(/UPO – Potwierdzenie złożenia/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Wyślij wszystkie wnioski/i }));
+    await user.click(screen.getByRole('button', { name: /Wyślij wszystkie/i }));
     expect(screen.getByRole('button', { name: /Wszystkie wnioski wysłane/i })).toBeDisabled();
+
+    const nextLink = screen.getByRole('link', { name: /Dalej: Wsparcie/i });
+    expect(nextLink).toHaveAttribute(
+      'href',
+      '/plan/support?zatrudnienie=uop&porod=2026-11-10&podstawa=6000',
+    );
   });
 
-  it('w zakładce Wsparcie udostępnia organizacje pomocowe, pytanie do PUE/eZUS oraz Asystenta AI z etykietą AI', async () => {
-    const { user } = renderPlan('/plan/support');
+  it('w zakładce Wsparcie pokazuje najpierw organizacje i linki, potem kontakt z ZUS, a na końcu Najczęstsze pytania bez etykiety AI', async () => {
+    const { user } = renderPlan('/plan/support?situation=afterBirth');
 
-    expect(screen.getByText(/Wspierane przez AI/i)).toBeInTheDocument();
+    // Brak nieprawdziwego oznaczenia AI
+    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/asystent.*AI/i)).not.toBeInTheDocument();
+
+    // Właściwa kolejność sekcji: organizacje -> linki -> PUE/eZUS -> Najczęstsze pytania
+    const orgsHeading = screen.getByRole('heading', { level: 2, name: /Organizacje pomocowe/i });
+    const linksHeading = screen.getByRole('heading', {
+      level: 2,
+      name: /Oficjalne strony urzędowe/i,
+    });
+    const pueHeading = screen.getByRole('heading', {
+      level: 2,
+      name: /Kontakt z ZUS przez PUE \/ eZUS/i,
+    });
+    const faqHeading = screen.getByRole('heading', { level: 2, name: /Najczęstsze pytania/i });
+
+    expect(orgsHeading.compareDocumentPosition(linksHeading)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(linksHeading.compareDocumentPosition(pueHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(pueHeading.compareDocumentPosition(faqHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
     expect(screen.getByText(/Fundacja Rodzić po Ludzku/i)).toBeInTheDocument();
 
+    // Gotowe odpowiedzi nadal działają
     await user.click(screen.getByRole('button', { name: /Kiedy opłaca się wariant 81,5%/i }));
     expect(await screen.findByText(/ujednoliconą stawkę 81,5%/i)).toBeInTheDocument();
 
+    // Formularz PUE / eZUS nadal działa
     await user.type(
       screen.getByLabelText(/Treść pytania do doradcy ZUS/i),
       'Proszę o potwierdzenie terminu złożenia ZAM.',
     );
     await user.click(screen.getByRole('button', { name: /Wyślij pytanie do PUE \/ eZUS/i }));
     expect(screen.getByText(/Zapytanie zostało wysłane/i)).toBeInTheDocument();
+
+    const backLink = screen.getByRole('link', { name: /Wróć do planu/i });
+    expect(backLink).toHaveAttribute('href', '/plan?situation=afterBirth');
   });
 });
