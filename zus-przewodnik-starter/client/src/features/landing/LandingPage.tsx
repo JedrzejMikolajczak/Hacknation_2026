@@ -41,9 +41,9 @@ const EXTERNAL_LINKS = [
 ];
 
 const BENEFITS = [
-  'Sprawdzisz, jakie świadczenia Ci przysługują – i dlaczego.',
-  'Policzysz, jak długo i w jakiej wysokości otrzymasz zasiłek.',
-  'Dowiesz się, jakie dokumenty, gdzie i do kiedy złożyć.',
+  'Sprawdzisz, jakie świadczenia Ci przysługują.',
+  'Policzysz okres i wysokość zasiłku.',
+  'Dostaniesz listę dokumentów i terminów.',
 ];
 
 export function LandingPage() {
@@ -84,14 +84,19 @@ export function LandingPage() {
 
   return (
     <div className="landing">
-      <header className="landing__header">
+      <div className="landing__demo-strip">
         <div className="landing__container">
           <p className="landing__demo-label">
             Wersja demonstracyjna – dane i logowanie są symulowane
           </p>
+        </div>
+      </div>
+
+      <header className="landing__header">
+        <div className="landing__container">
           <h1 className="landing__title">Przewodnik Przyszłego Rodzica</h1>
           <p className="landing__subtitle">
-            Sprawdź, jakie świadczenia z ZUS Ci przysługują – w kilka minut
+            Sprawdź, jakie świadczenia z ZUS Ci przysługują – w kilka minut.
           </p>
         </div>
       </header>
@@ -102,9 +107,7 @@ export function LandingPage() {
             <h2 id="situation-heading" className="landing__section-title">
               W jakiej jesteś sytuacji?
             </h2>
-            <p className="landing__section-lead">
-              Wybierz jedną odpowiedź – dopasujemy do niej kolejne pytania.
-            </p>
+            <p className="landing__section-lead">Wybierz jedną opcję, aby przejść dalej.</p>
 
             <SituationTiles
               options={SITUATION_OPTIONS}
@@ -148,8 +151,11 @@ export function LandingPage() {
             </div>
           </section>
 
-          <section className="landing__section" aria-labelledby="benefits-heading">
-            <h2 id="benefits-heading" className="landing__section-title">
+          <section
+            className="landing__section landing__benefits-section"
+            aria-labelledby="benefits-heading"
+          >
+            <h2 id="benefits-heading" className="landing__benefits-title">
               Co tu zrobisz
             </h2>
             <ol className="landing__benefits">

@@ -24,7 +24,7 @@ function renderPlan(initialEntry = '/plan', initialScenario?: ScenarioDraft) {
 }
 
 describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreatora i stany braków', () => {
-  it('na /plan pokazuje 6 kafelków sekcji, każdy prowadzi do swojej zakładki z zachowaniem scenariusza', () => {
+  it('na /plan pokazuje wskazówkę kolejności, wyróżniony pierwszy kafelek i 6 sekcji z zachowaniem scenariusza', () => {
     renderPlan('/plan?zatrudnienie=uop&dzieci=2&porod=2026-11-10');
 
     expect(screen.getByTestId('loc')).toHaveTextContent(
@@ -34,8 +34,11 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
       screen.getByRole('heading', { level: 2, name: 'Czym chcesz się teraz zająć?' }),
     ).toBeInTheDocument();
     const hub = within(screen.getByRole('region', { name: 'Czym chcesz się teraz zająć?' }));
+    expect(hub.getByText(/Od czego zacząć\?/i)).toBeInTheDocument();
     const tiles = hub.getAllByRole('link');
     expect(tiles).toHaveLength(6);
+    expect(tiles[0]).toHaveClass('plan-hub__tile--recommended');
+    expect(within(tiles[0]).getByText('Zacznij tutaj')).toBeInTheDocument();
     const expected: [string, string][] = [
       ['Uprawnienia', 'entitlements'],
       ['Kalkulator', 'calculator'],
@@ -56,7 +59,7 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     ).not.toBeInTheDocument();
   });
 
-  it('nieznana sekcja wraca do kafelków, a z sekcji można wrócić do listy sekcji', async () => {
+  it('nieznana sekcja wraca do kafelków, a okruszki pozwalają wrócić do listy sekcji i do kreatora', async () => {
     const { user } = renderPlan('/plan/nie-ma-takiej?dzieci=1&porod=2026-11-10&zatrudnienie=uop');
     expect(screen.getByTestId('loc')).toHaveTextContent(
       '/plan?dzieci=1&porod=2026-11-10&zatrudnienie=uop',
@@ -66,8 +69,56 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(screen.getByTestId('loc')).toHaveTextContent('/plan/calculator');
     expect(screen.getByRole('navigation', { name: 'Zakładki Twojego planu' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('link', { name: '← Wszystkie sekcje planu' }));
+    const breadcrumb = within(screen.getByRole('navigation', { name: 'Ścieżka nawigacji' }));
+    expect(breadcrumb.getByText('Kalkulator')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Zmień odpowiedzi' })).toHaveAttribute(
+      'href',
+      '/wizard?situation=afterBirth',
+    );
+
+    await user.click(breadcrumb.getByRole('link', { name: '← Twój plan' }));
     expect(screen.getByTestId('loc')).toHaveTextContent(/^\/plan\?/);
+  });
+
+  it('na stronie sekcji pokazuje zwinięte podsumowanie danych, a po rozwinięciu przelicza, aktualizuje URL i kopiuje link', async () => {
+    const { user } = renderPlan(
+      '/plan/calculator?zatrudnienie=uop&dzieci=1&porod=2026-11-10&podstawa=6000&wariant=combined',
+    );
+
+    const summaryRegion = within(screen.getByRole('region', { name: 'Twoje dane planu' }));
+    expect(
+      summaryRegion.getByText(/Urodziło się dziecko · umowa o pracę · 1 dziecko · 81,5%/i),
+    ).toBeInTheDocument();
+
+    const toggle = summaryRegion.getByRole('button', { name: 'Zmień dane' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      summaryRegion.queryByRole('button', { name: /Kopiuj link do planu/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await user.selectOptions(summaryRegion.getByLabelText('Liczba dzieci'), '2');
+    expect(screen.getByTestId('loc')).toHaveTextContent('dzieci=2');
+    expect(
+      summaryRegion.getByText(/Urodziło się dziecko · umowa o pracę · 2 dzieci · 81,5%/i),
+    ).toBeInTheDocument();
+
+    await user.click(summaryRegion.getByRole('button', { name: 'Kopiuj link do planu' }));
+    expect(
+      summaryRegion.getByRole('button', { name: /Skopiowano link do planu/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('w pustym stanie nie zmyśla formy zatrudnienia w pasku podsumowania danych', () => {
+    renderPlan('/plan/calculator');
+    const summaryRegion = within(screen.getByRole('region', { name: 'Twoje dane planu' }));
+    expect(
+      summaryRegion.getByText(
+        /Urodziło się dziecko · brak danych o ubezpieczeniu · 1 dziecko · 81,5%/i,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('pokazuje wyraźny stan "Uzupełnij dane" z linkiem do kreatora zamiast zmyślonych domyślnych', () => {
