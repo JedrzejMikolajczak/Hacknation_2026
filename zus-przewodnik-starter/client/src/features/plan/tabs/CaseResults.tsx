@@ -566,10 +566,16 @@ export function CaseCalculator({
       ? `Wariant ${formatRate(params.rates.combined)}`
       : `Wariant ${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`;
   const appliedVariantTotal = outcome.variants[appliedVariant];
-  const otherVariantTotal = outcome.variants[otherVariant];
+  // outcome.variants dotyczą wnioskodawcy; część drugiego rodzica (9 tyg. po 70% i ojcowski)
+  // jest taka sama w obu wariantach, więc do porównania z sumą rodziny ją doliczamy.
+  const otherVariantApplicantTotal = outcome.variants[otherVariant];
+  const otherVariantTotal =
+    otherVariantApplicantTotal !== null && secondarySummary.totalAmount !== null
+      ? otherVariantApplicantTotal + secondarySummary.totalAmount
+      : otherVariantApplicantTotal;
   const variantDiff =
-    otherVariantTotal !== null && appliedVariantTotal !== null
-      ? otherVariantTotal - appliedVariantTotal
+    otherVariantApplicantTotal !== null && appliedVariantTotal !== null
+      ? otherVariantApplicantTotal - appliedVariantTotal
       : null;
 
   const showVariantSwitch = !childLostAll && !input.parental_only;
