@@ -1,0 +1,85 @@
+{
+  "version": "2026-11-21",
+  "effectiveFrom": "2026-01-01",
+  "rates": {
+    "maternity": 1.0,
+    "adoptionMaternity": 1.0,
+    "supplementaryMaternity": 1.0,
+    "paternity": 1.0,
+    "parental": 0.7,
+    "combined": 0.815,
+    "sicknessPregnancy": 1.0,
+    "secondParentNonTransferableInCombined": 0.7
+  },
+  "maternityLeave": {
+    "weeksByChildrenCount": { "1": 20, "2": 31, "3": 33, "4": 35, "5": 37 },
+    "maxWeeksBeforeBirth": 6,
+    "motherMandatoryWeeksAfterBirth": 14,
+    "motherMandatoryWeeksWithIncapacityCertificate": 8
+  },
+  "adoptionMaternityLeave": {
+    "minWeeks": 9,
+    "fosterFamilyMaxChildAgeYears": 7,
+    "fosterFamilyMaxChildAgeYearsDeferredSchool": 10,
+    "adoptionMaxChildAgeYears": 14
+  },
+  "parentalLeave": {
+    "weeksSingleChild": 41,
+    "weeksMultipleChildren": 43,
+    "weeksSingleChildZaZyciem": 65,
+    "weeksMultipleChildrenZaZyciem": 67,
+    "nonTransferableWeeksPerParent": 9,
+    "maxParts": 5,
+    "deadlineChildTurnsAgeYears": 6,
+    "maxWorkTimeFraction": 0.5
+  },
+  "paternityLeave": {
+    "weeks": 2,
+    "maxParts": 2,
+    "minPartWeeks": 1,
+    "deadlineChildAgeMonths": 12,
+    "adoptionDeadlineMonthsFromAdoption": 12,
+    "adoptionMaxChildAgeYears": 14
+  },
+  "supplementaryMaternityLeave": {
+    "cases": [
+      { "id": 1, "description": "Urodzenie przed 28. tygodniem ciąży", "maxPregnancyWeekExclusive": 28, "minPregnancyWeek": null, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
+      { "id": 2, "description": "Masa urodzeniowa do 1000 g", "maxPregnancyWeekExclusive": null, "minPregnancyWeek": null, "maxBirthWeightGrams": 1000, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
+      { "id": 3, "description": "Urodzenie przed 28. tygodniem i masa do 1000 g", "maxPregnancyWeekExclusive": 28, "minPregnancyWeek": null, "maxBirthWeightGrams": 1000, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 15 },
+      { "id": 4, "description": "Urodzenie od 28. do przed 37. tygodniem, masa powyżej 1000 g", "maxPregnancyWeekExclusive": 37, "minPregnancyWeek": 28, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": 1000, "minHospitalizationDays": null, "countFromDayAfterBirth": null, "limitWeekAfterBirth": 8 },
+      { "id": 5, "description": "Urodzenie od 37. tygodnia i hospitalizacja min. 2 kolejne dni między 5. a 28. dniem po porodzie", "maxPregnancyWeekExclusive": null, "minPregnancyWeek": 37, "maxBirthWeightGrams": null, "minBirthWeightGramsExclusive": null, "minHospitalizationDays": 2, "countFromDayAfterBirth": 5, "limitWeekAfterBirth": 8 }
+    ]
+  },
+  "childDeath": {
+    "thresholdWeeksOfLife": 8,
+    "weeksAfterBirthIfBeforeThreshold": 8,
+    "minDaysAfterDeath": 7
+  },
+  "combinedRateApplicationDeadlineDays": 21,
+  "sickness": {
+    "waitingPeriodDaysMandatory": 30,
+    "waitingPeriodDaysVoluntary": 90,
+    "employerPaidDaysUnder50": 33,
+    "employerPaidDaysFrom50": 14,
+    "maxBenefitPeriodDays": 270,
+    "gapDaysForSameBenefitPeriod": 60
+  },
+  "benefitBase": {
+    "socialContributionDeduction": 0.1371,
+    "lookbackMonths": 12,
+    "minimumWage": 4806,
+    "maxVoluntaryContributionBase": 23550,
+    "maxBaseNonEmployee": 20321.3,
+    "newBaseAfterGapMonths": 1
+  },
+  "selfEmployedDebtThresholdShareOfMinimumWage": 0.01,
+  "payerThresholdInsuredCount": 20,
+  "applicationDeadlinesDays": {
+    "parentalLeave": 21,
+    "supplementaryMaternityLeave": 21,
+    "paternityLeave": 7,
+    "resignFromMaternityPart": 7,
+    "fatherTakeoverPart": 14,
+    "fosterFamilyAfterAcceptance": 7
+  }
+}
