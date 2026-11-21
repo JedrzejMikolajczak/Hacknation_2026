@@ -1,0 +1,66 @@
+{
+  "caseId": "etat-po-porodzie",
+  "title": "Umowa o pracę i jedno dziecko",
+  "scenario": {
+    "situation": "afterBirth",
+    "referenceDate": "2026-11-21",
+    "expectedBirthDate": null,
+    "birthDate": "2026-11-01",
+    "childrenCount": 1,
+    "adoptionType": null,
+    "childAcceptanceDate": null,
+    "childAgeYears": null,
+    "schoolObligationDeferred": false,
+    "rateVariant": "standard",
+    "mother": {
+      "role": "mother",
+      "insuranceTitle": "employment",
+      "sicknessInsurance": "mandatory",
+      "insuredSince": "2026-10-01",
+      "insuranceEndDate": null,
+      "benefitBase": null,
+      "employerInsuredCount": 25,
+      "age": 30,
+      "contributionDebt": null,
+      "wantsLeave": true
+    },
+    "father": null,
+    "special": {
+      "zaZyciemCertificate": false,
+      "pregnancyWeekAtBirth": null,
+      "birthWeightGrams": null,
+      "hospitalizationDays": null,
+      "stillbirth": false,
+      "childDeathDate": null,
+      "motherHospitalized": false,
+      "motherIncapableOfIndependentLiving": false,
+      "motherDeceased": false,
+      "employerBankruptcyOrLiquidation": false
+    }
+  },
+  "benefitBaseInput": {
+    "insuranceTitle": "employment",
+    "rightArisesOn": "2026-11-01",
+    "insuredSince": "2026-10-01",
+    "employmentFraction": 1,
+    "incomes": [
+      {
+        "month": "2026-10",
+        "grossAmount": 10000,
+        "workedDays": null,
+        "requiredWorkingDays": null
+      }
+    ],
+    "contractMonthlySalary": 10000,
+    "declaredContributionBase": null,
+    "previousBenefitEndDate": null,
+    "previousBenefitBase": null
+  },
+  "expectedDays": 364,
+  "zusDecision": {
+    "granted": true,
+    "benefitBase": 8629,
+    "amount": 85368.36,
+    "note": "10 000 zł − 13,71% = 8 629 zł podstawy. 140 dni × 287,63 zł oraz 224 dni × 201,34 zł. Drugi rodzic nie pobiera świadczenia w tej sprawie."
+  }
+}

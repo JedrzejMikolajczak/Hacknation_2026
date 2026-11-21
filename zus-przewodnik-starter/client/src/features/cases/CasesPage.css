@@ -1,0 +1,55 @@
+.cases-page {
+  max-width: var(--content-max-width);
+  margin-inline: auto;
+  padding: var(--space-6) var(--page-gutter);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cases-page h1 {
+  font-size: var(--font-size-3xl);
+}
+
+.cases-list {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+}
+
+.cases-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-inline-start: var(--accent-bar-width) solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.cases-panel button {
+  justify-self: start;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--color-on-cta);
+  border-radius: var(--radius-sm);
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.cases-panel th,
+.cases-panel td {
+  padding: var(--space-2);
+  text-align: left;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.cases-panel thead {
+  background: var(--color-surface-muted);
+}

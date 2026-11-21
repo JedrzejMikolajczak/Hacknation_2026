@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { PlaceholderPage } from '../components/PlaceholderPage';
 import { LandingPage } from '../features/landing/LandingPage';
+import { CasesPage } from '../features/cases/CasesPage';
 import { PlanPage } from '../features/plan/PlanPage';
 import { WizardPage } from '../features/wizard/WizardPage';
 
@@ -15,8 +16,7 @@ export function App() {
       <Route path="/plan/:tab" element={<PlanPage />} />
       <Route path="/guide" element={<PlaceholderPage />} />
       <Route path="/guide/:slug" element={<PlaceholderPage />} />
-      <Route path="/cases" element={<PlaceholderPage />} />
-      <Route path="/cases/:caseId" element={<PlaceholderPage />} />
+      <Route path="/cases/:caseId?" element={<CasesPage />} />
       <Route path="/admin" element={<PlaceholderPage />} />
       <Route path="*" element={<PlaceholderPage />} />
     </Routes>
