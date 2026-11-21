@@ -361,23 +361,27 @@ describe('Twój plan (/plan/:tab) – wszystkie 6 zakładek, realne dane z kreat
     expect(screen.getByText(/nieprzenoszalną część drugiego rodzica/i)).toBeInTheDocument();
   });
 
-  it('wyświetla oś czasu, kalendarz, waliduje podział urlopu rodzicielskiego i liczy łączenie urlopu z pracą', async () => {
+  it('wyświetla kluczową odpowiedź, oś czasu, zwinięty kalendarz i liczy łączenie urlopu z pracą', async () => {
     const { user } = renderPlan(
       '/plan/leave-plan?zatrudnienie=uop&dzieci=1&porod=2026-11-10&podstawa=6000&ojciec=1&podstawaOjca=7500',
     );
 
     expect(
-      screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów obojga rodziców/i }),
+      screen.getByRole('heading', { level: 2, name: /Plan urlopów w skrócie/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /Kalendarz miesięczny/i }),
+      screen.getByRole('heading', { level: 2, name: /Oś czasu urlopów/i }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/Oś czasu urlopów matki/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Oś czasu urlopów drugiego rodzica/i)).toBeInTheDocument();
 
     expect(await screen.findByText(/Podział zgodny z Kodeksem pracy/i)).toBeInTheDocument();
+    expect(
+      screen.getByText('Pokaż kalendarz dzień po dniu').closest('details'),
+    ).not.toHaveAttribute('open');
 
-    // Włącz łączenie z pracą na 1/4 etatu dla pierwszej części urlopu rodzicielskiego (32 tyg. → +8 tyg.)
+    // Rozwiń ręczne układanie i włącz łączenie z pracą na 1/4 etatu dla pierwszej części urlopu rodzicielskiego (32 tyg. → +8 tyg.)
+    await user.click(screen.getByText('Ułóż ręcznie / połącz z pracą'));
     const workSelects = screen.getAllByLabelText(/Praca w trakcie urlopu:/i);
     await user.selectOptions(workSelects[0], '0.25');
     expect(await screen.findByText(/Wydłużenie urlopu rodzicielskiego:/i)).toBeInTheDocument();
