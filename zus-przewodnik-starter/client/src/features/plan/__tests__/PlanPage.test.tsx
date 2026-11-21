@@ -79,20 +79,17 @@ describe('Twój plan', () => {
       target: { value: '2027-11-09' },
     });
     fireEvent.click(tabLink('Dokumenty i terminy'));
-    expect(await screen.findByText('19.10.2027')).toBeInTheDocument();
+    expect((await screen.findAllByText('19.10.2027')).length).toBeGreaterThan(0);
     const link = tabLink('Wnioski');
     expect(new URL((link as HTMLAnchorElement).href).searchParams.get('inputs')).toContain(
       '2027-11-09',
     );
     fireEvent.click(link);
-    expect(await screen.findByText(/DANE PRZYKŁADOWE/)).toBeInTheDocument();
-    expect(screen.getByLabelText('PESEL')).toHaveValue('00000000000');
-    const selected = screen.getByLabelText('Wzór wniosku');
-    const father = within(selected).getByRole('option', {
-      name: /Ojciec.*rodzicielskiego.*09.11.2027/,
-    });
-    fireEvent.change(selected, { target: { value: (father as HTMLOptionElement).value } });
-    expect(screen.getByText(/09.11.2027–10.01.2028/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/uzupełnisz po zalogowaniu przez mObywatela \(symulacja\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('PESEL')).toHaveValue('');
+    expect(screen.getAllByText(/09\.11\.2027–10\.01\.2028/).length).toBeGreaterThan(0);
   });
 
   it('pokazuje podsumowanie, oś czasu obu rodziców i działające presety w Planie urlopów', async () => {
@@ -115,18 +112,41 @@ describe('Twój plan', () => {
     expect(screen.getByRole('link', { name: 'Dalej: Dokumenty i terminy ›' })).toBeInTheDocument();
   });
 
-  it('edytuje wzór w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
+  it('edytuje dane osobowe w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
     openPlan('applications');
-    const pesel = await screen.findByLabelText('PESEL');
-    fireEvent.change(pesel, { target: { value: '11111111111' } });
+    const nameInput = await screen.findByLabelText('Imię i nazwisko');
+    const peselInput = screen.getByLabelText('PESEL');
+    const bankInput = screen.getByLabelText('Numer rachunku');
+    expect(nameInput).toHaveValue('');
+    expect(peselInput).toHaveValue('');
+    expect(bankInput).toHaveValue('');
+
+    fireEvent.change(nameInput, { target: { value: 'Maria Testowa' } });
+    fireEvent.change(peselInput, { target: { value: '11111111111' } });
+    fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
+
     const count = api.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: 'Symuluj złożenie wniosku' }));
+    fireEvent.click(screen.getByRole('button', { name: /Wyślij wszystkie/ }));
     expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
+
     fireEvent.click(tabLink('Plan urlopów'));
     fireEvent.click(tabLink('Wnioski'));
-    expect(await screen.findByLabelText('PESEL')).toHaveValue('00000000000');
+    expect(await screen.findByLabelText('PESEL')).toHaveValue('');
+  });
+
+  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
+    openPlan('support');
+    expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
+    expect(
+      screen.getByText('Wcześniak lub hospitalizacja dziecka po porodzie'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Fundacja Wcześniak Rodzice-Rodzicom')).toBeInTheDocument();
+    expect(screen.getByText('Najczęstsze pytania')).toBeInTheDocument();
+    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/asystent AI/i)).not.toBeInTheDocument();
   });
 
   it('wyświetla hub planu z kolejnością kroków, bez zduplikowanych linków w nagłówku', () => {
