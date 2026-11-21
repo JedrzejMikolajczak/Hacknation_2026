@@ -248,18 +248,6 @@ export function calculateMaternity(
         'Liczba dzieci pozostałych przy życiu (childrenAliveCount) musi mieścić się między 0 a liczbą urodzonych dzieci.',
       );
       aliveChildrenCount = input.childrenAliveCount;
-    } else if (
-      input.special.deceasedChildrenCount !== undefined &&
-      input.special.deceasedChildrenCount !== null
-    ) {
-      requireValue(
-        Number.isInteger(input.special.deceasedChildrenCount) &&
-          input.special.deceasedChildrenCount >= 0 &&
-          input.special.deceasedChildrenCount <= input.childrenCount,
-        'deceasedChildrenCount',
-        'Liczba zmarłych dzieci (deceasedChildrenCount) musi mieścić się między 0 a liczbą urodzonych dzieci.',
-      );
-      aliveChildrenCount = input.childrenCount - input.special.deceasedChildrenCount;
     } else if (input.special.stillbirth) {
       aliveChildrenCount = 0;
     } else {
@@ -411,16 +399,13 @@ export function calculateMaternity(
   );
 
   const motherDeceasedOrAbandoned = Boolean(
-    input.special.motherDeceased ||
-      input.special.motherAbandonedChild ||
-      input.motherAbandonedChild,
+    input.special.motherDeceased || input.motherAbandonedChild,
   );
   const motherTakesSpecialTransfer = Boolean(
     input.special.motherHospitalized || input.special.motherIncapableOfIndependentLiving,
   );
 
-  const motherUses =
-    motherEligible && !motherDeceasedOrAbandoned && Boolean(input.mother?.wantsLeave);
+  const motherUses = motherEligible && !input.special.motherDeceased && input.mother.wantsLeave;
   const fatherUses = fatherEligible && Boolean(input.father?.wantsLeave);
 
   // Czy ojciec kwalifikuje się do urlopu ojcowskiego (tylko dla żywego dziecka, nie dla rodziny zastępczej)
@@ -452,7 +437,7 @@ export function calculateMaternity(
     rate: number,
   ) {
     if (days <= 0) return;
-    const parent = role === 'mother' ? input.mother! : input.father!;
+    const parent = role === 'mother' ? input.mother : input.father!;
     amount(parent.benefitBase, `${role}.benefitBase`);
     const money = calculateBenefitAmount(parent.benefitBase, rate, days);
     periods.push({
@@ -560,7 +545,7 @@ export function calculateMaternity(
         legalBasis: 'KP art. 180 § 6–7; ustawa zasiłkowa art. 29 ust. 5',
       });
     }
-  } else if (motherEligible && input.mother && !input.mother.wantsLeave && fatherUses && aliveChildrenCount > 0) {
+  } else if (motherEligible && !input.mother.wantsLeave && fatherUses && aliveChildrenCount > 0) {
     // Rezygnacja matki po obowiązkowych 14 tygodniach – przejęcie reszty przez ojca
     const mandatory = Math.min(
       maternityWeeks,
@@ -591,7 +576,7 @@ export function calculateMaternity(
         legalBasis: 'KP art. 180 § 6–10',
       });
     }
-  } else if (motherEligible && input.mother && !input.mother.wantsLeave && !fatherUses) {
+  } else if (motherEligible && !input.mother.wantsLeave && !fatherUses) {
     explanations.push({
       message: `Matka zadeklarowała brak korzystania z urlopu. Uwaga: zgodnie z Kodeksem pracy pracownica nie może zrezygnować z pierwszych ${params.maternityLeave.motherMandatoryWeeksAfterBirth} tygodni urlopu macierzyńskiego po porodzie.`,
       legalBasis: 'KP art. 180 § 4',
@@ -678,7 +663,6 @@ export function calculateMaternity(
   if (
     motherUses &&
     !motherDeceasedOrAbandoned &&
-    input.mother !== null &&
     input.mother.benefitBase !== null &&
     pool > 0 &&
     aliveChildrenCount > 0

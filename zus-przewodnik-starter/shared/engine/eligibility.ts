@@ -128,11 +128,9 @@ export function checkEligibility(
     input.childAgeYears >= maxAdoptionAge;
 
   const isBankruptcy = Boolean(input.special.employerBankruptcyOrLiquidation);
-  const isUnlawfulTermination = Boolean(
-    input.special.unlawfulTerminationConfirmedByCourt || input.unlawfulTerminationConfirmedByCourt,
-  );
+  const isUnlawfulTermination = Boolean(input.unlawfulTerminationConfirmedByCourt);
   const hasMaternityEquivalentCause = isBankruptcy || isUnlawfulTermination;
-  const motherIsInsuredOrActive = input.mother !== null && insuranceActive(input.mother, on);
+  const motherIsInsuredOrActive = insuranceActive(input.mother, on);
 
   for (const parent of [input.mother, input.father]) {
     if (!parent) continue;
@@ -157,13 +155,6 @@ export function checkEligibility(
     const missingDebtNote =
       active && parent.insuranceTitle === 'selfEmployed' && parent.contributionDebt === null
         ? ' Nie podano stanu zadłużenia składkowego – zweryfikuj brak zaległości na koncie PUE/eZUS (art. 2a).'
-        : '';
-    const secondaryTitleNote =
-      parent.secondaryInsuranceTitle && parent.secondaryInsuranceTitle !== 'none'
-        ? parent.secondaryInsuranceTitle === 'employment' ||
-          parent.secondarySicknessInsurance === 'voluntary'
-          ? ' Wskazano drugi równoległy tytuł ubezpieczenia chorobowego – zasiłek przysługuje odrębnie z każdego ubezpieczonego tytułu (ustawa systemowa art. 9).'
-          : ' Wskazano dodatkowy tytuł ubezpieczenia bez potwierdzonej składki chorobowej – świadczenie przysługuje wyłącznie z tytułu objętego ubezpieczeniem chorobowym.'
         : '';
 
     if (endsBeforeEvent) {
@@ -252,7 +243,8 @@ export function checkEligibility(
       // matka zachowuje prawo do zasiłku macierzyńskiego po porodzie (art. 30 ust. 1)
       entitled = !adoptionOverAgeLimit;
       effectivePayer = entitled ? 'zus' : null;
-      reasonMessage = `Po ustaniu umowy o pracę z powodu upadłości, likwidacji pracodawcy albo bezprawnego rozwiązania umowy w ciąży przysługuje zasiłek w wysokości zasiłku macierzyńskiego do dnia porodu oraz zasiłek macierzyński po porodzie (wypłaca ZUS).${secondaryTitleNote}`;
+      reasonMessage =
+        'Po ustaniu umowy o pracę z powodu upadłości, likwidacji pracodawcy albo bezprawnego rozwiązania umowy w ciąży przysługuje zasiłek w wysokości zasiłku macierzyńskiego do dnia porodu oraz zasiłek macierzyński po porodzie (wypłaca ZUS).';
       legalBasis = 'Ustawa zasiłkowa art. 30 ust. 1 i 3';
     } else if (adoptionOverAgeLimit) {
       entitled = false;
@@ -276,23 +268,19 @@ export function checkEligibility(
         reasonMessage =
           'W przypadku śmierci matki prawo do niewykorzystanej części urlopu macierzyńskiego i zasiłku macierzyńskiego przejmuje ubezpieczony ojciec dziecka (lub inny ubezpieczony członek najbliższej rodziny).';
         legalBasis = 'KP art. 180 § 12; ustawa zasiłkowa art. 29 ust. 5';
-      } else if (input.special.motherAbandonedChild) {
-        reasonMessage =
-          'W przypadku porzucenia dziecka przez matkę prawo do pozostałej części urlopu macierzyńskiego i zasiłku przejmuje ubezpieczony ojciec dziecka (KP art. 180 § 13).';
-        legalBasis = 'KP art. 180 § 13; ustawa zasiłkowa art. 29 ust. 5';
       } else if (input.special.motherHospitalized) {
-        reasonMessage = `Matka jest uprawniona do zasiłku macierzyńskiego. W okresie pobytu matki w szpitalu uniemożliwiającego opiekę nad dzieckiem (w szczególności po wykorzystaniu ${params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate} tygodni po porodzie) część urlopu może przejąć ubezpieczony ojciec dziecka.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`;
+        reasonMessage = `Matka jest uprawniona do zasiłku macierzyńskiego. W okresie pobytu matki w szpitalu uniemożliwiającego opiekę nad dzieckiem (w szczególności po wykorzystaniu ${params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate} tygodni po porodzie) część urlopu może przejąć ubezpieczony ojciec dziecka.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`;
         legalBasis = 'KP art. 180 § 10; ustawa zasiłkowa art. 29 ust. 5, art. 61';
       } else if (input.special.motherIncapableOfIndependentLiving) {
-        reasonMessage = `Matka jest uprawniona do zasiłku macierzyńskiego. Przy orzeczeniu o niezdolności do samodzielnej egzystencji może zrezygnować z dalszej części urlopu po wykorzystaniu co najmniej ${params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate} tygodni po porodzie, a resztę przejmuje ubezpieczony ojciec.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`;
+        reasonMessage = `Matka jest uprawniona do zasiłku macierzyńskiego. Przy orzeczeniu o niezdolności do samodzielnej egzystencji może zrezygnować z dalszej części urlopu po wykorzystaniu co najmniej ${params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate} tygodni po porodzie, a resztę przejmuje ubezpieczony ojciec.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`;
         legalBasis = 'KP art. 180 § 6–7; ustawa zasiłkowa art. 29 ust. 5, art. 61';
       } else if (input.special.stillbirth || input.special.childDeathDate) {
-        reasonMessage = `Ubezpieczenie chorobowe jest czynne na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania w wymiarze przewidzianym dla sytuacji straty dziecka.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`;
+        reasonMessage = `Ubezpieczenie chorobowe jest czynne na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania w wymiarze przewidzianym dla sytuacji straty dziecka.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`;
         legalBasis = 'KP art. 180¹; ustawa zasiłkowa art. 29, art. 61';
       } else {
         reasonMessage = isAdoption
-          ? `Ubezpieczenie chorobowe jest czynne na dzień przyjęcia dziecka na wychowanie (limit wieku: do ${maxAdoptionAge} lat). Zasiłek macierzyński przysługuje bez okresu wyczekiwania.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`
-          : `Ubezpieczenie chorobowe jest czynne na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`;
+          ? `Ubezpieczenie chorobowe jest czynne na dzień przyjęcia dziecka na wychowanie (limit wieku: do ${maxAdoptionAge} lat). Zasiłek macierzyński przysługuje bez okresu wyczekiwania.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`
+          : `Ubezpieczenie chorobowe jest czynne na dzień porodu. Zasiłek macierzyński przysługuje bez okresu wyczekiwania.${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`;
         legalBasis = isAdoption
           ? 'Ustawa zasiłkowa art. 29 ust. 1 pkt 2–3, art. 61'
           : 'Ustawa zasiłkowa art. 29, art. 61';
@@ -304,10 +292,6 @@ export function checkEligibility(
         specialTakeoverNotes.push(
           `Ze względu na śmierć matki ojciec może przejąć pozostałą część urlopu macierzyńskiego bez konieczności wykorzystania ${params.maternityLeave.motherMandatoryWeeksAfterBirth} tygodni przez matkę.`,
         );
-      } else if (input.special.motherAbandonedChild) {
-        specialTakeoverNotes.push(
-          'Ze względu na porzucenie dziecka przez matkę ubezpieczony ojciec może przejąć pozostałą część urlopu macierzyńskiego (KP art. 180 § 13).',
-        );
       } else if (input.special.motherIncapableOfIndependentLiving) {
         specialTakeoverNotes.push(
           `Ze względu na niezdolność matki do samodzielnej egzystencji ojciec może przejąć urlop macierzyński już po ${params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate} tygodniach po porodzie.`,
@@ -318,22 +302,19 @@ export function checkEligibility(
         );
       } else if (!motherIsInsuredOrActive) {
         specialTakeoverNotes.push(
-          input.mother === null
-            ? 'Samodzielny ojciec podlegający ubezpieczeniu chorobowemu ma prawo do urlopu rodzicielskiego oraz urlopu ojcowskiego.'
-            : 'Mimo że matka nie podlega ubezpieczeniu chorobowemu w dniu zdarzenia, ubezpieczonemu ojcu przysługuje urlop rodzicielski oraz urlop ojcowski.',
+          'Mimo że matka nie podlega ubezpieczeniu chorobowemu w dniu zdarzenia, ubezpieczonemu ojcu przysługuje urlop rodzicielski oraz urlop ojcowski.',
         );
       } else {
         specialTakeoverNotes.push(
           `Ojcu przysługuje ${params.parentalLeave.nonTransferableWeeksPerParent} tyg. nieprzenoszalnego urlopu rodzicielskiego${isAdoption && input.adoptionType === 'fosterFamily' ? '' : ` oraz ${params.paternityLeave.weeks} tyg. urlopu ojcowskiego`}, a po wykorzystaniu ${params.maternityLeave.motherMandatoryWeeksAfterBirth} tyg. przez matkę może także przejąć resztę urlopu macierzyńskiego.`,
         );
       }
-      reasonMessage = `${specialTakeoverNotes.join(' ')}${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}${secondaryTitleNote}`;
+      reasonMessage = `${specialTakeoverNotes.join(' ')}${missingInsuredSinceNote}${missingPayerCountNote}${missingDebtNote}`;
       legalBasis =
         input.special.motherDeceased ||
-        input.special.motherAbandonedChild ||
         input.special.motherHospitalized ||
         input.special.motherIncapableOfIndependentLiving
-          ? 'KP art. 180 § 6–13, art. 182¹a, art. 182³; ustawa zasiłkowa art. 29 ust. 5, art. 61'
+          ? 'KP art. 180 § 6–12, art. 182¹a, art. 182³; ustawa zasiłkowa art. 29 ust. 5, art. 61'
           : 'KP art. 180 § 4, art. 182¹a § 4, art. 182³; ustawa zasiłkowa art. 29a, art. 61';
     }
 
@@ -363,12 +344,11 @@ export function checkEligibility(
 
   // Świadczenia w okresie ciąży (3a): chorobowy, wynagrodzenie chorobowe, rehabilitacyjne, zasiłek w wysokości macierzyńskiego
   const includePregnancyBenefits =
-    input.mother !== null &&
-    (input.situation === 'pregnant' ||
-      input.situation === 'planning' ||
-      Boolean(input.sicknessStartDate));
+    input.situation === 'pregnant' ||
+    input.situation === 'planning' ||
+    Boolean(input.sicknessStartDate);
 
-  if (includePregnancyBenefits && input.mother !== null) {
+  if (includePregnancyBenefits) {
     const sickness = calculateSicknessInPregnancy(input, params);
     const mother = input.mother;
     const sicknessOn = input.sicknessStartDate ?? input.referenceDate;
@@ -441,7 +421,7 @@ export function checkEligibility(
   }
 
   // Zasiłek w wysokości zasiłku macierzyńskiego (upadłość/likwidacja/śmierć pracodawcy lub bezprawne rozwiązanie umowy)
-  if (hasMaternityEquivalentCause && input.mother !== null) {
+  if (hasMaternityEquivalentCause) {
     const isEmployee = input.mother.insuranceTitle === 'employment';
     entitlements.push({
       benefit: 'maternityEquivalentBenefit',
@@ -468,21 +448,6 @@ export function calculateSicknessInPregnancy(
   validateParams(params, on);
 
   const parent = input.mother;
-  if (parent === null) {
-    return {
-      entitled: false,
-      employerSickPayDays: 0,
-      sicknessBenefitMaxDays: 0,
-      rate: params.rates.sicknessPregnancy,
-      dailyAmount: null,
-      explanations: [
-        {
-          message: 'Brak danych matki – zasiłek chorobowy w ciąży dotyczy wyłącznie matki.',
-          legalBasis: 'Ustawa zasiłkowa art. 1, art. 4',
-        },
-      ],
-    };
-  }
   const explanations: Explanation[] = [];
 
   if (input.sicknessStartDate === undefined) {

@@ -102,16 +102,6 @@ function parentInsurance(
     ...(parent.insuredSince ? { title_start_date: parent.insuredSince } : {}),
     ...(parent.contributionDebt != null ? { debt_amount_pln: parent.contributionDebt } : {}),
     ...(monthlyBases ? { monthly_bases: monthlyBases } : {}),
-    ...(parent.secondaryInsuranceTitle
-      ? { secondary_employment_type: titles[parent.secondaryInsuranceTitle] }
-      : {}),
-    ...(parent.secondarySicknessInsurance !== undefined &&
-    parent.secondarySicknessInsurance !== null
-      ? {
-          secondary_voluntary_sickness_insured:
-            parent.secondarySicknessInsurance === 'voluntary',
-        }
-      : {}),
   };
 }
 
@@ -147,7 +137,6 @@ export function wizardCase(
   const other = fatherOnly ? draft.mother : draft.father;
   const special = draft.special ?? {};
   if (special.motherDeceased && draft.motherDeathDate === null) return null;
-  if (special.motherAbandonedChild && draft.motherAbandonmentDate === null) return null;
   const isAdoption = draft.situation === 'adoption';
   const birth = draft.birthDate ?? draft.expectedBirthDate ?? null;
   const event = isAdoption ? (draft.childAcceptanceDate ?? null) : birth;
@@ -165,10 +154,7 @@ export function wizardCase(
   const childDeathThresholdDays =
     params.childDeath.thresholdWeeksOfLife * params.calendar.daysPerWeek;
   const hasChildLoss = Boolean(special.stillbirth || death);
-  const deceasedChildrenCount = hasChildLoss
-    ? (special.deceasedChildrenCount ?? (childrenCount <= 1 ? childrenCount : 1))
-    : 0;
-  const livingChildren = Math.max(0, childrenCount - deceasedChildrenCount);
+  const livingChildren = hasChildLoss ? Math.max(0, childrenCount - 1) : childrenCount;
 
   const motherInsured = isParentInsured(draft.mother);
   const fatherInsured = isParentInsured(draft.father);
@@ -179,10 +165,7 @@ export function wizardCase(
   let fatherParentalWeeks = 0;
   if (!fatherOnly && fatherWantsLeave && livingChildren > 0) {
     const motherActive =
-      motherInsured === true &&
-      draft.mother?.wantsLeave !== false &&
-      !special.motherDeceased &&
-      !special.motherAbandonedChild;
+      motherInsured === true && draft.mother?.wantsLeave !== false && !special.motherDeceased;
     if (motherActive) {
       fatherParentalWeeks = params.parentalLeave.nonTransferableWeeksPerParent;
     } else {
@@ -223,7 +206,6 @@ export function wizardCase(
     motherInsured === true &&
     draft.mother?.wantsLeave === false &&
     !special.motherDeceased &&
-    !special.motherAbandonedChild &&
     fatherWantsLeave;
   const mandatoryMotherWeeks =
     special.motherHospitalized || special.motherIncapableOfIndependentLiving
@@ -232,11 +214,9 @@ export function wizardCase(
   const fatherTakeoverDate =
     special.motherDeceased && draft.motherDeathDate
       ? addDaysIso(draft.motherDeathDate, 1)
-      : special.motherAbandonedChild && draft.motherAbandonmentDate
-        ? addDaysIso(draft.motherAbandonmentDate, 1)
-        : motherWantsResignTakeover && birth
-          ? addDaysIso(birth, mandatoryMotherWeeks * params.calendar.daysPerWeek)
-          : undefined;
+      : motherWantsResignTakeover && birth
+      ? addDaysIso(birth, mandatoryMotherWeeks * params.calendar.daysPerWeek)
+      : undefined;
 
   const applicantInsurance = parentInsurance(applicant, params);
   const applicantMonthlyBases =
@@ -291,27 +271,10 @@ export function wizardCase(
         special.motherHospitalized || special.motherIncapableOfIndependentLiving
       ),
       ...(special.motherDeceased ? { mother_deceased: true } : {}),
-      ...(special.motherAbandonedChild ? { mother_abandoned_child: true } : {}),
       employer_bankruptcy_or_liquidation: !!special.employerBankruptcyOrLiquidation,
-      ...(special.unlawfulTerminationConfirmedByCourt
-        ? { unlawful_termination_confirmed_by_court: true }
-        : {}),
       adopted_or_foster_child_age_years: draft.childAgeYears ?? null,
       is_professional_foster_family: false,
     },
-    ...(hasChildLoss ? { living_children_count: livingChildren } : {}),
-    ...(hasChildLoss && deceasedChildrenCount > 0
-      ? { deceased_children_count: deceasedChildrenCount }
-      : {}),
-    ...(applicantInsurance.secondary_employment_type
-      ? { secondary_employment_type: applicantInsurance.secondary_employment_type }
-      : {}),
-    ...(applicantInsurance.secondary_voluntary_sickness_insured !== undefined
-      ? {
-          secondary_voluntary_sickness_insured:
-            applicantInsurance.secondary_voluntary_sickness_insured,
-        }
-      : {}),
     reference_date: referenceDate,
     title_start_date: applicant.insuredSince ?? undefined,
     debt_amount_pln: applicant.contributionDebt ?? undefined,
