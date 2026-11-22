@@ -357,3 +357,50 @@
   border-color: var(--accent-deadline);
   border-left-color: var(--accent-deadline);
 }
+
+/* ───────── Jeden wygląd przycisków „Dalej: …” w każdej zakładce ─────────
+ * Wcześniej: granatowy kontur (Uprawnienia, Kalkulator, Wnioski), zwykły link (Plan urlopów, góra)
+ * i pomarańczowa pigułka. Teraz wszystkie = główne CTA (pomarańcz z granatowym tekstem).
+ */
+.plan-page .results-next__link,
+.plan-page .apps-next-link,
+.plan-page .docs-next-link,
+.plan-page .lp-next-link,
+.plan-page .support-next-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-5);
+  border: var(--border-width-control) solid var(--color-cta);
+  border-radius: var(--radius-pill);
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+  transition:
+    transform 0.25s var(--ease-spring),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.plan-page .results-next__link:hover,
+.plan-page .apps-next-link:hover,
+.plan-page .docs-next-link:hover,
+.plan-page .lp-next-link:hover,
+.plan-page .support-next-link:hover {
+  border-color: var(--color-navy);
+  background: var(--color-navy);
+  color: var(--color-cta);
+  transform: translate3d(0, -2px, 0);
+}
+@media (min-width: 640px) {
+  .plan-page .results-next__link,
+  .plan-page .apps-next-link,
+  .plan-page .docs-next-link,
+  .plan-page .lp-next-link,
+.plan-page .support-next-link {
+    width: auto;
+  }
+}
