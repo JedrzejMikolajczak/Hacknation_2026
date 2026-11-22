@@ -64,7 +64,7 @@ Kreator przekazuje dane scenariusza do `POST /api/v1/plan`. Link do planu może 
 ## 5. Ścieżki demonstracyjne
 
 - [Kreator](client/src/features/wizard/README.md) zaczyna się od wybrania sytuacji na stronie startowej. Możesz go wypełnić ręcznie lub użyć danych z profilu testowego.
-- `/plan` prowadzi do uprawnień, kalkulatora, planu urlopów, dokumentów, wniosków i wsparcia.
+- `/plan` prowadzi do uprawnień, kalkulatora, planu urlopów, dokumentów, wniosków i wsparcia, a wspólny przycisk **Uwagi** w górnym pasku zbiera ostrzeżenia i ryzyka planu w jednym miejscu.
 - `/cases` porównuje wyniki ze sprawami katalogowymi. Import własnego PDF próbuje odczytać pola w przeglądarce. Użytkownik sprawdza i zatwierdza wartości wysyłane do kalkulatora. W oficjalnych formularzach ZUS dane można uzupełnić ręcznie.
 - `/login` symuluje mObywatela. `GET /api/v1/mock/profiles` zwraca listę profili, `POST /api/v1/mock/login` przyjmuje `{"profile_id":"anna"}`, a `GET /api/v1/mock/zus-data` używa tokenu z odpowiedzi logowania w nagłówku `Authorization: Bearer …`.
 - `/guide` zawiera przewodnik po tematach, a `/admin` pozwala edytować parametry wersji demonstracyjnej. Podgląd i pobieranie wniosków są dostępne w planie. Informacje o adresacie prowadzą do właściwej ścieżki złożenia dokumentów.
