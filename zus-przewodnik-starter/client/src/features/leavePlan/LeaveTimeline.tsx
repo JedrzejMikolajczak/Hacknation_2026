@@ -23,15 +23,15 @@ function toEpochDays(isoDate: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
-function getPeriodKindClass(period: CasePeriod): string {
-  if (period.leave_type === 'PARENTAL_WORK_EXTENSION') return 'lp-timeline-bar--extension';
-  if (period.work_fraction > 0) return 'lp-timeline-bar--with-work';
+function getPeriodKind(period: CasePeriod): string {
+  if (period.leave_type === 'PARENTAL_WORK_EXTENSION') return 'extension';
+  if (period.work_fraction > 0) return 'with-work';
   if (period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION') {
-    return 'lp-timeline-bar--parental';
+    return 'parental';
   }
-  if (period.leave_type === 'PATERNITY') return 'lp-timeline-bar--paternity';
-  if (period.leave_type === 'SUPPLEMENTARY_MATERNITY') return 'lp-timeline-bar--supplementary';
-  return 'lp-timeline-bar--maternity';
+  if (period.leave_type === 'PATERNITY') return 'paternity';
+  if (period.leave_type === 'SUPPLEMENTARY_MATERNITY') return 'supplementary';
+  return 'maternity';
 }
 
 function getPeriodShortTitle(period: CasePeriod): string {
@@ -40,21 +40,6 @@ function getPeriodShortTitle(period: CasePeriod): string {
     return `${base} + praca`;
   }
   return base;
-}
-
-function assignSubRows(rolePeriods: CasePeriod[]): { period: CasePeriod; row: number }[] {
-  const sorted = [...rolePeriods].sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const rowEnds: string[] = [];
-  return sorted.map((period) => {
-    let row = rowEnds.findIndex((end) => period.start_date > end);
-    if (row === -1) {
-      row = rowEnds.length;
-      rowEnds.push(period.end_date);
-    } else {
-      rowEnds[row] = period.end_date;
-    }
-    return { period, row };
-  });
 }
 
 export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimelineProps) {
@@ -101,15 +86,6 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
     }
   }
 
-  // Legenda: jeden wpis na rodzaj urlopu obecny na osi (kolor/obrys paska → nazwa)
-  const legend: { kind: string; label: string }[] = [];
-  for (const period of periods) {
-    const kind = getPeriodKindClass(period);
-    if (!legend.some((item) => item.kind === kind)) {
-      legend.push({ kind, label: getPeriodShortTitle(period) });
-    }
-  }
-
   return (
     <section className="lp-card" aria-labelledby="timeline-heading">
       <div className="lp-timeline-header">
@@ -121,87 +97,79 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
         </p>
       </div>
 
-      <div className="lp-timeline-tracks-wrap">
-        <div
-          className="lp-timeline-tracks"
-          role="region"
-          aria-label="Oś czasu w podziale na rodziców"
-        >
-          {roles.map((role) => {
-            const rolePeriods = periods.filter((p) => p.parent_role === role);
-            const positioned = assignSubRows(rolePeriods);
-            const rowCount = Math.max(1, ...positioned.map((item) => item.row + 1));
-            const laneAriaLabel =
-              role === 'MOTHER' ? 'Oś czasu urlopów mamy' : 'Oś czasu urlopów taty';
+      <div className="lp-rails">
+        {roles.map((role) => {
+          const rolePeriods = periods
+            .filter((p) => p.parent_role === role)
+            .sort((x, y) => x.start_date.localeCompare(y.start_date));
+          const totalWeeks = rolePeriods.reduce((sum, p) => sum + p.weeks, 0);
+          const laneAriaLabel =
+            role === 'MOTHER' ? 'Oś czasu urlopów mamy' : 'Oś czasu urlopów taty';
 
-            return (
-              <div key={role} className="lp-timeline-track">
-                <div className="lp-timeline-track__label">{getPlainParentLabel(role)}</div>
-                <div
-                  className="lp-timeline-track__lane"
-                  aria-label={laneAriaLabel}
-                  style={{ minHeight: `${rowCount * 4.5}rem` }}
-                >
-                  {positioned.length === 0 ? (
-                    <span className="lp-timeline-track__empty">Brak zaplanowanych okresów</span>
-                  ) : (
-                    positioned.map(({ period, row }, idx) => {
-                      const startOffset =
-                        ((toEpochDays(period.start_date) - minDay) / totalSpan) * 100;
-                      const rawWidth =
-                        ((toEpochDays(period.end_date) - toEpochDays(period.start_date) + 1) /
-                          totalSpan) *
-                        100;
-                      const widthPct = Math.min(100 - startOffset, Math.max(6, rawWidth));
-                      const shortTitle = getPeriodShortTitle(period);
-                      const fullName = benefitLabels[period.leave_type];
-                      const label = `${fullName} (${parentLabels[role]}), ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${formatDaysPl(period.days)}), stawka ${formatRatePercent(period.rate_percent)}`;
-                      const topPct = (row / rowCount) * 100;
-                      const heightPct = 100 / rowCount;
+          return (
+            <div key={role} className={`lp-rail lp-rail--${role === 'MOTHER' ? 'mother' : 'father'}`}>
+              <div className="lp-rail__head">
+                <span className="lp-rail__who">{getPlainParentLabel(role)}</span>
+                {rolePeriods.length > 0 && (
+                  <span className="lp-rail__total">
+                    {formatWeeksPl(Math.round(totalWeeks))} łącznie
+                  </span>
+                )}
+              </div>
+              {rolePeriods.length === 0 ? (
+                <p className="lp-rail__empty">Brak zaplanowanych okresów</p>
+              ) : (
+                <ol className="lp-rail__list" aria-label={laneAriaLabel}>
+                  {rolePeriods.map((period, idx) => {
+                    const startOffset =
+                      ((toEpochDays(period.start_date) - minDay) / totalSpan) * 100;
+                    const rawWidth =
+                      ((toEpochDays(period.end_date) - toEpochDays(period.start_date) + 1) /
+                        totalSpan) *
+                      100;
+                    const widthPct = Math.min(100 - startOffset, Math.max(2, rawWidth));
+                    const fullName = benefitLabels[period.leave_type];
+                    const label = `${fullName} (${parentLabels[role]}), ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${formatDaysPl(period.days)}), stawka ${formatRatePercent(period.rate_percent)}`;
 
-                      return (
+                    return (
+                      <li key={`${period.parent_role}-${period.leave_type}-${period.start_date}-${idx}`}>
                         <button
-                          key={`${period.parent_role}-${period.leave_type}-${period.start_date}-${idx}`}
                           type="button"
-                          className={`lp-timeline-bar ${getPeriodKindClass(period)}`}
-                          style={{
-                            left: `${startOffset}%`,
-                            width: `${widthPct}%`,
-                            top: rowCount > 1 ? `calc(${topPct}% + 2px)` : undefined,
-                            height: rowCount > 1 ? `calc(${heightPct}% - 4px)` : undefined,
-                            bottom: rowCount > 1 ? 'auto' : undefined,
-                          }}
+                          className={`lp-stage lp-stage--${getPeriodKind(period)}`}
                           onClick={() => onSelectDate(period.start_date, true)}
                           aria-label={label}
                           title={label}
                         >
-                          <span className="lp-timeline-bar__title">{shortTitle}</span>
-                          <span className="lp-timeline-bar__meta">
-                            <span className="lp-timeline-bar__weeks">{formatWeeksPl(period.weeks)}</span>
-                            <span className="lp-timeline-bar__rate">
-                              {' · '}
-                              {formatRatePercent(period.rate_percent)}
+                          <span className="lp-stage__dot" aria-hidden="true" />
+                          <span className="lp-stage__body">
+                            <span className="lp-stage__top">
+                              <span className="lp-stage__title">{getPeriodShortTitle(period)}</span>
+                              <span className="lp-stage__rate">
+                                {formatRatePercent(period.rate_percent)}
+                              </span>
+                            </span>
+                            <span className="lp-stage__weeks">{formatWeeksPl(period.weeks)}</span>
+                            <span className="lp-stage__dates">
+                              {formatPolishDate(period.start_date)} –{' '}
+                              {formatPolishDate(period.end_date)}
+                            </span>
+                            <span className="lp-stage__span" aria-hidden="true">
+                              <span
+                                className="lp-stage__span-fill"
+                                style={{ left: `${startOffset}%`, width: `${widthPct}%` }}
+                              />
                             </span>
                           </span>
                         </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          );
+        })}
       </div>
-
-      <ul className="lp-timeline-legend" aria-hidden="true">
-        {legend.map((item) => (
-          <li key={item.kind} className="lp-timeline-legend__item">
-            <span className={`lp-timeline-legend__swatch ${item.kind}`} />
-            {item.label}
-          </li>
-        ))}
-      </ul>
 
       <details
         className="lp-details"
