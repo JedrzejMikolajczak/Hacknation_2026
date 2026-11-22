@@ -360,7 +360,8 @@
 
 .lp-timeline-track__lane {
   position: relative;
-  min-height: 3.5rem;
+  /* pasek = lane − 2×4px, a w nim dwie linie tekstu (tytuł + „20 tyg. · 100%”) + padding i ramka */
+  min-height: 4.5rem;
   background: var(--color-surface);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);

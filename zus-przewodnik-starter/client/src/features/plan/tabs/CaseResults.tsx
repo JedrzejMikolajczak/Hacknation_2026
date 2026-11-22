@@ -66,6 +66,11 @@ function warningTitle(code: string, params: BenefitParams): string {
   }
 }
 
+/** Ogólne uwagi (bez własnego tytułu) – w kalkulatorze lądują na samym dole zakładki. */
+function isGeneralWarning(warning: CaseWarning, params: BenefitParams): boolean {
+  return warningTitle(warning.code, params) === 'Ważna uwaga do planu';
+}
+
 function isInfoWarning(warning: CaseWarning): boolean {
   return (
     warning.code === 'COMBINED_RATE_DEADLINE' &&
@@ -288,37 +293,6 @@ export function CaseRights({
 
   return (
     <div className="results-tab">
-      <section
-        className={anyQualified ? 'results-answer' : 'results-answer results-answer--none'}
-        aria-labelledby="rights-answer-heading"
-      >
-        <h2 id="rights-answer-heading" className="results-answer__title">
-          Uprawnienia
-        </h2>
-        <ul className="results-answer__list">
-          {parentSummaries.map((summary) => (
-            <li key={summary.role} className="results-answer__item">
-              <span className="results-answer__role">{summary.label}:</span>
-              <span>{summary.sentence}</span>
-            </li>
-          ))}
-        </ul>
-        {plan.outcome.warnings.length === 0 && (
-          <p className="results-answer__note">
-            Nie wykryto ryzyk utraty świadczeń dla podanych danych.
-          </p>
-        )}
-      </section>
-
-      {plan.outcome.warnings.length > 0 && (
-        <section className="results-section" aria-labelledby="rights-warnings-heading">
-          <h3 id="rights-warnings-heading" className="results-section__title">
-            Na co zwrócić uwagę
-          </h3>
-          <WarningList warnings={plan.outcome.warnings} params={params} compact />
-        </section>
-      )}
-
       <section className="results-section" aria-labelledby="rights-details-heading">
         <h3 id="rights-details-heading" className="results-section__title">
           Szczegóły świadczeń
@@ -369,6 +343,37 @@ export function CaseRights({
           })}
         </div>
       </section>
+
+      <section
+        className={anyQualified ? 'results-answer' : 'results-answer results-answer--none'}
+        aria-labelledby="rights-answer-heading"
+      >
+        <h2 id="rights-answer-heading" className="results-answer__title">
+          Uprawnienia
+        </h2>
+        <ul className="results-answer__list">
+          {parentSummaries.map((summary) => (
+            <li key={summary.role} className="results-answer__item">
+              <span className="results-answer__role">{summary.label}:</span>
+              <span>{summary.sentence}</span>
+            </li>
+          ))}
+        </ul>
+        {plan.outcome.warnings.length === 0 && (
+          <p className="results-answer__note">
+            Nie wykryto ryzyk utraty świadczeń dla podanych danych.
+          </p>
+        )}
+      </section>
+
+      {plan.outcome.warnings.length > 0 && (
+        <section className="results-section" aria-labelledby="rights-warnings-heading">
+          <h3 id="rights-warnings-heading" className="results-section__title">
+            Na co zwrócić uwagę
+          </h3>
+          <WarningList warnings={plan.outcome.warnings} params={params} compact />
+        </section>
+      )}
 
       {authSession &&
         (input?.employment_type === 'B2B' ||
@@ -623,6 +628,8 @@ export function CaseCalculator({
   const combinedUnavailable = combinedRateUnavailable(input, params);
   const durationText = formatDurationPl(primarySummary.weeks, primarySummary.days);
   const secondaryLabel = secondaryRole === 'FATHER' ? 'tata' : 'mama';
+  const specificWarnings = outcome.warnings.filter((w) => !isGeneralWarning(w, params));
+  const generalWarnings = outcome.warnings.filter((w) => isGeneralWarning(w, params));
 
   return (
     <div className="results-tab">
@@ -771,9 +778,9 @@ export function CaseCalculator({
         );
       })}
 
-      {outcome.warnings.length > 0 && (
+      {specificWarnings.length > 0 && (
         <section aria-label="Ostrzeżenia kalkulatora">
-          <WarningList warnings={outcome.warnings} params={params} />
+          <WarningList warnings={specificWarnings} params={params} />
         </section>
       )}
 
@@ -929,6 +936,12 @@ export function CaseCalculator({
           </details>
         )}
       </div>
+
+      {generalWarnings.length > 0 && (
+        <section aria-label="Ważne uwagi do planu">
+          <WarningList warnings={generalWarnings} params={params} />
+        </section>
+      )}
 
       <nav className="results-next" aria-label="Następny krok">
         <Link to={`/plan/leave-plan${search}`} className="results-next__link">

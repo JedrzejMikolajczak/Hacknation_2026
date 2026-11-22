@@ -404,3 +404,16 @@
     width: auto;
   }
 }
+
+/* ───────── Szczegóły „inline” w kafelkach: oddech wokół tekstu ─────────
+ * Wcześniej nagłówek miał padding 4px 0, więc napis dotykał krawędzi białej ramki. */
+.plan-page .results-details--inline {
+  margin-top: var(--space-3);
+  padding-top: 0;
+}
+.plan-page .results-details--inline > .results-details__summary {
+  padding: var(--space-3) var(--space-4);
+}
+.plan-page .results-details--inline > .results-details__body {
+  padding: 0 var(--space-4) var(--space-3);
+}
