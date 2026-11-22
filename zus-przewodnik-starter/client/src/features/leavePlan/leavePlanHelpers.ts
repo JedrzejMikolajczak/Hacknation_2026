@@ -14,6 +14,10 @@ import { addDaysIso, diffDaysIso, formatPln, formatPolishDate } from '../plan/pl
 
 export { addDaysIso, diffDaysIso, formatPln, formatPolishDate };
 
+export function formatDaysPl(days: number): string {
+  return `${days} ${days === 1 ? 'dzień' : 'dni'}`;
+}
+
 export function addMonthsIso(isoDate: IsoDate, months: number): IsoDate {
   const [year, month, day] = isoDate.split('-').map(Number);
   const targetFirst = new Date(Date.UTC(year, month - 1 + months, 1));

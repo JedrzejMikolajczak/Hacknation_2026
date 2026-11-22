@@ -38,3 +38,4 @@ export type {
   SicknessResult,
 };
 export { calculateCasePlan } from './casePlan';
+export { secondParentTotalForVariant } from './casePeriods';

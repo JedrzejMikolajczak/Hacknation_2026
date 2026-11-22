@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { secondParentTotalForVariant } from '@shared/engine';
 import type {
   ApplicantRole,
   BenefitParams,
@@ -12,6 +13,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
+import { formatDaysPl } from '../../leavePlan/leavePlanHelpers';
 import { ContributionDebtCertificate, SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { benefitLabels, parentLabels, payerLabel, percent, roles } from '../caseLabels';
 import {
@@ -418,9 +420,9 @@ function formatDurationPl(weeks: number, days: number): string {
     return formatWeeksPl(weeks);
   }
   if (weeks >= 1) {
-    return `${days} dni (ok. ${weeks.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} tyg.)`;
+    return `${formatDaysPl(days)} (ok. ${weeks.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} tyg.)`;
   }
-  return `${days} dni`;
+  return formatDaysPl(days);
 }
 
 function summarizeCasePeriods(periods: CasePeriod[]): {
@@ -529,7 +531,7 @@ export function PeriodCards({
                     <time dateTime={period.start_date}>{formatPolishDate(period.start_date)}</time>–
                     <time dateTime={period.end_date}>{formatPolishDate(period.end_date)}</time>
                     {' · '}
-                    {period.days} dni (
+                    {formatDaysPl(period.days)} (
                     {period.weeks.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} tyg.)
                     {period.work_fraction > 0 && (
                       <> · praca {percent(period.work_fraction * 100)} etatu</>
@@ -599,17 +601,22 @@ export function CaseCalculator({
     otherVariant === 'COMBINED_81_5'
       ? `Wariant ${formatRate(params.rates.combined)}`
       : `Wariant ${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`;
-  const appliedVariantTotal = outcome.variants[appliedVariant];
-  // outcome.variants dotyczą wnioskodawcy; część drugiego rodzica (9 tyg. po 70% i ojcowski)
-  // jest taka sama w obu wariantach, więc do porównania z sumą rodziny ją doliczamy.
+  // outcome.variants dotyczą wnioskodawcy; do porównania z sumą rodziny doliczamy drugiego
+  // rodzica przeliczonego na drugi wariant (w wariancie 81,5% tylko jego nieprzenoszalne tygodnie
+  // rodzicielskiego są po 70%, w wariancie 100% + 70% całe rodzicielskie).
   const otherVariantApplicantTotal = outcome.variants[otherVariant];
+  const otherVariantSecondaryTotal = secondParentTotalForVariant(
+    secondaryPeriods,
+    otherVariant,
+    params,
+  );
   const otherVariantTotal =
-    otherVariantApplicantTotal !== null && secondarySummary.totalAmount !== null
-      ? otherVariantApplicantTotal + secondarySummary.totalAmount
+    otherVariantApplicantTotal !== null && otherVariantSecondaryTotal !== null
+      ? otherVariantApplicantTotal + otherVariantSecondaryTotal
       : otherVariantApplicantTotal;
   const variantDiff =
-    otherVariantApplicantTotal !== null && appliedVariantTotal !== null
-      ? otherVariantApplicantTotal - appliedVariantTotal
+    otherVariantTotal !== null && allParentsTotal !== null
+      ? otherVariantTotal - allParentsTotal
       : null;
 
   const showVariantSwitch = !childLostAll && !input.parental_only;

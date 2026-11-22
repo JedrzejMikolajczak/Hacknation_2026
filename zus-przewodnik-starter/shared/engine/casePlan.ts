@@ -281,6 +281,34 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
     return addDays(from, Math.max(0, days));
   }
 
+  // W wariancie 81,5% obniżoną stawką (70%) objęte są tylko nieprzenoszalne tygodnie drugiego
+  // rodzica; jego pozostałe tygodnie rodzicielskiego są rozliczane stawką łączoną.
+  const reducedParentalDays = parentalLeave.nonTransferableWeeksPerParent * week;
+  const reducedParentalUsed: Record<ApplicantRole, number> = { MOTHER: 0, FATHER: 0 };
+  function putParental(
+    kind: CaseLeaveType,
+    from: string,
+    days: number,
+    parent: ApplicantRole,
+    basis: string,
+    work = 0,
+  ) {
+    if (variant !== COMBINED || parent === role)
+      return put(kind, from, days, parent, rateFor(parent), basis, work);
+    const reduced = Math.max(0, Math.min(days, reducedParentalDays - reducedParentalUsed[parent]));
+    reducedParentalUsed[parent] += Math.max(0, days);
+    const afterReduced = put(
+      kind,
+      from,
+      reduced,
+      parent,
+      rates.secondParentNonTransferableInCombined,
+      basis,
+      work,
+    );
+    return put(kind, afterReduced, days - reduced, parent, rates.combined, basis, work);
+  }
+
   let parentalStart = event;
   let fatherStart: string | null = null;
   const maternityRate =
@@ -534,16 +562,8 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
         }
         used[parent] += days;
         ends[parent] = end;
-        const next = put(
-          'PARENTAL',
-          part.start_date,
-          days,
-          parent,
-          rateFor(parent),
-          KP.parental,
-          work,
-        );
-        put('PARENTAL_WORK_EXTENSION', next, extra, parent, rateFor(parent), KP.work, work);
+        const next = putParental('PARENTAL', part.start_date, days, parent, KP.parental, work);
+        putParental('PARENTAL_WORK_EXTENSION', next, extra, parent, KP.work, work);
       }
       if (
         used.MOTHER > limitDays ||
@@ -592,39 +612,28 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
             'Plan wykracza poza termin wykorzystania rodzicielskiego. Wybierz krótsze części.',
           );
         else {
-          const next = put(
-            'PARENTAL',
-            parentalStart,
-            basic,
-            role,
-            rateFor(role),
-            KP.parental,
-            work,
-          );
-          const afterCertificate = put(
+          const next = putParental('PARENTAL', parentalStart, basic, role, KP.parental, work);
+          const afterCertificate = putParental(
             'PARENTAL_ZA_ZYCIEM_EXTENSION',
             next,
             days - basic,
             role,
-            rateFor(role),
             KP.zaZyciem,
           );
-          fatherStart = put(
+          fatherStart = putParental(
             'PARENTAL_WORK_EXTENSION',
             afterCertificate,
             extra,
             role,
-            rateFor(role),
             KP.work,
             work,
           );
           if (activeFatherWeeks)
-            put(
+            putParental(
               'PARENTAL',
               fatherStart,
               activeFatherWeeks * week,
               'FATHER',
-              rateFor('FATHER'),
               KP.parental,
             );
           if (!input.co_parenting) {
@@ -738,10 +747,14 @@ function calculateSingleCase(input: CaseInputs, params: BenefitParams): CasePlan
                 : adoption
                   ? rates.adoptionMaternity
                   : rates.maternity;
+        // Tak jak w calculatePeriod: podstawa i kwota okresu są zaokrąglane do grosza, a dopiero
+        // potem sumowane – dzięki temu suma wariantu zgadza się z sumą widocznych okresów.
         return (
           sum +
-          ((rawBase ?? 0) * rate * (1 - period.work_fraction) * period.days) /
-            calendar.dailyBenefitDivisor
+          roundPln(
+            (roundPln(rawBase ?? 0) * rate * (1 - period.work_fraction) * period.days) /
+              calendar.dailyBenefitDivisor,
+          )
         );
       }, 0),
     );

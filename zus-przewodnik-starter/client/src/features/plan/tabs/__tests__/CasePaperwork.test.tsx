@@ -481,8 +481,8 @@ describe('CaseApplications – wejście z mapy (?open=)', () => {
     fireEvent.change(panel.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Janina Nowak' },
     });
-    fireEvent.change(panel.getByLabelText('PESEL'), { target: { value: '90010112345' } });
-    expect(panel.getByLabelText('PESEL')).toHaveValue('90010112345');
+    fireEvent.change(panel.getByLabelText('PESEL'), { target: { value: '90010112349' } });
+    expect(panel.getByLabelText('PESEL')).toHaveValue('90010112349');
     const birth = panel.queryByLabelText('Data urodzenia');
     if (birth) fireEvent.change(birth, { target: { value: '1990-01-01' } });
 
@@ -709,7 +709,7 @@ describe('CaseApplications', () => {
     fireEvent.change(mother.getByLabelText('Imię i nazwisko'), {
       target: { value: 'Anna Kowalska' },
     });
-    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '95050512345' } });
+    fireEvent.change(mother.getByLabelText('PESEL'), { target: { value: '95050512346' } });
     fireEvent.click(
       screen.getByRole('button', {
         name: /Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski/,

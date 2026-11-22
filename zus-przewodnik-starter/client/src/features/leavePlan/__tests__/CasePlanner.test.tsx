@@ -76,6 +76,8 @@ describe('CasePlanner', () => {
     expect(screen.getByLabelText('Oś czasu urlopów mamy')).toBeInTheDocument();
     expect(screen.getByLabelText('Oś czasu urlopów taty')).toBeInTheDocument();
 
+    expect(screen.getByRole('button', { name: /Macierzyński \(Matka\).*10\.11\.2026.*stawka/i })).toBeInTheDocument();
+
     // 5 presetów
     for (const label of [
       'Najpierw mama, potem tata',
@@ -105,6 +107,18 @@ describe('CasePlanner', () => {
     // Link do kolejnego kroku zachowuje parametry URL
     const nextLink = screen.getByRole('link', { name: 'Dalej: Dokumenty i terminy ›' });
     expect(nextLink).toHaveAttribute('href', '/plan/documents?situation=afterBirth');
+  });
+
+  it('pokazuje listę okresów od razu w widoku mobilnym', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(max-width: 639px)' })));
+    try {
+      renderPlanner(makeCoupleInputs());
+      const details = screen.getByText('Zobacz okresy i kwoty').closest('details') as HTMLDetailsElement;
+      expect(details.open).toBe(true);
+      expect(screen.getByRole('list', { name: 'Szczegółowa lista okresów urlopu' })).toBeVisible();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('wywołuje update z nowymi częściami po kliknięciu gotowego scenariusza', () => {
