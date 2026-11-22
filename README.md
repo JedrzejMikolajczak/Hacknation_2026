@@ -32,6 +32,33 @@ Przepisy wokół zasiłku macierzyńskiego, urlopu rodzicielskiego i zwolnień w
 
 ---
 
+## Podgląd aplikacji
+
+| Twój plan zasiłkowy i urlopowy | Kalkulator zasiłków (81,5% vs 100% + 70%) |
+| :---: | :---: |
+| ![Twój plan](docs/screens/Opening1.png) | ![Kalkulator](docs/screens/Kalkulator1.png) |
+
+| Plan urlopów i podział między rodziców | Dokumenty, terminy i lista zadań |
+| :---: | :---: |
+| ![Plan urlopów](docs/screens/Urlop1.png) | ![Dokumenty i terminy](docs/screens/Dokumenty1.png) |
+
+| Gotowe wnioski i formularze PDF | Wsparcie i Asystent AI |
+| :---: | :---: |
+| ![Wnioski](docs/screens/Wnioski1.png) | ![Wsparcie](docs/screens/Wsparcie1.png) |
+
+<details>
+<summary><strong>Zobacz wszystkie zrzuty ekranu (15 widoków)</strong></summary>
+
+- **Kalkulator:** [`Kalkulator2.png`](docs/screens/Kalkulator2.png) · [`Kalkulator3.png`](docs/screens/Kalkulator3.png)
+- **Plan urlopów:** [`Urlop2.png`](docs/screens/Urlop2.png) · [`Urlop3.png`](docs/screens/Urlop3.png)
+- **Dokumenty i terminy:** [`Dokumenty2.png`](docs/screens/Dokumenty2.png) · [`Dokumenty3.png`](docs/screens/Dokumenty3.png)
+- **Wnioski PDF:** [`Wnioski2.png`](docs/screens/Wnioski2.png) · [`Wnioski3.png`](docs/screens/Wnioski3.png)
+- **Wsparcie:** [`Wsparcie2.png`](docs/screens/Wsparcie2.png)
+
+</details>
+
+---
+
 ## Dlaczego rozwiązanie jest gotowe do wdrożenia w ZUS?
 
 | Filar | Jak to rozwiązaliśmy |
@@ -196,7 +223,8 @@ Hacknation_2026/
 │   ├── data/                      # Zanonimizowane sprawy katalogowe (cases/) i fikcyjne profile (profiles/)
 │   ├── agents/                    # Kontrakt API i wytyczne pracy zespołu
 │   └── README.md                  # Szczegółowa dokumentacja techniczna, zmienne .env i mapa modułów
-├── docs/                          # Dokumentacja jakościowa i audyt prawno-techniczny
+├── docs/                          # Dokumentacja jakościowa, audyt i zrzuty ekranu
+│   ├── screens/                   # Zrzuty ekranu kluczowych widoków aplikacji
 │   ├── test-cases.md              # Audyt reguł ZUS i macierz przypadków testowych
 │   └── FIX_ALL_REPORT.md          # Historia integracji modułów
 └── README.md                      # Ten plik
