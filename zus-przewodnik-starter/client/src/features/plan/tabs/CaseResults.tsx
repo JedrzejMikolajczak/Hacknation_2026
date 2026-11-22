@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { secondParentTotalForVariant } from '@shared/engine';
 import type {
   ApplicantRole,
   BenefitParams,
@@ -599,17 +600,22 @@ export function CaseCalculator({
     otherVariant === 'COMBINED_81_5'
       ? `Wariant ${formatRate(params.rates.combined)}`
       : `Wariant ${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`;
-  const appliedVariantTotal = outcome.variants[appliedVariant];
-  // outcome.variants dotyczą wnioskodawcy; część drugiego rodzica (9 tyg. po 70% i ojcowski)
-  // jest taka sama w obu wariantach, więc do porównania z sumą rodziny ją doliczamy.
+  // outcome.variants dotyczą wnioskodawcy; do porównania z sumą rodziny doliczamy drugiego
+  // rodzica przeliczonego na drugi wariant (w wariancie 81,5% tylko jego nieprzenoszalne tygodnie
+  // rodzicielskiego są po 70%, w wariancie 100% + 70% całe rodzicielskie).
   const otherVariantApplicantTotal = outcome.variants[otherVariant];
+  const otherVariantSecondaryTotal = secondParentTotalForVariant(
+    secondaryPeriods,
+    otherVariant,
+    params,
+  );
   const otherVariantTotal =
-    otherVariantApplicantTotal !== null && secondarySummary.totalAmount !== null
-      ? otherVariantApplicantTotal + secondarySummary.totalAmount
+    otherVariantApplicantTotal !== null && otherVariantSecondaryTotal !== null
+      ? otherVariantApplicantTotal + otherVariantSecondaryTotal
       : otherVariantApplicantTotal;
   const variantDiff =
-    otherVariantApplicantTotal !== null && appliedVariantTotal !== null
-      ? otherVariantApplicantTotal - appliedVariantTotal
+    otherVariantTotal !== null && allParentsTotal !== null
+      ? otherVariantTotal - allParentsTotal
       : null;
 
   const showVariantSwitch = !childLostAll && !input.parental_only;

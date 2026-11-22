@@ -12,15 +12,17 @@ import { paramsRouter } from './routes/params';
 
 export const API_PREFIX = '/api/v1';
 const DEFAULT_CLIENT_ORIGIN = 'http://localhost:5173';
+const JSON_BODY_LIMIT = '1mb';
 
 export function createApp(): Express {
   const app = express();
+  app.disable('x-powered-by');
 
   const allowedOrigins = [DEFAULT_CLIENT_ORIGIN, process.env.CLIENT_ORIGIN].filter(
     (origin): origin is string => Boolean(origin),
   );
   app.use(cors({ origin: allowedOrigins }));
-  app.use(express.json());
+  app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
   app.use(API_PREFIX, healthRouter);
   app.use(API_PREFIX, paramsRouter);

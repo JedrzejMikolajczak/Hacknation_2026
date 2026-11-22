@@ -17,6 +17,7 @@ export function documentsForPlan(
     legal_basis: string,
     period?: CasePeriod,
     deadline: string | null = null,
+    filedOn: string | null = null,
   ) {
     docs.push({
       id,
@@ -28,7 +29,13 @@ export function documentsForPlan(
       leave_type: period?.leave_type ?? null,
       start_date: period?.start_date ?? null,
       end_date: period?.end_date ?? null,
-      is_overdue: !!(deadline && input.reference_date && deadline < input.reference_date),
+      // Dokument złożony w terminie (podana data złożenia ≤ termin) nie jest przeterminowany.
+      is_overdue: !!(
+        deadline &&
+        input.reference_date &&
+        deadline < input.reference_date &&
+        !(filedOn && filedOn <= deadline)
+      ),
     });
   }
   const notice = params.applicationDeadlinesDays;
@@ -229,6 +236,7 @@ export function documentsForPlan(
         KP.combined,
         maternity,
         addDays(event, params.combinedRateApplicationDeadlineDays),
+        input.application_to_payer_date ?? input.application_date,
       );
     }
     if (maternity && input.stage === 'ADOPTION' && employee && event)
