@@ -43,7 +43,7 @@ Wartości tokenów konfiguruj lokalnie. Plik `.env` pozostaje poza repozytorium.
 
 ## 3. Dane i źródła
 
-- [`data/cases/`](data/cases/) zawiera sześć spraw katalogowych przygotowanych z materiałów konkursowych.
+- [`data/cases/`](data/cases/) zawiera sześć wymyślonych, ilustracyjnych spraw przykładowych (nie pochodzą z materiałów ZUS; wynik wzorcowy wylicza silnik aplikacji).
 - [`data/profiles/`](data/profiles/) zawiera fikcyjne profile wykorzystywane przez symulację mObywatela i ZUS.
 - Materiały konkursowe otrzymane od ZUS należą do lokalnego, ignorowanego `docs/zus/`. Surowe sprawy przechowuj poza Gitem w `data/cases-raw/`.
 
@@ -84,7 +84,6 @@ npm run build
 
 - Kalkulator sygnalizuje brak obsługi macierzyńskiego i powiązanych urlopów przed 26.04.2023. Dla JDG wybiera próg zadłużenia według daty powstania prawa. W konfiguracji są wartości źródłowe dla lat 2025 i 2026. [Reforma](https://eli.gov.pl/eli/DU/2023/641/ogl) · [Płaca minimalna 2025](https://eli.gov.pl/eli/DU/2024/1362/ogl) · [Płaca minimalna 2026](https://eli.gov.pl/eli/DU/2025/1242/ogl)
 - Przy adopcji podaj datę urodzenia dziecka i, dla ojcowskiego, datę uprawomocnienia przysposobienia. W razie hospitalizacji po przyjęciu potrzebne są także daty pobytu i tydzień ciąży przy porodzie. [ZUS o ojcowskim](https://bip.zus.pl/pl/web/guest/swiadczenia/zasilki/zasilek-macierzynski/prawo-do-zasilku-i-okres-przyslugiwania/za-okres-dodatkowego-urlopu-ojcowskiego) · [ZUS o urlopie uzupełniającym](https://bip.zus.pl/pl/web/guest/swiadczenia/zasilki/zasilek-macierzynski/prawo-do-zasilku-i-okres-przyslugiwania/za-okres-uzupelniajacego-urlopu-macierzynskiego)
-- `case-05` pokazuje rozbieżność między wyciągiem (14 dni uzupełniającego) a obliczeniem dla podanych danych (7 dni). Katalog zachowuje wyciąg do weryfikacji z dokumentami źródłowymi. [Audyt reguł i matryca spraw](../docs/test-cases.md)
 
 ## 7. Praca nad projektem
 

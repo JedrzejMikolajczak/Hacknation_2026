@@ -290,7 +290,7 @@ describe('Niezależne punkty odniesienia audytu', () => {
   it('CAL-18 case-06 cztery i osiem pełnych miesięcy oraz stawka miesięczna i dzienna', () => {
     const data = case06 as CaseRecord;
     const result = calculateCasePlan(data.inputs, params).outcome;
-    expect(result.benefit_base_pln).toBe(4748.19);
+    expect(result.benefit_base_pln).toBe(5706.22);
     expect(
       result.periods.map(({ days, rate_percent, monthly_amount_pln, daily_amount_pln }) => [
         days,
@@ -299,15 +299,15 @@ describe('Niezależne punkty odniesienia audytu', () => {
         daily_amount_pln,
       ]),
     ).toEqual([
-      [42, 70, 3323.73, 110.79],
-      [61, 70, 3323.73, 110.79],
+      [42, 70, 3994.35, 133.15],
+      [61, 70, 3994.35, 133.15],
     ]);
   });
 
   it('CAL-19 stawka dzienna zaokrąglona przed mnożeniem w pomocniku ogólnym', () => {
-    expect(calculateBenefitAmount(4748.19, 0.7, 103)).toEqual({
-      dailyAmount: 110.79,
-      totalAmount: 11411.37,
+    expect(calculateBenefitAmount(5706.22, 0.7, 103)).toEqual({
+      dailyAmount: 133.15,
+      totalAmount: 13714.45,
     });
   });
 
@@ -533,8 +533,8 @@ describe('Audyt regresji aktualnej wersji silnika', () => {
 
   it('AUD-10 case-06 suma 103 dni zgodna z dziennymi kwotami w groszach', () => {
     const result = calculateCasePlan((case06 as CaseRecord).inputs, params).outcome;
-    expect(result.periods.map((row) => row.total_amount_pln)).toEqual([4653.18, 6758.19]);
-    expect(result.calculated_amount_pln).toBe(11411.37);
+    expect(result.periods.map((row) => row.total_amount_pln)).toEqual([5592.3, 8122.15]);
+    expect(result.calculated_amount_pln).toBe(13714.45);
   });
 
   it('AUD-11 zwykła niezdolność do pracy poza ciążą ma limit 182 dni', () => {

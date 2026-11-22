@@ -73,7 +73,7 @@ describe('Twój plan', () => {
     expect(JSON.parse(String(input?.body))).toMatchObject({
       applicant_role: 'MOTHER',
       stage: 'POST_BIRTH',
-      pregnancy_week_at_birth: '28+5',
+      pregnancy_week_at_birth: '29+2',
     });
   });
 

@@ -808,7 +808,7 @@ describe('CaseApplications', () => {
     );
 
     expect(screen.getAllByText(/1\/2 etatu \(50%\)/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/12\.01\.2026–07\.02\.2027/)).toBeInTheDocument();
+    expect(screen.getByText(/14\.09\.2027–09\.10\.2028/)).toBeInTheDocument();
     expect(screen.getByText(/łącznie 112 tyg\./)).toBeInTheDocument();
   });
 
@@ -925,8 +925,8 @@ describe('CaseApplications', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('WNIOSEK-KP')).not.toBeInTheDocument();
     expect(screen.getAllByText('ZUS ZAM')).toHaveLength(2);
-    expect(screen.getAllByText(/20\.09\.2026–31\.10\.2026/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/01\.11\.2026–31\.12\.2026/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/16\.08\.2027–26\.09\.2027/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/27\.09\.2027–26\.11\.2027/).length).toBeGreaterThan(0);
   });
 
   it('zachowuje spójność z plan.documents dla wszystkich 6 spraw ZUS (case-01…case-06)', () => {

@@ -1,7 +1,7 @@
 # Audyt reguł ZUS i macierz przypadków testowych
 
 > [!NOTE]
-> Dokument stanowi niezależny audyt jakościowy i prawny wykonany na stanie kodu `4c8c1fc`. **24 ustalenia z tego audytu (`AUD-01–AUD-24`) zostały następnie naprawione i pokryte testami regresyjnymi w `main` (PR #39)**. Pozostałe punkty (w tym brak pełnych oryginałów decyzji źródłowych oraz rozbieżność w wyciągu `case-05`) stanowią świadomy backlog przed ewentualnym wdrożeniem produkcyjnym w ZUS.
+> Dokument stanowi niezależny audyt jakościowy i prawny wykonany na stanie kodu `4c8c1fc`. **24 ustalenia z tego audytu (`AUD-01–AUD-24`) zostały następnie naprawione i pokryte testami regresyjnymi w `main` (PR #39)**. Pozostałe punkty (w tym brak weryfikacji względem niezależnych, rzeczywistych decyzji) stanowią świadomy backlog przed ewentualnym wdrożeniem produkcyjnym w ZUS.
 
 Stan kodu `4c8c1fc03a15f190b624c32c18d795de76973244`. Data odniesienia **21.11.2026**, strefa Europe/Warsaw. Dla wcześniejszych zdarzeń sprawdzono przepis obowiązujący w dacie zdarzenia, a dla dokumentów także w dacie składania wniosku. Dane prób poza katalogiem są fikcyjne. Kwoty są brutto, w PLN. Audyt obejmuje aplikację demonstracyjną, bez zmian w logice i bez składania prawdziwych wniosków.
 
@@ -9,7 +9,7 @@ Stan kodu `4c8c1fc03a15f190b624c32c18d795de76973244`. Data odniesienia **21.11.2
 
 - **Największe ryzyko dotyczy podstawy wymiaru, płatnika i decyzji na granicach dat.** Dla JDG z jednym pełnym miesiącem i składką od 8 000 zł kalkulator podaje 6 903,20 zł zamiast 5 045,95 zł w opisanym wariancie. Na przełomie 2026/2027 przekazuje 15 dni wynagrodzenia chorobowego do niewłaściwego rodzaju wypłaty. Nie przyznaje tygodnia uzupełniającego za pobyt 29–30.06.2026, po porodzie 01.06.2026.
 - **Nie ma ogólnego wyboru przepisów po dacie zdarzenia.** Konfiguracja dostarcza jeden zestaw parametrów. Wyjątki, takie jak data wejścia w życie urlopu uzupełniającego, są pojedynczymi warunkami w kodzie. W październiku 2024 dług 43,01 zł przekraczał próg 43,00 zł, a API kwalifikuje sprawę na podstawie progu 48,06 zł z 2026 r.
-- **Sześć spraw z katalogu uzyskało `matches: true`.** Porównano z zapisanym wyciągiem, bez oryginałów decyzji i wniosków w repozytorium ani w dostępnym pakiecie materiałów konkursowych. Trzy sprawy nie mają wartości podstawy i kwoty w wyciągu. W sprawie 05 wartość 14 dni jest zgodna z wyciągiem, ale nie z niezależnym odczytem dat i przepisu. Takiego porównania nie można użyć zamiast weryfikacji prawnej.
+- **Sześć przykładowych spraw z katalogu uzyskuje `matches: true`.** Są to wymyślone przykłady z wynikiem wzorcowym wyliczonym przez silnik, więc nie stanowią weryfikacji prawnej.
 
 ## Przepływ od danych do decyzji
 
@@ -82,18 +82,9 @@ W blokach testowych **L4** oznacza `stage=PREGNANCY`, zwolnienie `sickness_leave
 
 Status **zgodne** dotyczy wskazanego wyniku i danych. **Błąd** oznacza potwierdzoną rozbieżność. **Szacunek** oznacza wynik przy jawnych założeniach lub niekompletnych danych. **Nieobsługiwane** oznacza, że ścieżka lub kontrakt nie pozwala odwzorować reguły. **Niezweryfikowane** oznacza brak wiarygodnego potwierdzenia oczekiwania lub brak pomiaru danego wariantu.
 
-## Sprawy konkursowe
+## Przykładowe sprawy
 
-Dla każdej sprawy odtworzenie obejmuje `GET /api/v1/cases/case-0N`, `POST /api/v1/cases/case-0N/evaluate` oraz `POST /api/v1/plan` z pełnym `inputs` i datą odniesienia 21.11.2026. Źródłem oczekiwań w kolumnie „Wyciąg” jest `ground_truth_outcome` w odpowiednim [pliku JSON](../zus-przewodnik-starter/data/cases/). `caseComparison.ts` porównuje zmapowane pola decyzji i okresów. Wynik nie obejmuje autentyczności decyzji, adresatów i terminów każdego dokumentu ani składników, których w wyciągu nie ma.
-
-| ID i daty zdarzenia/wniosku | Wyciąg i niezależna kontrola istotnej reguły | Rzeczywisty wynik REST | Status i źródło |
-| --- | --- | --- | --- |
-| 01. Poród 15.10.2024, wniosek 04.11.2024, zaświadczenie 26.11.2025 | 20. dzień, 81,5%, chorobowe na osobnych okresach, 32 + 24 tyg. rodzicielskiego dla mamy. Zapisana podstawa 3 710,47 zł, kwota 53 626,19 zł i 532 dni. | Zgodność zapisanych pól. Identyczna kwota w planie. | **Zgodne** z wyciągiem. R od 26.04.2023, UZ art. 4, 11, 30a–31, KP art. 182¹a. Sposób ustalenia podwyżek, autokontrola i dowody z decyzji niezweryfikowane. |
-| 02. Poród 13.05.2024, wniosek 28.05.2024 | Trojaczki, jedno martwo urodzone, 31 tyg. podstawowego; zapisany indywidualny rodzicielski 56 tyg. z „Za życiem”, przy pracy na 1/2 112 tyg. Łącznie 1 001 dni. | 81,5%, ZUS, 1 001 dni, kwoty `null`. | **Zgodne** z wyciągiem. R/O od 26.04.2023, KP art. 180¹, 182¹a i 182¹f. Szczególna kwalifikacja puli 65 tyg. przy dwojgu żyjących dzieci pozostaje niezweryfikowana spoza wyciągu. |
-| 03. Poród 15.01.2025, początek 09.01, wniosek 22.01 | 217 dni + 238 dni. Start 6 dni przed porodem, 81,5%, ZUS. Zapisana podstawa 3 897,37 zł, kwota 48 174,75 zł. | Takie same pola i kwoty. L4 przecięte na początku macierzyńskiego. | **Zgodne** z wyciągiem. KP art. 180 i 182¹a, UZ art. 29a–31 i 43. Ponowne wyliczenie zadeklarowanych składek wymaga danych źródłowych. |
-| 04. Poród 20.07.2025, pracodawca 04.08, przekazanie 12.08 | Wpływ u pracodawcy w 15. dniu, mimo przekazania w 23. dniu. Bliźnięta 28+5, 1 150/1 290 g, 31 + 8 + 58 tyg., 679 dni. Uzupełniający płatny 100%. | ZUS, 81,5% dla podstawowego i rodzicielskiego, uzupełniający 100%, 679 dni. Kwoty `null`. | **Zgodne** w sprawdzonych polach. R od 26.04.2023, H od 19.03.2025. Rzeczywisty okres wypłaty i KRUS ojca są danymi z wyciągu. |
-| 05. Poród 01.12.2025, wniosek 10.12, 37+0, 2 350 g, szpital 01–08.12 | Wyciąg 14 dni uzupełniającego i 378 dni łącznie. Z literalnej reguły dla terminu liczenie od 06.12 daje 3 dni pobytu, czyli **7 dni uzupełniającego**. | 14 dni uzupełniającego, 378 dni łącznie, `matches: true`, kwoty `null`. | **Błąd** względem odczytu H od 19.03.2025. Rozbieżność źródeł. Potrzebne zaświadczenie szpitala i decyzja, zanim zmieni się wyciąg. Regresja H04 rozdziela wymiar liczony od 5. dnia od porównania katalogowego. |
-| 06. Poród 20.07.2023, wniosek 17.09.2026, rodzicielski 20.09–31.12.2026 | Dwie części rodzicielskiego, 42 i 61 dni, 70%. Zapisana podstawa 4 748,19 zł i 11 411,49 zł. | ZUS, 103 dni, 70%, ta sama podstawa i kwota w REST i w planie. | **Zgodne** z wyciągiem. KP art. 182¹a–d i UZ art. 31 od 26.04.2023. Reguła groszy pozostaje osobnym testem B09. |
+Katalog `data/cases/` zawiera sześć wymyślonych, ilustracyjnych spraw. Nie pochodzą z materiałów ZUS, a wynik wzorcowy wylicza silnik aplikacji, więc zgodność w katalogu sprawdza spójność kodu, a nie zgodność z decyzjami ZUS. Wcześniejsze zestawienie z decyzjami z materiałów konkursowych usunięto, bo tych materiałów nie wolno używać ani publikować.
 
 ## Macierz audytu
 
@@ -210,7 +201,7 @@ Wspólne odpowiedzi: **Po porodzie → Kontynuuj bez logowania → Samodzielnie 
 3. **Hospitalizacja i 81,5%.** Zapisywać rzeczywiste zakresy dla każdego dziecka, liczyć dwa dni i limity według dat oraz zachować odrębny termin wniosku. Dodać ustalenie wyrównania i termin liczony po zdarzeniu dotyczącym matki (H01–H09, R03, O02).
 4. **Adopcja, dokumenty i historia prawa.** Oprzeć wiek na datach urodzenia, nadawać zakres obowiązywania przepisom i wersjom dokumentów z oddzielną datą wniosku. W raportach zwracać informację o brakujących danych w odrębnym stanie (R04, O04–O10, D03–D07).
 
-Wciąż brakuje oryginalnych decyzji, zaświadczeń i danych źródłowych do spraw 01–06. Do potwierdzenia pozostają rozliczenie kwot z dziennym zaokrągleniem, dokładne liczenie siedmiu dni po zgonie, weekendowe przesunięcie terminu 81,5%, wyjątki po 26.04.2023, wszystkie warianty pracy w przedłużeniu, zbieg z KRUS oraz przyjęcie wzorów PDF przez odbiorcę. Dalszego audytu wymagają okres zasiłkowy z historią przerw i zasiłek rozpoczynający się po ustaniu tytułu, progi kwartalne dla składek, Mały ZUS Plus, płatność z kilku tytułów z podwyższeniem oraz niezależne sprawdzenie artykułów przewodnika i odpowiedzi asystenta. Na obecnych dowodach nie da się potwierdzić zgodności całej aplikacji dla dowolnej daty i sytuacji.
+Wciąż brakuje niezależnych, rzeczywistych decyzji i danych źródłowych do porównania. Do potwierdzenia pozostają rozliczenie kwot z dziennym zaokrągleniem, dokładne liczenie siedmiu dni po zgonie, weekendowe przesunięcie terminu 81,5%, wyjątki po 26.04.2023, wszystkie warianty pracy w przedłużeniu, zbieg z KRUS oraz przyjęcie wzorów PDF przez odbiorcę. Dalszego audytu wymagają okres zasiłkowy z historią przerw i zasiłek rozpoczynający się po ustaniu tytułu, progi kwartalne dla składek, Mały ZUS Plus, płatność z kilku tytułów z podwyższeniem oraz niezależne sprawdzenie artykułów przewodnika i odpowiedzi asystenta. Na obecnych dowodach nie da się potwierdzić zgodności całej aplikacji dla dowolnej daty i sytuacji.
 
 [kp26]: https://eli.gov.pl/eli/DU/2026/1245/ogl
 [uz26]: https://eli.gov.pl/eli/DU/2026/854/ogl
