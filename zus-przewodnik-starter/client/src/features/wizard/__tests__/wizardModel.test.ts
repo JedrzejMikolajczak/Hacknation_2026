@@ -449,4 +449,61 @@ describe('conditional family paths', () => {
     );
     expect(buildScenario('afterBirth', multipleLossAnswers).special?.deceasedChildrenCount).toBe(1);
   });
+
+  it('adapts grammatical person forms to single vs joint family path and enforces upper child age limit', () => {
+    const motherSingle = getQuestions('pregnant', {
+      family: 'motherOnly',
+      'mother.insuranceTitle': 'employment',
+    });
+    expect(motherSingle.find((q) => q.id === 'childrenCount')?.title).toContain('spodziewasz się');
+    expect(motherSingle.find((q) => q.id === 'zaZyciemCertificate')?.title).toContain('Czy masz');
+    expect(motherSingle.find((q) => q.id === 'mother.insuranceTitle')?.title).toBe(
+      'Jaka jest Twoja sytuacja zawodowa?',
+    );
+    expect(motherSingle.find((q) => q.id === 'mother.pregnancySickLeave')?.title).toContain(
+      'Czy jesteś albo byłaś',
+    );
+    expect(motherSingle.find((q) => q.id === 'rateVariant')?.title).toContain('Jak chcesz');
+
+    const joint = getQuestions('pregnant', {
+      family: 'both',
+      'mother.insuranceTitle': 'employment',
+    });
+    expect(joint.find((q) => q.id === 'childrenCount')?.title).toContain('spodziewacie się');
+    expect(joint.find((q) => q.id === 'zaZyciemCertificate')?.title).toContain('Czy macie');
+    expect(joint.find((q) => q.id === 'mother.insuranceTitle')?.title).toBe(
+      'Jaka jest sytuacja zawodowa mamy?',
+    );
+    expect(joint.find((q) => q.id === 'rateVariant')?.title).toContain('Jak chcecie');
+
+    // Górny limit wieku dziecka (0–17 lat) przy adopcji i rodzinie zastępczej
+    const adoptionQuestions = getQuestions('adoption', {
+      family: 'motherOnly',
+      adoptionType: 'adoption',
+      adoptionStage: 'accepted',
+    });
+    const ageQ = adoptionQuestions.find((q) => q.id === 'childAgeYears')!;
+    expect(ageQ.max).toBe(17);
+    expect(ageQ.hint).toContain('14. roku życia');
+    expect(validateAnswer(ageQ, '0')).toBeNull();
+    expect(validateAnswer(ageQ, '14')).toBeNull();
+    expect(validateAnswer(ageQ, '17')).toBeNull();
+    expect(validateAnswer(ageQ, '18')).toContain('0 do 17 lat');
+    expect(validateAnswer(ageQ, '45')).toContain('0 do 17 lat');
+    expect(adoptionQuestions.map((q) => q.id)).not.toContain('schoolObligationDeferred');
+
+    const fosterQuestions = getQuestions('adoption', {
+      family: 'motherOnly',
+      adoptionType: 'fosterFamily',
+      adoptionStage: 'accepted',
+    });
+    expect(fosterQuestions.map((q) => q.id)).toContain('schoolObligationDeferred');
+    expect(fosterQuestions.find((q) => q.id === 'childAgeYears')?.hint).toContain('7. roku życia');
+
+    // Górny limit wieku dziecka (18 lat) na ścieżce afterBirth
+    const birthQ = getQuestions('afterBirth', { family: 'motherOnly' }).find(
+      (q) => q.id === 'birthDate',
+    )!;
+    expect(validateAnswer(birthQ, '1990-01-01')).toBeTruthy();
+  });
 });
