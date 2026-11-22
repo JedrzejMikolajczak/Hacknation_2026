@@ -26,7 +26,6 @@ function Calculation({ result, input }: { result: CasePlan; input: CaseInputs })
     headingRef.current?.focus();
   }, [result]);
 
-  const query = new URLSearchParams({ inputs: JSON.stringify(input) });
   const amount = result.outcome.calculated_amount_pln;
   return (
     <section className="cases-upload__result" aria-labelledby="pdf-calculation-heading">
@@ -54,7 +53,7 @@ function Calculation({ result, input }: { result: CasePlan; input: CaseInputs })
           ))}
         </ul>
       )}
-      <Link className="ui-btn ui-btn--cta ui-btn--sm" to={`/plan/calculator?${query}`}>
+      <Link className="ui-btn ui-btn--cta ui-btn--sm" to="/plan/calculator?source=pdf" state={{ pdfPlanInputs: input }}>
         Otwórz plan
       </Link>
     </section>

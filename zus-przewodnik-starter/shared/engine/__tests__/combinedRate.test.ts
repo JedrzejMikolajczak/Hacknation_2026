@@ -135,14 +135,14 @@ describe('Kwoty wariantów zgadzają się z sumą widocznych okresów', () => {
     expect(split.outcome.variants.COMBINED_81_5).toBe(combined.outcome.variants.COMBINED_81_5);
   });
 
-  it('przypadek z E2E (podstawa 5000 zł, mama 20 + 32 tyg.): 49 466,66 zł, a nie 49 466,67 zł', () => {
+  it('kwoty obu wariantów używają stawki dziennej w groszach przy podstawie 5000 zł', () => {
     const input9 = input({ father_parental_weeks: nonTransferable });
     const split = calculateCasePlan({ ...input9, requested_payment_variant: 'SPLIT_100_70' }, params);
     const combined = calculateCasePlan(input9, params);
-    expect(split.outcome.variants.SPLIT_100_70).toBe(49466.66);
-    expect(combined.outcome.variants.SPLIT_100_70).toBe(49466.66);
-    // 81,5%: 20 tyg. i 32 tyg. po 4075,00 zł / 30 dni → 19 016,67 + 30 426,67 = 49 443,34 zł.
-    expect(combined.outcome.variants.COMBINED_81_5).toBe(49443.34);
+    expect(split.outcome.variants.SPLIT_100_70).toBe(49467.88);
+    expect(combined.outcome.variants.SPLIT_100_70).toBe(49467.88);
+    // 364 dni po 135,83 zł.
+    expect(combined.outcome.variants.COMBINED_81_5).toBe(49442.12);
   });
 
   it('drugi rodzic przeliczony na drugi wariant daje taką kwotę, jak pełny przebieg silnika', () => {

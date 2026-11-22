@@ -1,4 +1,5 @@
 import type { BenefitParams, IsoDate, SickLeaveCertificate } from '@shared/types';
+import { debtThresholdPln } from '@shared/engine/caseRules';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import { diffDaysIso, formatPln, formatPolishDate } from '../plan/planScenario';
 import './ZusSimulationPanels.css';
@@ -22,11 +23,8 @@ export function ContributionDebtCertificate({
   params = DEFAULT_PARAMS,
   onApplyDebt,
 }: ContributionDebtCertificateProps) {
-  const threshold =
-    Math.round(
-      params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
-    ) / 100;
-  const aboveThreshold = contributionDebt > threshold;
+  const threshold = debtThresholdPln(params, asOfDate);
+  const aboveThreshold = threshold !== null && contributionDebt > threshold;
   const hasAnyDebt = contributionDebt > 0;
   const panelClass = aboveThreshold
     ? 'zus-panel zus-panel--warning'
@@ -40,7 +38,7 @@ export function ContributionDebtCertificate({
       <div className="zus-panel__header">
         <h3 className="zus-panel__title">Zaświadczenie o stanie zadłużenia składkowego</h3>
         <span className={aboveThreshold ? 'zus-panel__badge zus-panel__badge--warn' : 'zus-panel__badge zus-panel__badge--ok'}>
-          {aboveThreshold ? 'Przekracza próg' : hasAnyDebt ? 'W progu ustawowym' : 'Brak zaległości'}
+          {aboveThreshold ? 'Przekracza próg' : !hasAnyDebt ? 'Brak zaległości' : threshold === null ? 'Brak danych o progu' : 'W progu ustawowym'}
         </span>
       </div>
 
@@ -68,6 +66,8 @@ export function ContributionDebtCertificate({
       <p className="zus-panel__status" role={aboveThreshold ? 'alert' : undefined}>
         {aboveThreshold
           ? `Zaległość (${formatPln(contributionDebt)}) przekracza próg ${formatPln(threshold)} – ZUS nie wypłaci zasiłku do czasu spłaty (art. 2a ustawy zasiłkowej).`
+          : threshold === null && hasAnyDebt
+            ? 'Brak skonfigurowanego historycznego progu. Sprawdź próg obowiązujący w dniu powstania prawa.'
           : hasAnyDebt
             ? `Zaległość (${formatPln(contributionDebt)}) nie przekracza progu ${formatPln(threshold)} – prawo do zasiłku jest zachowane.`
             : 'Brak zaległości w składkach ZUS na dzień powstania prawa – warunek art. 2a ustawy zasiłkowej jest spełniony.'}

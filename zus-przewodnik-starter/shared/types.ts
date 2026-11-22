@@ -339,6 +339,7 @@ export interface BenefitParams {
     employerPaidDaysUnder50: number;
     employerPaidDaysFrom50: number;
     maxBenefitPeriodDays: number;
+    maxStandardBenefitPeriodDays: number;
     gapDaysForSameBenefitPeriod: number;
   };
   benefitBase: {
@@ -448,12 +449,15 @@ export interface CaseInputs {
   sickness_leave_end_date?: IsoDate;
   sickness_benefit_start_date?: IsoDate;
   sickness_waiting_period_confirmed?: boolean;
+  sickness_prior_credited_days?: number;
   monthly_bases?: MonthlyBase[];
   parental_leave_parts?: PlannedParentalPart[];
   title_start_date?: IsoDate;
   employer_is_family_member?: boolean;
   newly_created_position?: boolean;
   adopted_or_foster_child_acceptance_date?: IsoDate;
+  adopted_or_foster_child_birth_date?: IsoDate;
+  adoption_order_final_date?: IsoDate;
   adoption_type?: 'ADOPTION' | 'FOSTER_FAMILY';
   school_obligation_deferred?: boolean;
   child_death_date?: IsoDate;
@@ -461,6 +465,8 @@ export interface CaseInputs {
   parental_only?: boolean;
   paternity_leave_start_date?: IsoDate;
   father_takeover_date?: IsoDate;
+  mother_death_date?: IsoDate;
+  mother_was_insured_at_death?: boolean;
   mother_abandonment_date?: IsoDate;
   mother_maternity_days_used?: number;
   mother_was_insured_at_abandonment?: boolean;

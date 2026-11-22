@@ -226,6 +226,7 @@ describe('family wizard', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
     await view.choice('Mama zmarła');
     await view.input('2026-01-14');
+    await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Twoja sytuacja zawodowa');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     // Mama zmarła: nie pytamy o jej plany; dziecko ma ponad 21 dni, więc 81,5% jest niedostępne.

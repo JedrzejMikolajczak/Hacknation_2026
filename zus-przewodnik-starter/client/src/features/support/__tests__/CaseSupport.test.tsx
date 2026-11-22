@@ -141,8 +141,8 @@ describe('CaseSupport', () => {
     expect(sent.context).toMatchObject({
       employment_type: 'B2B',
       has_b2b_arrears: true,
-      debt_amount_pln: 500,
     });
+    expect(sent.context).not.toHaveProperty('debt_amount_pln');
     expect(sent.context.warning_codes).toContain('SELF_EMPLOYED_DEBT');
 
     // Linki urzędowe i organizacje charytatywne

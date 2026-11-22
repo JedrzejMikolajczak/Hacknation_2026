@@ -69,7 +69,9 @@ export function endOfYearChildTurnsAge(birthDate: string, ageYears: number): str
 }
 
 export function roundPln(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  requireValue(Number.isFinite(rounded), 'amount_pln', 'Kwota przekracza zakres kalkulatora.');
+  return rounded;
 }
 
 export function formatPercentPl(rate: number): string {
@@ -96,7 +98,7 @@ export function validateParams(params: BenefitParams, on: string): void {
   );
 }
 
-export function calculateBenefitAmount(base: number, rate: number, days: number) {
+export function calculateBenefitAmount(base: number, rate: number, days: number, divisor = 30) {
   amount(base, 'benefitBase');
   requireValue(Number.isFinite(rate) && rate >= 0 && rate <= 1, 'rate', 'Nieprawidłowa stawka.');
   requireValue(
@@ -105,6 +107,6 @@ export function calculateBenefitAmount(base: number, rate: number, days: number)
     'Liczba dni musi być nieujemną liczbą całkowitą.',
   );
   // Art. 36 ust. 3: ustawowy dzielnik dzienny (30), niezależny od długości miesiąca.
-  const dailyAmount = roundPln((base * rate) / 30);
+  const dailyAmount = roundPln((base * rate) / divisor);
   return { dailyAmount, totalAmount: roundPln(dailyAmount * days) };
 }

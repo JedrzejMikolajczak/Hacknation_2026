@@ -1,4 +1,5 @@
 import type { SituationType } from '@shared/types';
+import { z3bRepresentativeNotice } from '@shared/engine/formNotices';
 
 interface Article {
   slug: string;
@@ -65,6 +66,10 @@ export const articles: Article[] = [
         content:
           'Za niezdolność do pracy przypadającą w ciąży zasiłek wynosi 100% podstawy wymiaru. Okres zasiłkowy może wynieść do 270 dni. Aby ustalić, ile dni zostało, uwzględnij zasady zaliczania wcześniejszych zwolnień.',
       },
+      {
+        title: 'Złożenie wniosku chorobowego przez pełnomocnika',
+        content: z3bRepresentativeNotice.text,
+      },
     ],
     prepare: [
       'Data początku zwolnienia i informacje z e-ZLA.',
@@ -72,6 +77,7 @@ export const articles: Article[] = [
     ],
     sources: [
       sickness,
+      z3bRepresentativeNotice,
       {
         title: 'ZUS · Wysokość zasiłku chorobowego',
         url: 'https://psz.zus.pl/web/guest/swiadczenia/zasilki/zasilek-chorobowy/z-ubezpieczenia-chorobowego/wysokosc',

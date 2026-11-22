@@ -610,10 +610,12 @@ export function LeaveSplitPlanner({
                           />
                         </label>
                         <p className="lp-extra-card__hint">
-                          {params.paternityLeave.weeks} tyg. ({formatRate(params.rates.paternity)}),
-                          do wykorzystania w ciągu {params.paternityLeave.deadlineChildAgeMonths}{' '}
-                          mies.
-                          {paternityDeadline ? ` (do ${formatPolishDate(paternityDeadline)})` : ''}.
+                          {params.paternityLeave.weeks} tyg. ({formatRate(params.rates.paternity)}).
+                          {paternityDeadline
+                            ? ` Ostatni dzień: ${formatPolishDate(paternityDeadline)}.`
+                            : input.stage === 'ADOPTION' && input.adoption_type !== 'FOSTER_FAMILY'
+                              ? ' Uzupełnij datę urodzenia dziecka oraz datę uprawomocnienia przysposobienia w danych planu.'
+                              : ''}
                         </p>
                       </div>
                     )}

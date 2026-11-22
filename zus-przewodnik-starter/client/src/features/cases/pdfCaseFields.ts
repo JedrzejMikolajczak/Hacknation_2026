@@ -3,7 +3,7 @@ import type { CaseInputs } from '@shared/types';
 const ISO_DATE = /\d{4}-\d{2}-\d{2}/;
 const POLISH_DATE = /\d{1,2}[./-]\d{1,2}[./-]\d{4}/;
 const DATE_VALUE = new RegExp('(?:' + ISO_DATE.source + '|' + POLISH_DATE.source + ')');
-const MONEY_VALUE = /(?:\d{1,3}(?: \d{3})+|\d+)(?:[,.]\d{1,2})?(?![\d,.])/;
+const MONEY_VALUE = /[+−–—-]?[ \t]*(?:\d{1,3}(?: \d{3})+|\d+)(?:[,.]\d{1,2})?(?![\d,.])/;
 
 type ExtractedField =
   | 'birthDate'
@@ -33,12 +33,13 @@ function uniqueValue(
   label: RegExp,
   pattern: RegExp,
   normalize: (value: string) => string | undefined,
+  separator = '[:–-]?',
 ): string | undefined {
   const matches = text.matchAll(
     new RegExp(
       '(?:^|[^\\p{L}\\p{N}])(?:' +
         label.source +
-        ')[ \\t]*[:–-]?[ \\t]*(?:\\r?\\n[ \\t]*)?(' +
+        ')[ \\t]*' + separator + '[ \\t]*(?:\\r?\\n[ \\t]*)?(' +
         pattern.source +
         ')(?!\\d)',
       'giu',
@@ -75,9 +76,9 @@ export function extractCaseFields(source: string): ExtractedFields {
       Number(value) > 0 ? String(Number(value)) : undefined,
     ),
     base: uniqueValue(text, /podstawa wymiaru zasiłku(?: \(zł\))?/, MONEY_VALUE, (value) => {
-      const amount = Number(value.replaceAll(' ', '').replace(',', '.'));
-      return Number.isFinite(amount) ? String(amount) : undefined;
-    }),
+      const amount = Number(value.replace(/\s/g, '').replace(',', '.'));
+      return Number.isFinite(amount) && amount >= 0 ? String(amount) : undefined;
+    }, ':?'),
   };
 }
 
