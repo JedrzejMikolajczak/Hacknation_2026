@@ -577,8 +577,10 @@ export function PlanPage() {
 
   const key = input ? JSON.stringify(input) : '';
   const current = computed?.key === key && computed.caseId === caseId ? computed : null;
-  // Keep the editor mounted while the API recalculates the same scenario.
-  const plannerSnapshot = tab === 'leave-plan' && computed?.caseId === caseId ? computed : null;
+  // Keep the editor mounted while the API recalculates the same scenario (otherwise the open
+  // accordion with the benefit-base field collapses after every keystroke).
+  const plannerSnapshot =
+    (tab === 'leave-plan' || tab === 'calculator') && computed?.caseId === caseId ? computed : null;
   const visibleResult = current ?? plannerSnapshot;
   const plan = visibleResult?.plan ?? null;
   const params = visibleResult?.params ?? null;
