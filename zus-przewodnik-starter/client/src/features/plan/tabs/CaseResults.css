@@ -253,6 +253,15 @@
   background: var(--color-surface);
 }
 
+.results-details--warning {
+  border-left: var(--accent-bar-width) solid var(--color-error);
+}
+
+.results-details--section > .results-details__summary {
+  padding: var(--space-4);
+  font-size: var(--font-size-lg);
+}
+
 .results-details--inline {
   margin-top: var(--space-1);
   padding-top: var(--space-1);
