@@ -312,3 +312,48 @@
 .support-tab {
   gap: var(--space-6);
 }
+
+/* ───────── Jednolite paski akcentu kafelków we wszystkich zakładkach ─────────
+ * Zasada: zwykła karta = zieleń marki; neutralna / informacyjna / „do uzupełnienia” = szaro-zielony;
+ * termin = pomarańcz ZUS; ostrzeżenie = czerwień (zostaje bez zmian, ma znaczenie).
+ * Wcześniej część kart brała tu `--color-navy`, który w planie jest ciemną zielenią (#1c3d2e),
+ * przez co obok siebie leżały kafelki w trzech różnych kolorach.
+ */
+.plan-page {
+  --accent-card: var(--color-primary);
+  --accent-neutral: #9fb3a8;
+  --accent-deadline: var(--color-cta);
+}
+
+/* zwykłe karty → zieleń marki */
+.plan-page .support-general-card,
+.plan-page .support-ai,
+.plan-page .support-ai__disclaimer,
+.plan-page .docs-plan-assumption,
+.plan-page .lp-details--card,
+.plan-page .lp-period-item--with-work,
+.plan-page .plan-hub__hint {
+  border-left-color: var(--accent-card);
+}
+
+/* neutralne / informacyjne → szaro-zielony */
+.plan-page .entitlements-answer--missing,
+.plan-page .entitlements-risk--info,
+.plan-page .support-answer--missing,
+.plan-page .support-risk-card--info,
+.plan-page .support-special-card--calm,
+.plan-page .support-account-box,
+.plan-page .lp-answer--missing,
+.plan-page .lp-sensitive-note,
+.plan-page .lp-planner-warnings,
+.plan-page .lp-limit-notice,
+.plan-page .application-preview__notice {
+  border-left-color: var(--accent-neutral);
+}
+
+/* terminy → pomarańcz ZUS (jak .lp-answer__deadline) */
+.plan-page .lp-deadline-callout,
+.plan-page .lp-milestone-chip--deadline {
+  border-color: var(--accent-deadline);
+  border-left-color: var(--accent-deadline);
+}
