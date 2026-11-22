@@ -3,11 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { MockProfileSummary, UserProfile, ZusData } from '@shared/types';
 import anna from '../../../data/profiles/anna.json';
-import annaUop from '../../../data/profiles/anna-uop.json';
 import jan from '../../../data/profiles/jan.json';
-import katarzynaJdgDlug from '../../../data/profiles/katarzyna-jdg-dlug.json';
-import magdalenaJdgCzysto from '../../../data/profiles/magdalena-jdg-czysto.json';
-import mariaZlecenie from '../../../data/profiles/maria-zlecenie.json';
 import { UnknownProfileError } from './AuthProvider';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -101,14 +97,7 @@ export class ProfileNotFoundError extends UnknownProfileError {
   }
 }
 
-const DEFAULT_RAW_PROFILES: unknown[] = [
-  anna,
-  jan,
-  annaUop,
-  katarzynaJdgDlug,
-  magdalenaJdgCzysto,
-  mariaZlecenie,
-];
+const DEFAULT_RAW_PROFILES: unknown[] = [anna, jan];
 
 function parseOneRecord(item: unknown): MockProfileRecord {
   const full = fullProfileRecordSchema.safeParse(item);

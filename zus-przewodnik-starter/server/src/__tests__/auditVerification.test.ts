@@ -138,7 +138,7 @@ describe('Kontrakt API w audycie', () => {
     const profiles = await request(app)
       .get(api + '/mock/profiles')
       .expect(200);
-    expect(profiles.body.data).toHaveLength(6);
+    expect(profiles.body.data).toHaveLength(2);
     expect(
       profiles.body.data.every(
         (row: Record<string, unknown>) => Object.keys(row).sort().join() === 'label,profileId',

@@ -13,25 +13,19 @@ describe('Symulacja logowania mObywatel i danych z ZUS (/api/v1/mock/*)', () => 
     const zus = new MockZusDataProvider(store);
 
     const profiles = await auth.listProfiles();
-    expect(profiles.map((item) => item.profileId)).toEqual(
-      expect.arrayContaining([
-        'anna-uop',
-        'katarzyna-jdg-dlug',
-        'magdalena-jdg-czysto',
-        'maria-zlecenie',
-      ]),
-    );
+    expect(profiles.map((item) => item.profileId).sort()).toEqual(['anna', 'jan']);
 
-    const { sessionToken, profile } = await auth.login('katarzyna-jdg-dlug');
+    const { sessionToken, profile } = await auth.login('anna');
     expect(sessionToken).toEqual(expect.any(String));
     expect(sessionToken.length).toBeGreaterThan(10);
     expect(await auth.getProfileBySession(sessionToken)).toEqual(profile);
     expect(await auth.getProfileBySession('nieprawidlowy-token')).toBeNull();
 
     const data = await zus.getZusData(profile.profileId);
-    expect(data.contributionDebt).toBeGreaterThan(0);
-    expect(data.sickLeaveCertificates.some((cert) => cert.pregnancyCode)).toBe(true);
-    expect(data.incomes.length).toBe(12);
+    expect(data.profile).toMatchObject({ firstName: 'Anna', lastName: 'Testowa' });
+    expect(data.contributionDebt).toBe(0);
+    expect(data.sickLeaveCertificates).toEqual([]);
+    expect(data.incomes).toEqual([]);
   });
 
   it('udostępnia listę profili, loguje przez POST /mock/login i zwraca dane ZUS po Bearer tokenie', async () => {
@@ -40,23 +34,16 @@ describe('Symulacja logowania mObywatel i danych z ZUS (/api/v1/mock/*)', () => 
     const listRes = await request(app).get('/api/v1/mock/profiles');
     expect(listRes.status).toBe(200);
     expect(listRes.body.error).toBeNull();
-    expect(listRes.body.data.length).toBeGreaterThanOrEqual(4);
+    expect(listRes.body.data).toHaveLength(2);
 
-    const loginRes = await request(app)
-      .post('/api/v1/mock/login')
-      .send({ profileId: 'anna-uop' });
+    const loginRes = await request(app).post('/api/v1/mock/login').send({ profileId: 'jan' });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.error).toBeNull();
     expect(loginRes.body.data.sessionToken).toEqual(expect.any(String));
     expect(loginRes.body.data.profile).toMatchObject({
-      profileId: 'anna-uop',
-      firstName: 'Anna',
-      lastName: 'Nowak',
-      mother: {
-        insuranceTitle: 'employment',
-        sicknessInsurance: 'mandatory',
-        employerInsuredCount: 150,
-      },
+      profileId: 'jan',
+      firstName: 'Jan',
+      lastName: 'Testowy',
     });
 
     const token = loginRes.body.data.sessionToken as string;
@@ -66,19 +53,10 @@ describe('Symulacja logowania mObywatel i danych z ZUS (/api/v1/mock/*)', () => 
     expect(zusRes.status).toBe(200);
     expect(zusRes.body.error).toBeNull();
     expect(zusRes.body.data).toMatchObject({
-      profile: { profileId: 'anna-uop' },
+      profile: { profileId: 'jan' },
       contributionDebt: 0,
     });
-    expect(zusRes.body.data.incomes).toHaveLength(12);
-    expect(zusRes.body.data.sickLeaveCertificates).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'EZLA-2026-09-1042',
-          startDate: '2026-09-14',
-          pregnancyCode: true,
-        }),
-      ]),
-    );
+    expect(zusRes.body.data.incomes).toEqual([]);
   });
 
   it('zwraca 401 bez lub z błędnym tokenem, 404 dla nieznanego profilu i 422 dla złego body', async () => {
