@@ -17,6 +17,7 @@ import { AppFooter } from '../../components/AppFooter';
 import { PencilIcon } from '../../components/icons';
 import { PlanHub } from './PlanHub';
 import { PlanJourney, StepEyebrow } from './PlanJourney';
+import { PlanNotifications } from './PlanNotifications';
 import { useVisitedSteps } from './planProgress';
 import {
   combinedRateUnavailable,
@@ -119,6 +120,7 @@ interface PlanDataSummaryBarProps {
   input: CaseInputs;
   params: BenefitParams;
   caseRecord: CaseRecord | null;
+  warnings: CasePlan['outcome']['warnings'];
   hasUrlEdits: boolean;
   onUpdate: (patch: Partial<CaseInputs>) => void;
   onResetEdits: () => void;
@@ -128,6 +130,7 @@ function PlanDataSummaryBar({
   input,
   params,
   caseRecord,
+  warnings,
   hasUrlEdits,
   onUpdate,
   onResetEdits,
@@ -167,15 +170,18 @@ function PlanDataSummaryBar({
             <strong className="plan-controls__summary-label">Twoje dane:</strong> {summaryText}
           </p>
         )}
-        <button
-          type="button"
-          className="plan-controls__toggle"
-          onClick={() => setIsOpen((open) => !open)}
-          aria-expanded={isOpen}
-          aria-controls="plan-controls-panel"
-        >
-          {isOpen ? 'Zwiń' : 'Zmień dane'}
-        </button>
+        <div className="plan-controls__bar-actions">
+          <PlanNotifications warnings={warnings} params={params} />
+          <button
+            type="button"
+            className="plan-controls__toggle"
+            onClick={() => setIsOpen((open) => !open)}
+            aria-expanded={isOpen}
+            aria-controls="plan-controls-panel"
+          >
+            {isOpen ? 'Zwiń' : 'Zmień dane'}
+          </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -599,6 +605,7 @@ export function PlanPage() {
       input={input}
       params={effectiveParams}
       caseRecord={currentFixture?.item ?? null}
+      warnings={visibleResult?.plan?.outcome.warnings ?? []}
       hasUrlEdits={Boolean(serialized)}
       onUpdate={update}
       onResetEdits={() => updatePlanInputs(null)}

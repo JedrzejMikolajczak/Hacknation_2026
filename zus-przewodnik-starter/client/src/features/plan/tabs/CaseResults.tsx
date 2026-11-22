@@ -234,7 +234,15 @@ function buildParentRightSummary(
   };
 }
 
-function WarningList({ warnings, params }: { warnings: CaseWarning[]; params: BenefitParams }) {
+export function WarningList({
+  warnings,
+  params,
+}: {
+  warnings: CaseWarning[];
+  params: BenefitParams;
+  /** Zachowane dla centrum powiadomień; w tym układzie nie zmienia wyglądu listy. */
+  compact?: boolean;
+}) {
   if (warnings.length === 0) return null;
   return (
     <ul className="results-risks__list">
@@ -337,15 +345,6 @@ export function CaseRights({
           </p>
         )}
       </section>
-
-      {plan.outcome.warnings.length > 0 && (
-        <section className="results-section" aria-labelledby="rights-warnings-heading">
-          <h3 id="rights-warnings-heading" className="results-section__title">
-            Na co zwrócić uwagę
-          </h3>
-          <WarningList warnings={plan.outcome.warnings} params={params} />
-        </section>
-      )}
 
       <details className="results-benefits" open={!anyQualified || undefined}>
         <summary className="results-benefits__summary">
@@ -652,7 +651,6 @@ export function CaseCalculator({
   const combinedUnavailable = combinedRateUnavailable(input, params);
   const durationText = formatDurationPl(primarySummary.weeks, primarySummary.days);
   const secondaryLabel = secondaryRole === 'FATHER' ? 'tata' : 'mama';
-  const specificWarnings = outcome.warnings.filter((w) => !isGeneralWarning(w, params));
   const generalWarnings = outcome.warnings.filter((w) => isGeneralWarning(w, params));
 
   return (
@@ -834,12 +832,6 @@ export function CaseCalculator({
           </section>
         );
       })}
-
-      {specificWarnings.length > 0 && (
-        <section aria-label="Ostrzeżenia kalkulatora">
-          <WarningList warnings={specificWarnings} params={params} />
-        </section>
-      )}
 
       <div className="results-details-stack">
         <details className="results-details">

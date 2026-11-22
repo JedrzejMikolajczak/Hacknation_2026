@@ -38,6 +38,8 @@
 
 /* Podsumowanie danych + zwijany panel edycji na żywo */
 .plan-controls {
+  position: relative;
+  z-index: 30;
   margin-bottom: var(--space-3);
   border: var(--border-width) solid var(--color-border);
   border-left: var(--accent-bar-width) solid var(--color-primary);
@@ -86,6 +88,160 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.plan-controls__bar-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Centrum powiadomień / uwag do planu */
+.plan-notif {
+  position: relative;
+}
+
+.plan-notif__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap-target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plan-notif__btn--unread {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.plan-notif__btn:hover {
+  background: var(--color-navy);
+  border-color: var(--color-navy);
+  color: var(--color-on-primary);
+}
+
+.plan-notif__btn--unread:hover {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: var(--color-on-primary);
+}
+
+.plan-notif__icon {
+  flex-shrink: 0;
+}
+
+.plan-notif__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-navy);
+  color: var(--color-on-primary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.plan-notif__badge--unread {
+  background: var(--color-error);
+}
+
+.plan-notif__btn:hover .plan-notif__badge {
+  background: var(--color-surface);
+  color: var(--color-navy);
+}
+
+.plan-notif__btn--unread:hover .plan-notif__badge {
+  background: var(--color-surface);
+  color: var(--color-error);
+}
+
+.plan-notif__popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 100;
+  width: min(28rem, calc(100vw - 2 * var(--page-gutter)));
+  max-height: 70vh;
+  overflow-y: auto;
+  border: var(--border-width) solid var(--color-border-control);
+  border-top: var(--accent-bar-width) solid var(--color-error);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+
+.plan-notif__popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.plan-notif__popover-title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+}
+
+.plan-notif__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-target-min);
+  min-height: var(--tap-target-min);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.plan-notif__close:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.plan-notif__popover-body {
+  padding: var(--space-3) var(--space-3) var(--space-4) var(--space-5);
+}
+
+.plan-notif__popover-body .results-risk {
+  margin-left: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+}
+
+.plan-notif__popover-body .results-risk .results-details--inline {
+  margin-left: calc(var(--space-3) * -1);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.plan-notif__popover-body .results-risk .results-details--inline > .results-details__summary {
+  padding: var(--space-2) 0;
+}
+
+.plan-notif__popover-body .results-risk .results-details--inline > .results-details__body {
+  padding: 0 0 var(--space-2);
 }
 
 .plan-controls__toggle {
