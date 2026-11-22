@@ -78,14 +78,15 @@ npm test
 npm run build
 ```
 
-`npm test` uruchamia Vitest w pakietach `shared`, `server` i `client`. Aby sprawdzić porównanie z decyzją w wybranej sprawie, otwórz ją w katalogu lub wyślij `POST /api/v1/cases/:caseId/evaluate`. [Matryca spraw](../docs/test-cases.md) · [Raport integracji](../docs/FIX_ALL_REPORT.md) · [Raport E2E](docs/E2E_BUGI.md)
+`npm test` uruchamia Vitest w pakietach `shared`, `server` i `client`. Aby sprawdzić porównanie z decyzją w wybranej sprawie, otwórz ją w katalogu lub wyślij `POST /api/v1/cases/:caseId/evaluate`. [Audyt reguł i matryca spraw](../docs/test-cases.md) · [Raport weryfikacji E2E](docs/E2E_BUGI.md) · [Historia integracji](../docs/FIX_ALL_REPORT.md)
 
 ## 7. Praca nad projektem
 
-Pracuj na gałęzi zadania i wykonaj kontrole przed publikacją. Zmiany kontraktu omawiaj z zespołem i opisuj w dzienniku zmian. Materiały konkursowe, lokalną konfigurację i klucze przechowuj poza Gitem. [Instrukcje repozytorium](agents/AGENTS.md) · [Brief zespołu](docs/TEAM_BRIEF.md)
+Pracuj na gałęzi zadania i wykonaj kontrole przed publikacją (`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`). Zmiany kontraktu opisuj w dzienniku zmian w [`agents/CONVENTIONS.md`](agents/CONVENTIONS.md). Materiały konkursowe, lokalną konfigurację i klucze przechowuj poza Gitem. [Kontrakt i konwencje](agents/CONVENTIONS.md) · [Instrukcje repozytorium](agents/AGENTS.md)
 
-## 8. Licencje plików zewnętrznych
+## 8. Licencje
 
+- Kod projektu udostępniany jest na [licencji MIT](../LICENSE).
 - [PDF.js](client/src/features/cases/vendor/README.md) zawiera informację o wydaniu i licencji Apache 2.0.
 - Lato ma licencję SIL Open Font License. Kopie licencji są dołączone [do fontów interfejsu](client/public/fonts/OFL.txt) oraz [do zasobów generatora formularzy](client/public/forms/OFL-Lato.txt).
 

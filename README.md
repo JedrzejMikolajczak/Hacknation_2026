@@ -6,11 +6,13 @@
 
 Projekt zespołowy przygotowany na **HackNation 2026** dla wyzwania Zakładu Ubezpieczeń Społecznych.
 
+[![CI](https://github.com/bchochoool/Hacknation_2026/actions/workflows/ci.yml/badge.svg)](https://github.com/bchochoool/Hacknation_2026/actions/workflows/ci.yml)
 ![Node.js 20+](https://img.shields.io/badge/Node.js-20.12%2B-339933?style=flat-square&logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React + Vite](https://img.shields.io/badge/React%20%2B%20Vite-Frontend-007834?style=flat-square&logo=react&logoColor=white)
 ![Express API](https://img.shields.io/badge/Express-REST%20API-1c3d2e?style=flat-square)
 ![Gemini AI](https://img.shields.io/badge/Gemini%20AI-Asystent%20Wsparcia-4285F4?style=flat-square&logo=google&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00416e?style=flat-square)](LICENSE)
 
 </div>
 
@@ -28,6 +30,17 @@ Przepisy wokół zasiłku macierzyńskiego, urlopu rodzicielskiego i zwolnień w
 
 > [!NOTE]
 > Aplikacja jest prototypem demonstracyjnym. Logowanie przez **mObywatela**, dane z **ZUS** (w tym e-ZLA i zaświadczenie o zadłużeniu) oraz wysyłka wniosków działają w trybie symulacji na fikcyjnych profilach. Wyliczenia mają charakter informacyjny i nie zastępują oficjalnej decyzji ZUS.
+
+---
+
+## Dlaczego rozwiązanie jest gotowe do wdrożenia w ZUS?
+
+| Filar | Jak to rozwiązaliśmy |
+| --- | --- |
+| **Determinizm — zero halucynacji AI przy kwotach** | Cała logika uprawnień, podstaw wymiaru, okresów, stawek i terminów działa w czystym, deterministycznym silniku TypeScript (`shared/engine/`), pokrytym testami jednostkowymi i sprawami katalogowymi. Model AI pełni wyłącznie rolę asystenta wyjaśniającego w zakładce **Wsparcie**. |
+| **Parametryzacja bez zmian w kodzie** | Stawki, wymiary urlopów, płaca minimalna i progi prawne znajdują się w jednym pliku [`shared/params.json`](zus-przewodnik-starter/shared/params.json) i mogą być aktualizowane w panelu [`/admin`](http://localhost:5173/admin) — np. przy corocznej zmianie płacy minimalnej. |
+| **Prywatność i RODO by design** | Dane wrażliwe (PESEL, numery rachunków bankowych) nigdy nie trafiają do `localStorage`/`sessionStorage`, są maskowane przed wysłaniem pytania do AI, a import i generowanie PDF (`ZAM`, `ZAS-53`) odbywa się w całości lokalnie w przeglądarce. |
+| **Dostępność (WCAG 2.1 AA) i empatyczny UX** | Interfejs mobile-first (czytelny od 360 px), wysokie kontrasty, nawigacja klawiaturą i link „Przejdź do treści”, lokalne fonty Lato oraz spokojny, empatyczny język w sytuacjach trudnych (wcześniactwo, hospitalizacja, utrata dziecka, „Za życiem”). |
 
 ---
 
@@ -50,6 +63,26 @@ Przepisy wokół zasiłku macierzyńskiego, urlopu rodzicielskiego i zwolnień w
 | **Asystent AI w zakładce Wsparcie** | Odpowiada na pytania w kontekście zanonimizowanego planu użytkownika (Google Gemini `gemini-3.1-flash-lite`), maskuje wrażliwe dane (PESEL, numer konta), blokuje wklejanie zdjęć, chroni limity cache'em i rate limiterem, a bez klucza API płynnie przechodzi na lokalną bazę ZUS 2026. |
 | **Przykładowe sprawy i import PDF** (`/cases`) | Katalog 6 spraw testowych do natychmiastowego sprawdzenia działania silnika oraz lokalny odczyt pól z własnego pliku PDF w przeglądarce (z weryfikacją przez użytkownika przed przeliczeniem). |
 | **Przewodnik i Panel parametrów** (`/guide`, `/admin`) | Baza wiedzy po ludzku oraz panel demonstracyjny do podglądu i zmiany aktualnych stawek i progów (np. płacy minimalnej). |
+
+---
+
+## Architektura systemu
+
+```mermaid
+flowchart LR
+    UI["Frontend (React + Vite + TypeScript)<br/>Kreator · Plan · PDF.js · pdf-lib (ZAM / ZAS-53)"]
+    API["REST API (Express + Zod)<br/>/api/v1/* · Walidacja · Rate Limit · PII Masking"]
+    ENGINE["Deterministyczny silnik (shared/engine)<br/>Uprawnienia · Podstawa · Okresy · Dokumenty"]
+    PARAMS["Parametry prawa (shared/params.json)<br/>Stawki · Wymiary · Progi · Panel /admin"]
+    MOCK["Adaptery demonstracyjne<br/>Symulacja mObywatel + ZUS · 6 spraw katalogowych"]
+    AI["Asystent AI (Gemini API)<br/>Opcjonalny · Automatyczny fallback do bazy ZUS 2026"]
+
+    UI -->|"/api/v1/*"| API
+    API --> ENGINE
+    ENGINE --> PARAMS
+    API --> MOCK
+    API --> AI
+```
 
 ---
 
@@ -103,16 +136,22 @@ Kliknij **Zapisz odpowiedzi → Przejdź do planu → Kalkulator**.
 
 ---
 
-## Testy i weryfikacja
+## Testy, audyt i weryfikacja
 
 Wszystkie polecenia wykonuj w katalogu `zus-przewodnik-starter`:
 
 ```bash
 npm run lint       # ESLint dla całego monorepo
 npm run typecheck  # TypeScript (shared, server, client)
-npm test           # Testy jednostkowe i integracyjne Vitest
+npm test           # Testy jednostkowe i integracyjne Vitest (shared, server, client)
 npm run build      # Pełny build produkcyjny
 ```
+
+W repozytorium znajduje się także automatyczny workflow [GitHub Actions CI](.github/workflows/ci.yml), który weryfikuje powyższy zestaw przy każdym `push` i `pull_request` do `main`.
+
+### Znane ograniczenia prototypu i dalszy rozwój
+- Symulacja mObywatela, danych ZUS i wysyłki PUE/eZUS wymagałaby docelowo podpięcia rzeczywistych interfejsów uwierzytelniania i integracji ZUS.
+- Silnik korzysta obecnie z jednego aktywnego zestawu parametrów (`shared/params.json` dla stanu prawnego 2026); obsługa historycznego wersjonowania przepisów według daty zdarzenia oraz szczegółowych przypadków brzegowych została zinwentaryzowana w **[audycie reguł ZUS i macierzy testowej](docs/test-cases.md)** jako mapa rozwoju przed wdrożeniem produkcyjnym.
 
 ---
 
@@ -120,17 +159,30 @@ npm run build      # Pełny build produkcyjny
 
 ```text
 Hacknation_2026/
-├── zus-przewodnik-starter/        # Główna aplikacja (monorepo npm workspaces)
+├── .github/
+│   ├── workflows/ci.yml           # Automatyczny pipeline CI (lint, typecheck, test, build)
+│   ├── CODEOWNERS                 # Opiekunowie obszarów projektu
+│   └── pull_request_template.md   # Szablon Pull Requesta
+├── zus-przewodnik-starter/        # Kod źródłowy aplikacji (monorepo npm workspaces)
 │   ├── client/                    # Frontend React + Vite + TypeScript (kreator, plan, PDF, AI UI)
 │   ├── server/                    # REST API Express + walidacja Zod + adaptery (mObywatel, ZUS, Gemini)
 │   ├── shared/                    # Deterministyczny silnik uprawnień, kwot, okresów i dokumentów
 │   ├── data/                      # Sprawy katalogowe (cases/) i fikcyjne profile demonstracyjne (profiles/)
-│   ├── agents/                    # Konwencje API i wytyczne pracy zespołu
+│   ├── agents/                    # Kontrakt API i wytyczne pracy zespołu
 │   └── README.md                  # Szczegółowa dokumentacja techniczna, zmienne .env i mapa modułów
-├── docs/                          # Dokumentacja weryfikacyjna projektu
-│   ├── FIX_ALL_REPORT.md          # Raport integracji
-│   └── test-cases.md              # Matryca spraw testowych
+├── docs/                          # Dokumentacja jakościowa i audyt prawno-techniczny
+│   ├── test-cases.md              # Audyt reguł ZUS i macierz przypadków testowych
+│   └── FIX_ALL_REPORT.md          # Historia integracji modułów
+├── LICENSE                        # Licencja MIT
 └── README.md                      # Ten plik
 ```
 
-Szczegółową konfigurację środowiska (zmienne `.env`, własne porty, opis endpointów API, licencje i raport E2E) znajdziesz w **[dokumentacji technicznej aplikacji](zus-przewodnik-starter/README.md)**.
+Szczegółową konfigurację środowiska (zmienne `.env`, własne porty, opis endpointów API, zależności, licencje zasobów zewnętrznych i weryfikację E2E) znajdziesz w **[dokumentacji technicznej aplikacji](zus-przewodnik-starter/README.md)**.
+
+---
+
+## Zespół i licencja
+
+Projekt przygotowany zespołowo podczas **HackNation 2026** (wyzwanie ZUS) przez: `@bchochoool`, `@JedrzejMikolajczak`, `@GluglaK`, `@szymczakkk`, `@gluglam` oraz zespół QA/merytoryczny.
+
+Kod projektu udostępniany jest na licencji **[MIT](LICENSE)**. Zasoby zewnętrzne (font **Lato** na licencji SIL OFL oraz **PDF.js** na licencji Apache 2.0) posiadają dołączone kopie swoich licencji — szczegóły w [dokumentacji aplikacji](zus-przewodnik-starter/README.md#8-licencje).

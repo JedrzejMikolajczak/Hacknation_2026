@@ -23,7 +23,7 @@
 - **Zakres:** rób tylko to, o co poproszono. Bez refaktorów „przy okazji”, bez zmiany plików innych właścicieli (README §6), bez nowych zależności bez pytania.
 - **Dane ZUS:** nigdy nie commituj `docs/zus/`, `data/cases-raw/`, `.env`, kluczy. Do `data/cases/*.json` trafiają tylko wyciągnięte wartości.
 - **AI w aplikacji:** każda funkcja korzystająca z modelu AI dostaje `<AiBadge />` i wpis w README §9.
-- **Wygląd:** UI ma wyglądać jak www.zus.pl (Lato, zieleń `#007834`, granat `#00416e`, pomarańczowe CTA `#fab856`, zielone pasy 7 px, promień 3 px). Kolory, odstępy i fonty tylko z `client/src/styles/tokens.css`. Bez logo ZUS i bez udawania oficjalnego serwisu. Szczegóły: `CONVENTIONS.md` §7.1.
+- **Wygląd:** spokojny, przyjazny interfejs inspirowany paletą ZUS (Lato, zieleń `#007834`, granat `#00416e`, pomarańczowe CTA `#fab856`, miękkie zaokrąglenia i cienie). Kolory, odstępy, promienie i fonty wyłącznie z `client/src/styles/tokens.css`. Bez logo ZUS i bez udawania oficjalnego serwisu. Szczegóły: `CONVENTIONS.md` §7.1.
 
 ## Git: workflow, który wykonujesz
 

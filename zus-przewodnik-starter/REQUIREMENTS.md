@@ -11,12 +11,13 @@
 ## 2. Instalacja
 
 ```bash
+cd zus-przewodnik-starter
 nvm use              # opcjonalnie – przełącza na Node z .nvmrc
-npm install          # w katalogu głównym; instaluje wszystkie workspace'y (client, server, shared)
-cp .env.example .env # opcjonalnie – własny port / origin / token admina
+npm ci               # instaluje wszystkie workspace'y (client, server, shared) z package-lock.json
+cp .env.example .env # opcjonalnie – własny port / origin / token admina / klucz Gemini
 ```
 
-Zawsze instaluj z **katalogu głównego** (tam, gdzie jest ten plik). Nie uruchamiaj `npm install` w `client/` ani w `server/`.
+Zawsze instaluj z **katalogu aplikacji `zus-przewodnik-starter/`** (tam, gdzie leży ten plik i `package-lock.json`). Nie uruchamiaj `npm install` w `client/` ani w `server/`.
 
 ## 3. Uruchomienie
 
@@ -57,6 +58,8 @@ Przed każdym pushem: `npm run lint && npm run typecheck && npm test` (README §
 | `react`                       | client       | Biblioteka UI.                                                           |
 | `react-dom`                   | client       | Renderowanie Reacta w przeglądarce.                                      |
 | `react-router-dom`            | client       | Routing stron (`/`, `/wizard`, `/plan/:tab` …).                          |
+| `pdf-lib`                     | client       | Lokalne wypełnianie oficjalnych formularzy PDF ZUS (`ZAM`, `ZAS-53`) w przeglądarce. |
+| `@pdf-lib/fontkit`            | client       | Osadzanie polskich fontów Lato w generowanych formularzach PDF.          |
 | `vite`                        | client (dev) | Serwer deweloperski, proxy `/api` i build frontendu.                     |
 | `@vitejs/plugin-react`        | client (dev) | Obsługa JSX i Fast Refresh w Vite.                                       |
 | `@types/react`                | client (dev) | Typy TypeScript dla Reacta.                                              |

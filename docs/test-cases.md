@@ -1,5 +1,8 @@
 # Audyt reguł ZUS i macierz przypadków testowych
 
+> [!NOTE]
+> Dokument stanowi niezależny audyt jakościowy i prawny prototypu konkursowego. Wszystkie **6 spraw katalogowych** w repozytorium przechodzi automatyczne porównanie (`matches: true`), a zebrane poniżej przypadki brzegowe i różnice historyczne dokumentują świadomy backlog rozwoju przed ewentualnym wdrożeniem produkcyjnym w ZUS.
+
 Stan kodu `4c8c1fc03a15f190b624c32c18d795de76973244`. Data odniesienia **21.11.2026**, strefa Europe/Warsaw. Dla wcześniejszych zdarzeń sprawdzono przepis obowiązujący w dacie zdarzenia, a dla dokumentów także w dacie składania wniosku. Dane prób poza katalogiem są fikcyjne. Kwoty są brutto, w PLN. Audyt obejmuje aplikację demonstracyjną, bez zmian w logice i bez składania prawdziwych wniosków.
 
 ## Wnioski

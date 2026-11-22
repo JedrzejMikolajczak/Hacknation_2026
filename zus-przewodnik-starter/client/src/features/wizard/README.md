@@ -24,7 +24,7 @@ Zmiana odpowiedzi może usunąć pola, które przestały dotyczyć wybranej ści
 
 ## Testowanie
 
-Uruchom aplikację zgodnie z [instrukcją projektu](../../../../README.md). [Ręczny test rodziny](../../../../../README.md#ręczny-test-z-fikcyjną-rodziną) prowadzi od wyboru sytuacji do porównania wariantów w kalkulatorze.
+Uruchom aplikację zgodnie z [instrukcją projektu](../../../../README.md). [Scenariusze testowe w README](../../../../../README.md#jak-przetestować-aplikację-w-2-minuty) prowadzą od wyboru sytuacji do porównania wariantów w kalkulatorze.
 
 Z katalogu `zus-przewodnik-starter` uruchom testy kreatora i mapowania planu:
 

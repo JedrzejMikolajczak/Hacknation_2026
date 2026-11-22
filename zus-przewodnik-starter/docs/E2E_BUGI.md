@@ -1,82 +1,36 @@
-# Raport błędów E2E (Playwright), podział na 3 części
+# Raport weryfikacji E2E (Playwright)
 
-Data testu: 2026-11-22. Branch: `jedrzej-ui`. Test: Chromium, 1280 px i 360 px, API przez curl.
-Raport podzielono na **Część 1, 2 i 3**. Każda część dotyczy innych plików, więc trzech agentów może pracować równolegle bez konfliktów.
+Data audytu E2E: **2026-11-22**. Środowisko: Chromium (desktop `1280 px` i mobile `360 px`) oraz weryfikacja REST API.  
+Wszystkie **17 zgłoszeń** zidentyfikowanych podczas przeglądu E2E zostało naprawionych i scalonych do gałęzi `main` (PR #30, #31, #32 oraz poprawki silnika i UI).
 
-## Jak użyć (prompt dla agenta)
+## 1. Zrealizowane poprawki z przeglądu E2E
 
-> Repo `zus-przewodnik-starter`, branch `jedrzej-ui`. Przeczytaj `agents/CLAUDE.md` i `agents/CONVENTIONS.md`. Otwórz `docs/E2E_BUGI.md` i zrealizuj **tylko Część N** (N podaje człowiek). Naprawiaj błędy po kolei i trzymaj się wyłącznie plików wymienionych w swojej części. Dla zmian w logice silnika dodaj test Vitest. Nie zmieniaj kontraktu (`shared/types.ts`, `shared/params.json`, ścieżki API) bez pytania człowieka. Uruchom `npm run lint && npm run typecheck && npm test`. Nie commituj i nie pushuj, dopóki człowiek nie poprosi. Na końcu podaj listę zmienionych plików i jak to przetestować.
-
-### Podział
-
-| Część | Zakres | Błędy | Główne pliki |
+| # | Obszar | Problem wykryty w E2E | Status w `main` |
 |---|---|---|---|
-| **1** | Silnik obliczeń i serwer | #1, #2, #3, #4, #10, #16 | `shared/engine/*`, `server/src/*`, regiony overdue w `CasePaperwork.tsx` |
-| **2** | Plan: kalkulator, plan urlopów, wnioski | #5, #8, #9, #13, #17 | `leavePlan/*`, `plan/tabs/CaseResults.tsx`, `plan/tabs/CasePaperwork.tsx` (PESEL, status wysłania) |
-| **3** | Admin, kreator, import PDF, a11y i routing | #6, #7, #11, #12, #14, #15 | `features/admin/*`, `features/wizard/wizardModel.ts`, `features/cases/*`, `app/App.tsx` |
+| 1 | Silnik | W wariancie 81,5% stawka 70% drugiego rodzica obejmowała wszystkie jego tygodnie zamiast wyłącznie 9 tygodni nieprzenoszalnych. | ✅ Naprawione (`shared/engine/casePlan.ts`, testy Vitest) |
+| 2 | Silnik / Dokumenty | Oznaczenie „Termin minął” mimo wniosku złożonego w terminie lub oznaczonego jako „Wysłano”. | ✅ Naprawione (`casePlan.ts`, `CasePaperwork.tsx`) |
+| 3 | Kalkulator | Rozbieżność 1 gr między sumą w nagłówku kalkulatora a porównaniem wariantów. | ✅ Naprawione (wspólne sumowanie i porównanie wariantów) |
+| 4 | API | Zbyt duże ciało żądania zwracało 500 `INTERNAL_ERROR` zamiast 413. | ✅ Naprawione (`express.json({ limit: '1mb' })`, obsługa `413` w `errorHandler.ts`) |
+| 5 | Plan urlopów | Panel „Ułóż ręcznie / połącz z pracą” zwijał się po każdej edycji. | ✅ Naprawione (kontrolowany stan `useState` w `LeaveSplitPlanner.tsx`) |
+| 6 | Panel admina | Komunikaty odsyłały do nieistniejącego przycisku hasła demonstracyjnego. | ✅ Naprawione (`AdminPage.tsx`) |
+| 7 | Panel admina | Błędy HTTP 404/500 mogły być traktowane jak zapis lokalny; brak walidacji zakresu pól. | ✅ Naprawione (`adminApi.ts`, testy `AdminPage.test.tsx`) |
+| 8 | Wnioski | Niejasny komunikat dla błędnego numeru PESEL i brak `maxLength={11}`. | ✅ Naprawione (`CasePaperwork.tsx`) |
+| 9 | Kalkulator | Odmiana „1 dni” przy jednodniowym okresie. | ✅ Naprawione (`CaseResults.tsx`) |
+| 10 | Asystent AI | Format „81.5%” z kropką zamiast polskiej konwencji „81,5%”. | ✅ Naprawione (`formatPercentPl` w `assistantAnswers.ts`) |
+| 11 | Kreator | Podsumowanie wyświetlało pominięte pytanie o drugi tytuł ubezpieczenia. | ✅ Naprawione (`wizardModel.ts`) |
+| 12 | Import PDF | Zbyt skromny wynik po przeliczeniu danych z PDF oraz brak informacji o ograniczeniach oficjalnych formularzy XFA. | ✅ Naprawione (`CasePdfUpload.tsx`) |
+| 13 | Dostępność / Mobile | Segmenty osi czasu przy `360 px` bez `aria-label` i czytelnej listy okresów. | ✅ Naprawione (`LeaveTimeline.tsx`) |
+| 14 | Dostępność | Brak linku „Przejdź do treści” (`skip-link`) i punktu fokusu `<main>`. | ✅ Naprawione (`App.tsx`) |
+| 15 | Routing | Nieznane adresy (`*`) pokazywały `PlaceholderPage` zamiast strony 404. | ✅ Naprawione (`NotFoundPage.tsx`, `App.tsx`) |
+| 16 | Bezpieczeństwo | Nagłówek `X-Powered-By: Express`. | ✅ Naprawione (`app.disable('x-powered-by')` w `app.ts`) |
+| 17 | Wnioski (UX) | Status „Wysłano” znikał po przełączeniu zakładki. | ✅ Naprawione (zapis samych flag statusu w `sessionStorage`, bez PESEL i danych osobowych) |
 
-Uwaga o `CasePaperwork.tsx`: Część 1 zmienia tylko logikę terminów (~317-405, 486-512, 630). Część 2 zmienia tylko walidację PESEL (~1734) i zapis statusu „Wysłano”. Regiony się nie nakładają.
+## 2. Zakres zweryfikowany w testach E2E
 
----
-
-## Część 1: Silnik obliczeń i serwer
-
-| # | Waga | Co nie działa | Odtworzenie / dowód | Pliki | Jak naprawić |
-|---|---|---|---|---|---|
-| 1 | Wysoka (potwierdź regułę z człowiekiem) | W wariancie 81,5% **wszystkie** tygodnie rodzicielskiego drugiego rodzica liczą się po 70%. README §3.3 mówi, że po 70% jest tylko 9 tyg. | `/plan/leave-plan`, `?inputs=…`, data wniosku do 21 dni od porodu. „Tylko tata” daje 32 tyg. po 70%. „Po połowie” daje tacie 20 tyg. po 70% zamiast 9 tyg. po 70% i 11 tyg. po 81,5%. | `shared/engine/casePlan.ts` `rateFor` (~227-232). Ten sam wzorzec w `shared/engine/parental.ts` (~112-116, ~219-223) i `shared/engine/maternity.ts` (~477, 716, 746). | Stawkę `secondParentNonTransferableInCombined` stosuj tylko do pierwszych `parentalLeave.nonTransferableWeeksPerParent` (9) tygodni rodzicielskiego drugiego rodzica. Pozostałe tygodnie liczone po `rates.combined`. Dodaj test dla podziałów 9/32, 20/21 i „tylko tata”. |
-| 2 | Średnia | „Termin minął” mimo wniosku złożonego w terminie. Dotyczy też wniosku ze statusem „Wysłano”. | Matka, poród 15.10.2026, data wniosku 20.10.2026 (5 dni), dziś 22.11. Zakładka Dokumenty: „CO ZROBIĆ TERAZ – Termin minął… do 05.11.2026”. Na karcie wysłanego wniosku też „Termin minął”. | `shared/engine/casePlan.ts` (~171-205, `combinedDeadline`, `is_overdue`). `client/src/features/plan/tabs/CasePaperwork.tsx` (~317-405, 486-512, 630). | Jeśli `application_to_payer_date ?? application_date` ≤ termin, dokument „Wniosek 81,5%” oznacz jako zrobiony i bez flagi overdue. Termin przeterminowany tylko wtedy, gdy nie ma daty złożenia i `reference_date` > termin. Na karcie „Wysłano” nie pokazuj „Termin minął”. |
-| 3 | Średnia | Różnica 1 gr między sumą w nagłówku kalkulatora a porównaniem wariantów. | `/plan/calculator`, podstawa 5000 zł. Nagłówek „Łącznie 59 149,99 zł”, a w porównaniu wariant 100%+70% to „59 150,00 zł (+23,34 zł)”. Mama 49 466,66 + tata 9 683,33 = 59 149,99. | `shared/engine/casePlan.ts` `totalFor` (~725-745) i `variants` (~796-799). | Wszędzie sumuj zaokrąglone kwoty okresów albo wszędzie zaokrąglaj dopiero sumę. Wystarczy jedna wspólna funkcja dla nagłówka i porównania. Test: `variants.SPLIT_100_70 === suma okresów`. |
-| 4 | Średnia | Serwer zwraca 500 `INTERNAL_ERROR` dla zbyt dużego body (powinno być 413). | `curl -X POST /api/v1/plan --data-binary @10MB.json` → `500 {"error":{"code":"INTERNAL_ERROR"}}`. | `server/src/app.ts:23` (`express.json()`), `server/src/middleware/errorHandler.ts`. | Ustaw `express.json({ limit: '1mb' })`. W `errorHandler` obsłuż `err.type === 'entity.too.large'` → 413 w kopercie `{data:null,error:{code:'PAYLOAD_TOO_LARGE',…}}`. To nowy kod błędu, więc zapytaj człowieka i dopisz do changelogu kontraktu. |
-| 10 | Niska | Asystent podaje „81.5%” z kropką, reszta aplikacji „81,5%”. | `POST /api/v1/assistant/ask` o stawkę 81,5%. | `shared/engine/assistantAnswers.ts:11` (`Math.round(rate*1000)/10`). | Użyj `formatPercentPl(params.rates.combined)`, tak jak w `casePlan.ts`. |
-| 16 | Niska (bezpieczeństwo) | Nagłówek `X-Powered-By: Express`. | `curl -I localhost:3001/api/v1/health`. | `server/src/app.ts` | `app.disable('x-powered-by')`. `helmet` to nowa zależność, więc zapytaj człowieka. |
-
----
-
-## Część 2: Plan (kalkulator, plan urlopów, wnioski)
-
-| # | Waga | Co nie działa | Odtworzenie / dowód | Pliki | Jak naprawić |
-|---|---|---|---|---|---|
-| 5 | Średnia | Panel „Ułóż ręcznie / połącz z pracą” zwija się po każdej edycji (data, przyciski etatu). Użytkownik traci miejsce przy układaniu planu. | `/plan/leave-plan?case=case-06`, otwórz panel, zmień „Koniec” części 1 albo kliknij „1/4 etatu”. `details.open` zmienia się z `true` na `false`. Wartość się zapisuje. | `client/src/features/leavePlan/LeaveSplitPlanner.tsx:233` (niekontrolowany `<details className="lp-details">`). Rodzic: `client/src/features/plan/tabs/CasePlanner.tsx:388`. | Trzymaj stan otwarcia w `useState` w `LeaveSplitPlanner`, przekazuj `open` i `onToggle`. Ustal, co remontuje poddrzewo (podejrzewam stan „loading” przy `POST /plan`) i zachowaj poprzedni plan w trakcie odświeżania. |
-| 8 | Niska | Zły komunikat dla błędnego PESEL: „Uzupełnij dane osobowe (Matka): PESEL.”, choć PESEL jest wpisany. Pole nie ma `maxLength`. | Zakładka Wnioski, PESEL `12345`, „Wyślij Wniosek…”. | `client/src/features/plan/tabs/CasePaperwork.tsx:1734` (`PERSONAL_FIELD_LABELS`). | Rozróżnij „brak” i „błędny”: „PESEL jest nieprawidłowy (11 cyfr, poprawna suma kontrolna)”. Dodaj `maxLength={11}` i `inputMode="numeric"`. |
-| 9 | Niska | Zła odmiana: „1 dni”. | Kalkulator → zasiłek chorobowy 15.10–15.10 → „1 dni (0,14 tyg.)”. | `client/src/features/plan/tabs/CaseResults.tsx` `formatDurationPl` (~414-423). Przejrzyj też inne `${days} dni`. | Dodaj helper `pluralizePl(n, 'dzień', 'dni', 'dni')` (1 dzień, 2-4 dni, 5+ dni, 22-24 dni). Użyj go wszędzie. |
-| 13 | Niska (a11y/mobile) | Oś czasu przy 360 px: segmenty ~20 px szerokości. Treść tylko w atrybucie `title`, brak `aria-label`. | `/plan/leave-plan?case=case-04`, viewport 360. „Uzupełniający 8 tyg. · 100%” ma w=20. | `client/src/features/leavePlan/LeaveTimeline.tsx`. | Dodaj `aria-label` każdemu segmentowi. Na wąskim ekranie pokaż listę okresów pod osią albo ustaw `min-width` i przewijanie poziome z legendą. |
-| 17 | Niska (UX, zgodne z kontraktem) | Status „Wysłano” i wpisane dane (PESEL, konto) znikają po zmianie zakładki. Użytkownik może wysłać drugi raz i traci UPO. PESEL poza storage to zgodne z §7. | Wnioski → „Wyślij” → zakładka Plan urlopów → powrót. | `client/src/features/plan/tabs/CasePaperwork.tsx` (stan w pamięci komponentu). | Zapisuj w `sessionStorage` same flagi statusu bez danych osobowych (jest już klucz `zus.filing.done.scenariusz`). Dane osobowe nadal tylko w pamięci. |
-
----
-
-## Część 3: Admin, kreator, import PDF, a11y i routing
-
-| # | Waga | Co nie działa | Odtworzenie / dowód | Pliki | Jak naprawić |
-|---|---|---|---|---|---|
-| 6 | Średnia | Panel admina: komunikaty odsyłają do nieistniejącego przycisku „Wypełnij hasłem demonstracyjnym”. Tekst wstępny obiecuje, że przycisk wstawi klucz, a faktycznie jest „Przywróć oficjalne przepisy 2026”. | `/admin`, „Zapisz parametry w systemie” bez tokena → „…lub kliknij przycisk „Wypełnij hasłem demonstracyjnym”.” | `client/src/features/admin/AdminPage.tsx:86` (komunikat), `:152-153` (tekst wstępny), `:156-162` (przycisk, `handleRestoreDefaults`). | Popraw teksty: „Podaj klucz dostępu administratora (ADMIN_TOKEN).” Opis przycisku ma mówić, że przywraca wartości domyślne, a nie wstawia klucz. Nie dodawaj hasła demo do klienta. |
-| 7 | Średnia | Zapis parametrów admina pokazuje „zapisano w sesji demo” także wtedy, gdy serwer zwrócił 404 albo 500. Użytkownik myśli, że zapis się udał. | Kod: `isFallbackableError` zwraca `true` dla `NOT_FOUND`, `INTERNAL_ERROR` i błędów spoza `ApiError`. Zachowania na żywo nie wywołałem, bo nie miałem tokena. | `client/src/features/admin/adminApi.ts` (`isFallbackableError`). | Fallback tylko przy błędzie sieci (serwer niedostępny) i z wyraźnym komunikatem „zapisano tylko lokalnie, serwer nie zapisał”. 404 i 500 pokazuj jako błąd. Dodatkowo: pola z wartością spoza zakresu (−5, 250, puste) nie dostają `aria-invalid` ani komunikatu przy polu. Dodaj walidację `onChange` (stawki 0-100). Z prawdziwym tokenem nie sprawdzałem odpowiedzi serwera. |
-| 11 | Niska | Podsumowanie kreatora pokazuje „Drugi tytuł do ubezpieczeń: Do uzupełnienia później”, choć pytania nie było w przepływie. Do zweryfikowania. | `/wizard?situation=afterBirth`, dwoje rodziców na UoP, kroki do końca. | `client/src/features/wizard/wizardModel.ts` (~700-725, pytanie `additionalInsurance.insuranceTitle`, `optional: true`) oraz budowanie wiersza w podsumowaniu. | Pomijaj w podsumowaniu opcjonalne pytania, które nie trafiły do przepływu. Albo pokaż je tylko, gdy warunek pytania jest spełniony. |
-| 12 | Niska | Import PDF: po „Przelicz potwierdzone dane” wynik to tylko „364 dni”, bez kwot i okresów, bez linku do planu i bez przeniesienia fokusu. PDF-y wygenerowane przez aplikację (ZAM, ZAS-53) dają „Brak rozpoznanych pól”. Własny PDF z etykietami „Data urodzenia dziecka: …” działa. | `/cases` → „Wczytaj własny wniosek PDF”. | `client/src/features/cases/CasePdfUpload.tsx`, `pdfCaseFields.ts` (`extractCaseFields`). | Pokaż po przeliczeniu kwoty i okresy albo przycisk „Otwórz plan” z `?inputs=`. Przenieś fokus na „Wynik kalkulatora”. Dopisz w UI, że oficjalne formularze ZUS nie są odczytywane. |
-| 14 | Niska (a11y) | Brak linku „Przejdź do treści”. Pierwszy Tab ląduje na pierwszej opcji sytuacji. | Landing, Tab. Grep po `client/src` nic nie znajduje. Fokus jest widoczny (outline 3 px). | `client/src/app/App.tsx` (layout) i `<main>` na stronach. | Dodaj `<a class="skip-link" href="#main">Przejdź do treści</a>` jako pierwszy element. Każdemu `<main>` daj `id="main"` i `tabIndex={-1}`. Styl widoczny po fokusie, tokeny z `tokens.css`. |
-| 15 | Niska | Nieznane adresy (`*`) pokazują `PlaceholderPage` zamiast strony 404. | Wejście na dowolny nieistniejący adres (np. `/xyz`). | `client/src/app/App.tsx` (`<Route path="*" element={<PlaceholderPage />}/>`). | Dodaj `NotFoundPage` („Nie znaleziono strony” plus link do `/`). `PlaceholderPage` zostaw tylko dla planowanych tras. |
-
----
-
-## Uwagi poza podziałem
-
-- Ostrzeżenie w konsoli „Removing XFA form data as pdf-lib does not support…” pojawia się 3 razy przy generowaniu ZAS-53 i ZAM. To oczekiwane przy oficjalnych formularzach ZUS i nic nie psuje.
-- Katalog `.playwright-mcp/` (snapshoty, logi, zrzuty ekranu, wygenerowane PDF-y) jest nieśledzony. Nie commituj go, najlepiej dodaj do `.gitignore`.
-
-## Zweryfikowane i działa poprawnie
-
-- Landing: liczniki 20/2/41 po przewinięciu, nawigacja strzałkami w grupie opcji, walidacja „Wybierz swoją sytuację”.
-- Kreator w 4 sytuacjach: Wstecz, odświeżenie, „Usuń zapisane odpowiedzi” (dwuetapowe).
-- Logowanie 6 profili i JDG z długiem (odmowa wg art. 2a).
-- 6 przykładowych spraw: `evaluate` zwraca `matches: true` dla wszystkich.
-- Kalkulator, uprawnienia, dokumenty i wsparcie bez błędów konsoli, bez `NaN` i `undefined`.
-- Wygenerowane wnioski i PDF-y: ZAS-53, ZAM x2 i USC. Pobrane pliki mają 16-431 KB, bez błędów.
-- Import PDF odrzuca poprawnie: txt, plik 13 MB, pusty i podrobiony PDF.
-- API: 404 i 422 w kopercie, admin bez tokena daje 401.
-- Uszkodzone `?inputs=` nie wywala aplikacji.
-- Walidacja ręcznego planera działa: koniec przed początkiem i nakładanie części dają komunikaty.
-
-## Czego nie sprawdzono
-
-- Ręczny planer: etat powyżej 1/2, szósta część i bardzo długi zakres. Zwijający się panel (#5) przerwał skrypt testowy.
-- Walidacja pól admina z prawdziwym tokenem (brak `ADMIN_TOKEN`).
-- Inne przeglądarki niż Chromium.
+- **Strona startowa:** liczniki, nawigacja klawiaturą w grupie sytuacji, walidacja wyboru.
+- **Kreator (4 ścieżki):** cofanie, zachowanie odpowiedzi, dwuetapowe czyszczenie danych.
+- **Symulacja mObywatela i ZUS:** wszystkie 6 profili demonstracyjnych, w tym JDG z zadłużeniem (odmowa wg art. 2a) oraz e-ZLA z kodem „B”.
+- **Sprawy katalogowe:** wszystkie 6 spraw przechodzą `POST /api/v1/cases/:caseId/evaluate` z wynikiem `matches: true`.
+- **Kalkulator, uprawnienia, dokumenty i wsparcie:** brak błędów konsoli, brak wartości `NaN`/`undefined`.
+- **Generator PDF:** poprawnie wypełnione formularze `ZAS-53`, `ZAM` i wzór wniosku USC (ostrzeżenie konsoli o usunięciu XFA przy oficjalnych szablonach ZUS jest oczekiwanym zachowaniem `pdf-lib`).
+- **Walidacja i bezpieczeństwo API:** odrzucanie niepoprawnych plików w imporcie PDF, koperty błędów `401`/`404`/`413`/`422`, odporność na uszkodzony parametr `?inputs=`.

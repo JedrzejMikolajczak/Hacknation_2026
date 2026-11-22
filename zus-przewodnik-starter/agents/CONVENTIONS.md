@@ -41,7 +41,7 @@ Typy domenowe pochodzą z `shared/types.ts`. `shared/params.json` jest początko
 
 ## 6. REST API
 
-Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error: null`. Błąd zwraca `data: null`, kod i komunikat. Nieprawidłowy JSON lub kontrakt zwracają 422. Nieznana sprawa zwraca 404.
+Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error: null`. Błąd zwraca `data: null`, kod i komunikat. Nieprawidłowy JSON lub kontrakt zwracają `422`, zbyt duże ciało żądania (> 1 MB) zwraca `413` (`VALIDATION_ERROR`), nieznana sprawa lub ścieżka zwraca `404`.
 
 | Metoda | Ścieżka | Wejście | `data` |
 |---|---|---|---|
@@ -59,9 +59,11 @@ Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error:
 | POST | `/cases/:caseId/evaluate` | puste żądanie | `{ case_id, outcome, matches, differences }` |
 | GET | `/params` | — | `BenefitParams` |
 | PUT | `/admin/params` | `BenefitParams`, nagłówek `Authorization: Bearer …` | Parametry aktywne do restartu |
-| POST | `/assistant/ask` | `{ question }` | `{ answer, sources, is_demo_fallback }` |
+| GET | `/assistant/status` | — | `{ ai_enabled, provider }` |
+| POST | `/assistant/ask` | `{ question, context?, history? }` | `{ answer, sources, is_demo_fallback }` |
 | GET | `/mock/profiles` | — | `MockProfileSummary[]` |
 | POST | `/mock/login` | `{ profile_id }` | `AuthSession` z `sessionToken` i `profile: UserProfile` |
+| GET | `/mock/zus-data` | nagłówek `Authorization: Bearer …` | Dane ubezpieczeniowe, e-ZLA i zadłużenie dla profilu sesji |
 
 `matches` porównuje kwalifikację, płatnika, stawkę, wymiary, formularze, okresy oraz znane kwoty. Streszczenie i cytaty źródłowe są zwracane obok wyniku jako treść decyzji.
 
@@ -96,3 +98,4 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | Rozszerzenie kontraktu o przypadki z PDF: `mother_abandoned_child`, `unlawful_termination_confirmed_by_court`, `WizardScenario.mother: ParentData \| null` (samotny ojciec), `secondary_employment_type` / `secondary_voluntary_sickness_insured` (dwa tytuły naraz) oraz `deceased_children_count` (poród mnogi) |
 | 2026-11-21 | Dane przejęcia po porzuceniu wymagają daty i informacji o ubezpieczeniu matki. `CaseInputs.additional_insurance_titles` przechowuje odrębne dane każdego tytułu, a `CasePlan.additional_title_outcomes` jego wyliczenie. Pola `secondary_*` pozostają obsługiwane jako starszy format. |
 | 2026-11-21 | Dodano katalog i logowanie profili testowych oraz pola `pesel` i `birthDate` w `UserProfile` |
+| 2026-11-22 | Uzupełniono dokumentację REST API o `GET /assistant/status`, `GET /mock/zus-data`, opcjonalne `context`/`history` w `POST /assistant/ask` oraz obsługę `413` |

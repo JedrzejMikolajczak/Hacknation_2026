@@ -1,14 +1,14 @@
 ## Opis zmiany
-<!-- Co zostało dodane lub poprawione? -->
+<!-- Co zostało dodane lub poprawione i dlaczego? -->
 
-## Rola / Moduł
-- [ ] 01 - API & Admin
-- [ ] 02 - Rules Engine
-- [ ] 03 - UI/UX
-- [ ] 04 - Planner & Timeline
-- [ ] 05 - Documents & Profiles
-- [ ] Docs / QA
+## Obszar zmian
+- [ ] `shared/` — silnik obliczeń, typy lub `params.json`
+- [ ] `server/` — REST API, walidacja Zod, adaptery (mObywatel, ZUS, Gemini)
+- [ ] `client/` — UI/UX, kreator, plan, generowanie PDF
+- [ ] `data/` — sprawy katalogowe lub fikcyjne profile demonstracyjne
+- [ ] `docs/` / CI — dokumentacja, testy lub konfiguracja repozytorium
 
-## Checklista
-- [ ] Brak kluczy API i plików `.env` w commicie
-- [ ] Zmiany przetestowane lokalnie
+## Checklista przed scaleniem
+- [ ] Brak kluczy API, plików `.env` i surowych materiałów konkursowych ZUS w commicie
+- [ ] Uruchomiono lokalnie: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`
+- [ ] Jeśli zmieniono kontrakt (`shared/types.ts`, `shared/params.json`, ścieżki API) — zaktualizowano `agents/CONVENTIONS.md`

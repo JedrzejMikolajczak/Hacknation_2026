@@ -1,10 +1,6 @@
-/modules/01-kalendarz/           @bchochoool
-/modules/02-formularz/           @GluglaK
-/modules/03-kalkulator/          @szymczakkk
-/modules/04-ui/                  @JedrzejMikolajczak
-/modules/05-documents-profiles/  @gluglam
-
-# Marcel (QA, dokumentacja, testy na sprawach ZUS)
-# TODO: Gdy Marcel dołączy do repozytorium, podmień @bchochoool poniżej na jego nick z GitHuba
-/docs/                           @bchochoool
-/data/sample-cases/              @bchochoool
+# Domyślni opiekunowie obszarów repozytorium
+*                                           @bchochoool
+/zus-przewodnik-starter/client/             @JedrzejMikolajczak @GluglaK
+/zus-przewodnik-starter/server/             @bchochoool @gluglam
+/zus-przewodnik-starter/shared/             @szymczakkk @bchochoool
+/docs/                                      @bchochoool
