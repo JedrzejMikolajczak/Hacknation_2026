@@ -1,4 +1,5 @@
 import type { SpecialSituationGuide } from './caseSupportData';
+import { SuperText } from '../../components/SuperText';
 
 interface SpecialSituationCardProps {
   item: SpecialSituationGuide;
@@ -33,7 +34,7 @@ function SpecialSituationCard({ item, defaultOpen = false }: SpecialSituationCar
         <details className="support-inline-details">
           <summary className="support-inline-details__summary">Podstawa prawna</summary>
           <div className="support-inline-details__body">
-            <p className="support-legal">{item.legalBasis}</p>
+            <p className="support-legal"><SuperText text={item.legalBasis} /></p>
           </div>
         </details>
       </div>

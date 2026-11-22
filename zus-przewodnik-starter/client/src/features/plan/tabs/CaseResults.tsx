@@ -24,6 +24,7 @@ import {
   todayIsoDate,
 } from '../planScenario';
 import './CaseResults.css';
+import { SuperText } from '../../../components/SuperText';
 
 const PARENT_GROUP_LABELS: Record<ApplicantRole, string> = {
   MOTHER: 'Mama',
@@ -269,7 +270,7 @@ export function WarningList({
                 <div className="results-details__body">
                   {context && <p>{context}</p>}
                   {warning.legal_basis && (
-                    <p className="results-legal">Podstawa prawna: {warning.legal_basis}</p>
+                    <p className="results-legal">Podstawa prawna: <SuperText text={warning.legal_basis} /></p>
                   )}
                 </div>
               </details>
@@ -389,7 +390,7 @@ export function CaseRights({
                         Płatnik świadczenia: {payerLabel(item.who_pays)}
                       </p>
                     )}
-                    <p className="results-legal">Podstawa prawna: {item.legal_basis}</p>
+                    <p className="results-legal">Podstawa prawna: <SuperText text={item.legal_basis} /></p>
                   </div>
                 </details>
               </article>
@@ -944,7 +945,9 @@ export function CaseCalculator({
               {outcome.legal_basis_cited.length > 0 && (
                 <ul className="results-legal-list">
                   {outcome.legal_basis_cited.map((basis) => (
-                    <li key={basis}>{basis}</li>
+                    <li key={basis}>
+                      <SuperText text={basis} />
+                    </li>
                   ))}
                 </ul>
               )}

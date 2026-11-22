@@ -184,12 +184,6 @@
   border-color: var(--color-primary);
 }
 
-.journey__check {
-  width: 1.2rem;
-  height: 1.2rem;
-  stroke-width: 3;
-}
-
 .journey__item--done .journey__dot {
   border-color: var(--color-primary);
   background: var(--color-primary);
@@ -218,10 +212,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .journey__item--current .journey__dot {
     animation: ui-ring 1.4s ease-out 1;
-  }
-
-  .journey__item--done .journey__check {
-    animation: ui-pop 420ms var(--ease-spring) backwards;
   }
 }
 
