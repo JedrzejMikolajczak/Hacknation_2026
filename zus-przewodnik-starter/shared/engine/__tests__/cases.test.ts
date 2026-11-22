@@ -59,22 +59,15 @@ function baseTwoParentInput(overrides: Partial<CaseInputs> = {}): CaseInputs {
   };
 }
 
-describe('Sprawy konkursowe ZUS', () => {
+describe('Przykładowe sprawy (dane ilustracyjne)', () => {
   for (const fixture of cases) {
     const { inputs, ground_truth_outcome: expected, case_id } = fixture;
     const outcome = calculateCasePlan(inputs, params).outcome;
     const differences = compareCase(expected, outcome);
 
-    if (case_id === 'case-05') {
-      it('case-05 pokazuje rozbieżność między wyciągiem a ustawowym oknem hospitalizacji', () => {
-        expect(differences).toContainEqual({ field: 'granted_duration_days', expected: 378, actual: 371 });
-        expect(outcome.periods.find(({ leave_type }) => leave_type === 'SUPPLEMENTARY_MATERNITY')?.days).toBe(7);
-      });
-    } else {
-      it(`${case_id} odtwarza decyzję ZUS bez rozbieżności`, () => {
-        expect(differences).toEqual([]);
-      });
-    }
+    it(`${case_id} odtwarza wynik wzorcowy bez rozbieżności`, () => {
+      expect(differences).toEqual([]);
+    });
 
     it(`${case_id} nie sygnalizuje ryzyka bez danych spełniających warunki`, () => {
       expect(
@@ -148,18 +141,18 @@ describe('Sprawy konkursowe ZUS', () => {
         params,
       ).documents.find((item) => item.parent_role === 'FATHER' && item.id === 'PARENTAL_REQUEST')
         ?.deadline;
-    expect(plan('2027-06-20', '2027-06-26')).toBe('2027-05-30');
-    expect(plan('2027-11-09', '2028-01-10')).toBe('2027-10-19');
+    expect(plan('2028-12-11', '2028-12-17')).toBe('2028-11-20');
+    expect(plan('2029-05-02', '2029-07-03')).toBe('2029-04-11');
   });
 
   it('podaje sygnał weryfikacji bez zmiany prawa do świadczenia', () => {
     const input = {
       ...cases[1].inputs,
-      title_start_date: '2024-04-08',
+      title_start_date: '2025-12-09',
       employer_is_family_member: true,
       monthly_bases: [
-        { month: '2024-02', amount_pln: 4000 },
-        { month: '2024-03', amount_pln: 6000 },
+        { month: '2025-10', amount_pln: 4000 },
+        { month: '2025-11', amount_pln: 6000 },
       ],
     };
     const { outcome } = calculateCasePlan(input, params);

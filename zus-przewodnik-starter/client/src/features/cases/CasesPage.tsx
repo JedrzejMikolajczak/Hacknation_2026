@@ -68,12 +68,12 @@ export function CasesPage() {
           )}
         </nav>
         <header className="cases-hero">
-          {!current && <p className="ui-eyebrow">Materiał konkursowy</p>}
-          <h1>{current ? current.item.short_title : 'Przykładowe sprawy ZUS'}</h1>
+          {!current && <p className="ui-eyebrow">Przykład ilustracyjny</p>}
+          <h1>{current ? current.item.short_title : 'Przykładowe sprawy'}</h1>
           {!caseId && (
             <p className="cases-hero__lead">
-              Gotowe sprawy z materiału konkursowego. Otwórz plan dla wybranej sprawy albo
-              porównaj wynik naszego silnika z decyzją ZUS.
+              Gotowe, wymyślone sprawy do wypróbowania. Otwórz plan dla wybranej sprawy albo
+              porównaj wynik silnika z wynikiem wzorcowym.
             </p>
           )}
         </header>
@@ -136,7 +136,7 @@ export function CasesPage() {
                 <p>{current.evaluation.outcome.decision_summary_pl}</p>
               </section>
               <section className="cases-compare__card">
-                <h2>Decyzja w materiale konkursowym</h2>
+                <h2>Wynik wzorcowy (przykład)</h2>
                 <p>{current.item.ground_truth_outcome.decision_summary_pl}</p>
               </section>
             </div>

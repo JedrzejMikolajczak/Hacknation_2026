@@ -1,9 +1,10 @@
-# Render Blueprint – backend API (Express). Frontend jest na Netlify (patrz netlify.toml).
+# Render Blueprint – backend API (Express). Frontend jest na Netlify (patrz zus-przewodnik-starter/netlify.toml).
 services:
   - type: web
     name: zus-przewodnik-api
     runtime: node
     plan: free
+    rootDir: zus-przewodnik-starter
     region: frankfurt
     buildCommand: npm ci
     startCommand: npm run start -w server

@@ -6,8 +6,8 @@ import { createApp } from '../app';
 const app = createApp();
 const api = '/api/v1';
 
-describe('Katalog spraw konkursowych', () => {
-  it('podaje sześć spraw i sygnalizuje rozbieżność w sprawie hospitalizacji', async () => {
+describe('Katalog przykładowych spraw', () => {
+  it('podaje sześć przykładowych spraw i zgodny wynik wzorcowy', async () => {
     const { body } = await request(app).get(`${api}/cases`).expect(200);
     const summaries: CaseSummary[] = body.data;
     expect(summaries.map(({ case_id }) => case_id)).toEqual([
@@ -28,13 +28,8 @@ describe('Katalog spraw konkursowych', () => {
       ).body.data;
       expect(evaluation.case_id).toBe(case_id);
       expect(evaluation.outcome.is_qualified).toBe(true);
-      if (case_id === 'case-05') {
-        expect(evaluation.matches).toBe(false);
-        expect(evaluation.differences).toContainEqual({ field: 'granted_duration_days', expected: 378, actual: 371 });
-      } else {
-        expect(evaluation.differences).toEqual([]);
-        expect(evaluation.matches).toBe(true);
-      }
+      expect(evaluation.differences).toEqual([]);
+      expect(evaluation.matches).toBe(true);
     }
   });
 

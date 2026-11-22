@@ -30,7 +30,7 @@ Wszystkie **17 zgłoszeń** zidentyfikowanych podczas przeglądu E2E zostało na
 - **Strona startowa:** liczniki, nawigacja klawiaturą w grupie sytuacji, walidacja wyboru.
 - **Kreator (4 ścieżki):** cofanie, zachowanie odpowiedzi, dwuetapowe czyszczenie danych.
 - **Symulacja mObywatela i ZUS:** profile demonstracyjne (obecnie w `main` uproszczone do **Anna Testowa** i **Jan Testowy**), w tym panel e-ZLA i zaświadczenia o zadłużeniu.
-- **Sprawy katalogowe:** katalog 6 spraw oraz regresje prawne `AUD-01–AUD-24` (uwaga dla `case-05` opisana w `docs/test-cases.md` i README aplikacji).
+- **Sprawy katalogowe:** katalog 6 spraw oraz regresje prawne `AUD-01–AUD-24`.
 - **Kalkulator, uprawnienia, dokumenty i wsparcie:** brak błędów konsoli, brak wartości `NaN`/`undefined`.
 - **Generator PDF:** poprawnie wypełnione formularze `ZAS-53`, `ZAM` i wzór wniosku USC (ostrzeżenie konsoli o usunięciu XFA przy oficjalnych szablonach ZUS jest oczekiwanym zachowaniem `pdf-lib`).
 - **Walidacja i bezpieczeństwo API:** odrzucanie niepoprawnych plików w imporcie PDF, koperty błędów `401`/`404`/`413`/`422`, odporność na uszkodzony parametr `?inputs=`.

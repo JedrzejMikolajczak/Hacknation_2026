@@ -69,7 +69,7 @@ Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error:
 
 ## 7. Frontend
 
-`/plan/:tab` obsługuje `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`. `?case=case-04` wskazuje publiczną sprawę katalogową. Edycje planu i dane importu PDF trafiają do sesji karty. Starsze adresy z `inputs` są obsługiwane przy otwarciu i zastępowane adresem bez tego parametru. Wnioski demo przechowują wpisane wartości tylko w pamięci komponentu. Klient wywołuje HTTP przez `client/src/api/client.ts`.
+`/plan/:tab` obsługuje `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`. `?case=case-04` wskazuje przykładową (wymyśloną) sprawę katalogową. Edycje planu i dane importu PDF trafiają do sesji karty. Starsze adresy z `inputs` są obsługiwane przy otwarciu i zastępowane adresem bez tego parametru. Wnioski demo przechowują wpisane wartości tylko w pamięci komponentu. Klient wywołuje HTTP przez `client/src/api/client.ts`.
 
 ### 7.1 Wygląd
 
@@ -85,7 +85,7 @@ Uruchom `npm ci`, `npm run lint`, `npm run typecheck`, `npm test` i `npm run bui
 
 ## 10. Otwarte kwestie
 
-Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case-02 i zaokrągleniu case-06 mają opis w [raporcie](../../docs/FIX_ALL_REPORT.md).
+Minimalna podstawa dla pracownika w brakującej tabeli ma opis w [raporcie](../../docs/FIX_ALL_REPORT.md).
 
 ## 11. Changelog kontraktu
 
