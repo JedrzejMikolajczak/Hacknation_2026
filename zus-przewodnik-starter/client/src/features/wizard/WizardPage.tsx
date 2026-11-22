@@ -1,10 +1,13 @@
-import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { SickLeaveCertificate } from '@shared/types';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import type { FieldSource, ManualFormState } from '../../app/scenarioDraft';
 import { parseSituation } from '../../app/situation';
+import { AppBar } from '../../components/AppBar';
+import { AppFooter, type FooterLink } from '../../components/AppFooter';
+import { ArrowIcon, CheckIcon } from '../../components/icons';
 import { ContributionDebtCertificate, SickLeavePreview } from '../login/ZusSimulationPanels';
 import {
   buildScenario,
@@ -23,11 +26,22 @@ import {
   selectZusIncomesForBuild,
 } from './zusMerge';
 import { WizardDateFields } from './WizardDateFields';
-import '../landing/LandingMotion.css';
 import './WizardPage.css';
 
-/** Tytuł w nagłówku dzielony na frazy – każda wjeżdża osobno (jak na stronie startowej i planie). */
-const TITLE_PARTS = ['Plan dla', 'Twojej rodziny'];
+const FOOTER_LINKS: FooterLink[] = [
+  { to: '/guide', label: 'Przewodnik' },
+  { to: '/cases', label: 'Przykładowe sprawy' },
+];
+
+/** Odpowiedź pominięta („Do uzupełnienia później”) albo jeszcze pusta. */
+function isMissing(value: string | undefined) {
+  return !value || value === 'unknown';
+}
+
+/** „1 odpowiedź”, ale „2 odpowiedzi”, „5 odpowiedzi”… */
+function answersLabel(count: number) {
+  return `${count} ${count === 1 ? 'odpowiedź' : 'odpowiedzi'}`;
+}
 
 function SourceBadge({ source }: { source: FieldSource | undefined }) {
   if (!source) return null;
@@ -77,10 +91,11 @@ function QuestionField({
         aria-describedby={describedBy}
         aria-invalid={Boolean(error)}
       >
-        {question.options?.map((option) => (
+        {question.options?.map((option, index) => (
           <label
             key={option.value}
             className={`wizard__choice${selected.includes(option.value) ? ' wizard__choice--selected' : ''}`}
+            style={{ ['--i' as string]: index }}
           >
             <input
               type={multiple ? 'checkbox' : 'radio'}
@@ -119,11 +134,15 @@ function QuestionField({
           aria-invalid={Boolean(error)}
           disabled={value === 'unknown'}
         >
-          {['1', '2', '3', 'more'].map((option) => {
+          {['1', '2', '3', 'more'].map((option, index) => {
             const more = option === 'more';
             const selected = more ? isOtherCount : !isOtherCount && value === option;
             return (
-              <label key={option} className={`wizard__choice${selected ? ' wizard__choice--selected' : ''}`}>
+              <label
+                key={option}
+                className={`wizard__choice${selected ? ' wizard__choice--selected' : ''}`}
+                style={{ ['--i' as string]: index }}
+              >
                 <input
                   type="radio"
                   name={question.id}
@@ -243,6 +262,20 @@ export function WizardPage() {
       : (question?.stage ?? 0);
   const focusKey = showComplete ? 'complete' : showSummary ? 'summary' : question?.id;
   const progress = Math.round((stage / STAGES.length) * 100);
+
+  // Kierunek przejścia (dalej / wstecz) decyduje, z której strony wjeżdża nowy ekran.
+  // Pierwszy ekran nie ma kierunku – wchodzi razem z całą stroną.
+  const stepIndex = showComplete
+    ? questions.length + 1
+    : showSummary
+      ? questions.length
+      : Math.max(0, questions.findIndex((item) => item.id === question?.id));
+  const [motion, setMotion] = useState<{ index: number; direction?: 'forward' | 'back' }>({
+    index: stepIndex,
+  });
+  if (motion.index !== stepIndex) {
+    setMotion({ index: stepIndex, direction: stepIndex > motion.index ? 'forward' : 'back' });
+  }
 
   useEffect(() => {
     if (situation && scenario.situation !== situation) setSituation(situation);
@@ -379,10 +412,19 @@ export function WizardPage() {
 
   if (!situation || !form) {
     return (
-      <main id="main" tabIndex={-1} className="wizard__empty">
-        <h1>Najpierw wybierz swoją sytuację</h1>
-        <Link to="/">Wróć do strony startowej</Link>
-      </main>
+      <div className="wizard">
+        <header>
+          <AppBar isStatic />
+        </header>
+        <main id="main" tabIndex={-1} className="wizard__empty">
+          <h1>Najpierw wybierz swoją sytuację</h1>
+          <p>Pytania dopasujemy do tego, w jakiej jesteś sytuacji.</p>
+          <Link to="/" className="ui-btn ui-btn--cta">
+            Wróć do strony startowej
+          </Link>
+        </main>
+        <AppFooter links={FOOTER_LINKS} />
+      </div>
     );
   }
 
@@ -401,60 +443,65 @@ export function WizardPage() {
     authSession?.profile.mother.insuranceTitle === 'selfEmployed';
   const rightArisesDate = resolveRightArisesDate(scenario, answers);
 
+  // Pierwszy ekran wita rodzica pełnym wstępem; dalej wstęp zwija się do jednej linii,
+  // żeby samo pytanie było jak najwyżej.
+  const compactIntro = showComplete || showSummary || question?.id !== 'family';
+  const summaryGroups = STAGES.slice(0, -1).map((label, index) => ({
+    label,
+    index,
+    items: questions.filter(
+      (item) => item.stage === index && (!item.optional || answers[item.id]),
+    ),
+  }));
+  const missingCount = summaryGroups.reduce(
+    (sum, group) => sum + group.items.filter((item) => isMissing(answers[item.id])).length,
+    0,
+  );
+
+  const zusBar = (
+    <div className={compactIntro ? 'wizard__zus-bar wizard__zus-bar--below' : 'wizard__zus-bar'}>
+      {authSession ? (
+        <p className="wizard__zus-status" role="status">
+          Połączono z ZUS przez mObywatela (symulacja):{' '}
+          <strong>
+            {authSession.profile.firstName} {authSession.profile.lastName}
+          </strong>
+          . Uzupełniono wyłącznie puste pola.
+        </p>
+      ) : (
+        <Link
+          to={`/login?situation=${situation}`}
+          state={{ returnTo: `/wizard?situation=${situation}` }}
+          className="wizard__zus-link"
+        >
+          Pobierz dane z ZUS przez mObywatela (symulacja) →
+        </Link>
+      )}
+    </div>
+  );
+
   return (
     <div className="wizard">
-      <div className="wizard__demo-strip">
-        <p className="wizard__shell wizard__demo-note">
-          Wersja demonstracyjna · integracje z ZUS są symulowane
-        </p>
-      </div>
-      <header className="wizard__header">
-        <div className="landing__aurora" aria-hidden="true">
-          <span className="landing__blob landing__blob--1" />
-          <span className="landing__blob landing__blob--2" />
-          <span className="landing__blob landing__blob--3" />
-        </div>
-        <div className="wizard__shell">
-          <div className="wizard__nav-row">
-            <Link to="/" className="wizard__back-link">
+      <header>
+        <AppBar
+          isStatic
+          actions={
+            <Link to="/" className="ui-btn ui-btn--ghost ui-btn--sm">
               ← Strona startowa
             </Link>
-            <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
-          </div>
-          <h1 className="wizard__title">
-            {TITLE_PARTS.map((part, index) => (
-              <Fragment key={part}>
-                <span className="landing__word" style={{ ['--i' as string]: index }}>
-                  <span className="landing__word-inner">{part}</span>
-                </span>{' '}
-              </Fragment>
-            ))}
-          </h1>
+          }
+        />
+      </header>
+      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
+        <div className={compactIntro ? 'wizard__intro wizard__intro--compact' : 'wizard__intro'}>
+          <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
+          <h1 className="wizard__title">Plan dla Twojej rodziny</h1>
           <p className="wizard__subtitle">
             Pytania dopasujemy do Waszej sytuacji. Odpowiedzi można uzupełnić później.
           </p>
-          <div className="wizard__zus-bar">
-            {authSession ? (
-              <p className="wizard__zus-status" role="status">
-                Połączono z ZUS przez mObywatela (symulacja):{' '}
-                <strong>
-                  {authSession.profile.firstName} {authSession.profile.lastName}
-                </strong>
-                . Uzupełniono wyłącznie puste pola.
-              </p>
-            ) : (
-              <Link
-                to={`/login?situation=${situation}`}
-                state={{ returnTo: `/wizard?situation=${situation}` }}
-                className="wizard__zus-link"
-              >
-                Pobierz dane z ZUS przez mObywatela (symulacja) →
-              </Link>
-            )}
-          </div>
+          {!compactIntro && zusBar}
         </div>
-      </header>
-      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
+
         <div className="wizard__progress-card">
           <div className="wizard__progress-heading">
             <span>
@@ -479,8 +526,8 @@ export function WizardPage() {
                 className={index <= stage ? 'wizard__stage--active' : ''}
                 aria-current={index === stage ? 'step' : undefined}
               >
-                <span aria-hidden="true">{index < stage ? '✓' : index + 1}</span>
-                {label}
+                <span aria-hidden="true">{index < stage ? <CheckIcon /> : index + 1}</span>
+                <span className="wizard__stage-label">{label}</span>
               </li>
             ))}
           </ol>
@@ -512,14 +559,19 @@ export function WizardPage() {
         )}
 
         {showComplete ? (
-          <section className="wizard__card" aria-labelledby="question-title">
+          <section
+            key={focusKey}
+            data-dir={motion.direction}
+            className="wizard__card wizard__card--done"
+            aria-labelledby="question-title"
+          >
             <span className="wizard__complete-icon" aria-hidden="true">
-              ✓
+              <CheckIcon />
             </span>
             <h2 ref={titleRef} tabIndex={-1} id="question-title">
               {storageAvailable ? 'Odpowiedzi zapisane' : 'Odpowiedzi zebrane'}
             </h2>
-            <p>
+            <p className="wizard__help">
               {storageAvailable
                 ? 'Możecie wrócić do nich na tym samym urządzeniu i w tej samej przeglądarce.'
                 : 'Pozostawcie tę stronę otwartą. Przeglądarka nie pozwoliła zapisać odpowiedzi na później.'}
@@ -530,20 +582,28 @@ export function WizardPage() {
               </p>
             )}
             <div className="wizard__actions">
+              <Link
+                className="ui-btn ui-btn--cta ui-btn--lg wizard__button wizard__button--primary"
+                to="/plan"
+              >
+                Przejdź do planu <ArrowIcon />
+              </Link>
               <button
                 type="button"
-                className="wizard__button wizard__button--primary"
+                className="ui-btn ui-btn--ghost ui-btn--lg wizard__button wizard__button--secondary"
                 onClick={() => persist(answers, 'summary')}
               >
                 Zobacz podsumowanie
               </button>
-              <Link className="wizard__button wizard__button--secondary" to="/plan">
-                Przejdź do planu
-              </Link>
             </div>
           </section>
         ) : showSummary ? (
-          <section className="wizard__card" aria-labelledby="question-title">
+          <section
+            key={focusKey}
+            data-dir={motion.direction}
+            className="wizard__card"
+            aria-labelledby="question-title"
+          >
             <h2 ref={titleRef} tabIndex={-1} id="question-title">
               Sprawdźcie odpowiedzi
             </h2>
@@ -551,76 +611,101 @@ export function WizardPage() {
               Każdą odpowiedź możecie zmienić. Pola „Do uzupełnienia później” pozostaną oznaczone
               jako brakujące.
             </p>
-            {STAGES.slice(0, -1).map((label, index) => (
-              <section key={label} className="wizard__summary-section" aria-label={label}>
-                <h3>{label}</h3>
-                <dl className="wizard__summary">
-                  {questions
-                    .filter((item) => item.stage === index && (!item.optional || answers[item.id]))
-                    .map((item) => {
-                      const conflict = pendingConflicts[item.id];
-                      return (
-                        <div key={item.id}>
-                          <dt>
-                            <span>{item.label}</span>
-                            <SourceBadge source={fieldSources[item.id]} />
-                          </dt>
-                          <dd>
-                            {item.id === 'family' && answers.motherSituation === 'deceased'
-                              ? 'Plan taty po zgonie mamy'
-                              : item.id === 'family' && answers.motherSituation === 'abandoned'
-                                ? 'Plan taty po porzuceniu dziecka przez mamę'
-                                : formatAnswer(item, answers[item.id])}
-                            {conflict && (
-                              <div className="wizard__conflict-inline">
-                                <p>
-                                  Dane z {FIELD_SOURCE_LABELS[conflict.incomingSource]}:{' '}
-                                  <strong>{formatAnswer(item, conflict.incomingValue)}</strong>
-                                </p>
-                                <div className="wizard__conflict-actions">
-                                  <button
-                                    type="button"
-                                    className="wizard__conflict-btn"
-                                    onClick={() => resolveFieldConflict(item.id, 'keepUser')}
-                                  >
-                                    Zostaw moją wartość
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="wizard__conflict-btn wizard__conflict-btn--primary"
-                                    onClick={() => resolveFieldConflict(item.id, 'useIncoming')}
-                                  >
-                                    Użyj danych z {FIELD_SOURCE_LABELS[conflict.incomingSource]}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </dd>
-                          <button
-                            type="button"
-                            className="wizard__edit"
-                            aria-label={`Zmień: ${item.label}`}
-                            onClick={() => edit(item.id)}
+            {missingCount > 0 && (
+              <p className="wizard__notice">
+                Do uzupełnienia zostało: {answersLabel(missingCount)} – zaznaczone poniżej na żółto.
+                Plan policzymy mimo to, a braki możesz dopisać później.
+              </p>
+            )}
+            {summaryGroups.map(({ label, index, items }) => {
+              return (
+                <section key={label} className="wizard__summary-section" aria-label={label}>
+                  <details className="wizard__group" open>
+                    <summary className="wizard__group-summary">
+                      <span className="wizard__group-num" aria-hidden="true">
+                        {index + 1}
+                      </span>
+                      <h3>{label}</h3>
+                      <span className="wizard__group-count">{answersLabel(items.length)}</span>
+                    </summary>
+                    <dl className="wizard__summary">
+                      {items.map((item) => {
+                        const conflict = pendingConflicts[item.id];
+                        return (
+                          <div
+                            key={item.id}
+                            className={isMissing(answers[item.id]) ? 'wizard__summary-missing' : undefined}
                           >
-                            Zmień
-                          </button>
-                        </div>
-                      );
-                    })}
-                </dl>
-              </section>
-            ))}
-            <button
-              type="button"
-              className="wizard__button wizard__button--primary"
-              onClick={() => persist(answers, 'summary', true)}
-            >
-              Zapisz odpowiedzi
-            </button>
+                            <dt>
+                              <span>{item.label}</span>
+                              <SourceBadge source={fieldSources[item.id]} />
+                            </dt>
+                            <dd>
+                              {item.id === 'family' && answers.motherSituation === 'deceased'
+                                ? 'Plan taty po zgonie mamy'
+                                : item.id === 'family' && answers.motherSituation === 'abandoned'
+                                  ? 'Plan taty po porzuceniu dziecka przez mamę'
+                                  : formatAnswer(item, answers[item.id])}
+                              {conflict && (
+                                <div className="wizard__conflict-inline">
+                                  <p>
+                                    Dane z {FIELD_SOURCE_LABELS[conflict.incomingSource]}:{' '}
+                                    <strong>{formatAnswer(item, conflict.incomingValue)}</strong>
+                                  </p>
+                                  <div className="wizard__conflict-actions">
+                                    <button
+                                      type="button"
+                                      className="wizard__conflict-btn"
+                                      onClick={() => resolveFieldConflict(item.id, 'keepUser')}
+                                    >
+                                      Zostaw moją wartość
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="wizard__conflict-btn wizard__conflict-btn--primary"
+                                      onClick={() => resolveFieldConflict(item.id, 'useIncoming')}
+                                    >
+                                      Użyj danych z {FIELD_SOURCE_LABELS[conflict.incomingSource]}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </dd>
+                            <button
+                              type="button"
+                              className="wizard__edit"
+                              aria-label={`Zmień: ${item.label}`}
+                              onClick={() => edit(item.id)}
+                            >
+                              Zmień
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </details>
+                </section>
+              );
+            })}
+            <div className="wizard__actions wizard__actions--end">
+              <button
+                type="button"
+                className="ui-btn ui-btn--cta ui-btn--lg wizard__button wizard__button--primary"
+                onClick={() => persist(answers, 'summary', true)}
+              >
+                Zapisz odpowiedzi
+              </button>
+            </div>
           </section>
         ) : (
           question && (
-            <form className="wizard__card" noValidate onSubmit={next}>
+            <form
+              key={focusKey}
+              data-dir={motion.direction}
+              className="wizard__card"
+              noValidate
+              onSubmit={next}
+            >
               <div className="wizard__card-top">
                 <p className="wizard__eyebrow">{STAGES[question.stage]}</p>
                 <SourceBadge source={fieldSources[question.id]} />
@@ -717,24 +802,28 @@ export function WizardPage() {
                   {error}
                 </p>
               )}
-              <div className="wizard__actions">
+              <div className="wizard__actions wizard__actions--split">
                 {question.id !== 'family' && (
                   <button
                     type="button"
-                    className="wizard__button wizard__button--secondary"
+                    className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
                     onClick={back}
                   >
                     Wstecz
                   </button>
                 )}
-                <button type="submit" className="wizard__button wizard__button--primary">
-                  {editing ? 'Wróć do podsumowania' : 'Dalej'} <span aria-hidden="true">→</span>
+                <button
+                  type="submit"
+                  className="ui-btn ui-btn--cta wizard__button wizard__button--primary"
+                >
+                  {editing ? 'Wróć do podsumowania' : 'Dalej'} <ArrowIcon />
                 </button>
               </div>
             </form>
           )
         )}
 
+        {compactIntro && zusBar}
         <p className={storageAvailable ? 'wizard__save-note' : 'wizard__notice'} role="status">
           {storageAvailable
             ? 'Odpowiedzi zapisują się automatycznie tylko w tej przeglądarce.'
@@ -761,18 +850,7 @@ export function WizardPage() {
         )}
       </main>
 
-      <footer className="wizard__footer">
-        <nav aria-label="Dodatkowa nawigacja" className="wizard__shell">
-          <ul className="wizard__footer-links">
-            <li>
-              <Link to="/guide">Przewodnik</Link>
-            </li>
-            <li>
-              <Link to="/cases">Przykładowe sprawy</Link>
-            </li>
-          </ul>
-        </nav>
-      </footer>
+      <AppFooter links={FOOTER_LINKS} />
     </div>
   );
 }

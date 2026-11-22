@@ -9,11 +9,6 @@
   line-height: var(--line-height-tight);
 }
 
-.case-doc__parent-tag {
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-regular);
-}
-
 .docs-answer,
 .docs-compact-item,
 .apps-card,

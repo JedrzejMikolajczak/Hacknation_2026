@@ -1,40 +1,15 @@
 /*
- * „Twój plan” – czysty, nowoczesny wygląd zakładek.
- * 1) Bez niebieskiego: granat i błękitne tła zastąpione głęboką zielenią i neutralnym szarym.
- * 2) Najważniejsze informacje (odpowiedź, kwoty, terminy) mają największy kontrast i rozmiar;
- *    reszta jest cichsza: cienkie ramki, mało cieni, dużo bieli.
+ * „Twój plan” – baza wyglądu zawartości zakładek (kwoty, okresy, statusy, jednolite akcenty).
+ * Najważniejsze informacje (odpowiedź, kwoty, terminy) mają największy kontrast i rozmiar;
+ * reszta jest cichsza. Finalny wygląd (karty, odpowiedź, przyciski) dostraja PlanUI.css.
  */
-
-.plan-page {
-  /* granat → głęboka zieleń; błękitne tło → neutralny, lekko ciepły szary */
-  --color-navy: #1c3d2e;
-  --color-navy-dark: #12281e;
-  --color-info-soft: #f3f5f4;
-  --color-surface-muted: #f3f5f4;
-  --color-border: #e4e8e6;
-  --accent-bar-width: 4px; /* cieńsze pasy akcentowe zamiast 7 px */
-  background: #f7f9f8;
-}
-
-.plan-page__demo-strip {
-  background: #eef2f0;
-}
-.plan-page__demo-note {
-  color: var(--color-text-muted);
-}
-
-.plan-page__footer {
-  background: var(--color-surface);
-}
 
 /* ───────── Karty: biel, cienka ramka, bez ciężkich pasów ───────── */
 .plan-section,
 .lp-card,
 .results-right-item,
 .results-variant-bar,
-.results-details,
-.case-plan-card,
-.case-plan-part {
+.results-details {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -108,7 +83,7 @@
 .lp-answer__lead,
 .support-answer__title {
   color: var(--color-text);
-  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  font-family: var(--font-family-display);
   font-size: clamp(1.5rem, 1.1rem + 1.8vw, 2.25rem);
   font-weight: var(--font-weight-bold);
   line-height: 1.15;
@@ -299,8 +274,7 @@
 }
 
 /* Terminy po terminie – czerwień zostaje, bo to ważne */
-.docs-compact-item__overdue,
-.case-overdue {
+.docs-compact-item__overdue {
   color: var(--color-error);
   font-weight: var(--font-weight-bold);
 }
@@ -331,14 +305,11 @@
 .plan-page .support-ai__disclaimer,
 .plan-page .docs-plan-assumption,
 .plan-page .lp-details--card,
-.plan-page .lp-period-item--with-work,
-.plan-page .plan-hub__hint {
+.plan-page .lp-period-item--with-work {
   border-left-color: var(--accent-card);
 }
 
 /* neutralne / informacyjne → szaro-zielony */
-.plan-page .entitlements-answer--missing,
-.plan-page .entitlements-risk--info,
 .plan-page .support-answer--missing,
 .plan-page .support-risk-card--info,
 .plan-page .support-special-card--calm,
@@ -397,9 +368,9 @@
 }
 @media (min-width: 640px) {
   .plan-page .results-next__link,
-  .plan-page .apps-next-link,
-  .plan-page .docs-next-link,
-  .plan-page .lp-next-link,
+.plan-page .apps-next-link,
+.plan-page .docs-next-link,
+.plan-page .lp-next-link,
 .plan-page .support-next-link {
     width: auto;
   }

@@ -1,22 +1,59 @@
-.placeholder-page {
-  max-width: var(--content-max-width);
+/* Strony „nic tu nie ma” (404, sekcja w przygotowaniu): jedna myśl, jeden jasny następny krok. */
+
+.status-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.status-page__main {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  width: min(100% - 2rem, 40rem);
   margin: 0 auto;
-  padding: var(--space-7) var(--page-gutter);
+  padding-block: var(--space-7);
+  text-align: center;
 }
 
-.placeholder-page__title {
-  margin-bottom: var(--space-3);
-  font-size: var(--font-size-2xl);
-  color: var(--color-text);
+.status-page__code {
+  margin: 0;
+  background: linear-gradient(135deg, var(--color-primary-bright), var(--color-primary) 60%, #0a3a2a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(5rem, 3rem + 14vw, 9rem);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.04em;
+  line-height: 1;
 }
 
-.placeholder-page__text {
-  margin-bottom: var(--space-5);
+@media (prefers-reduced-motion: no-preference) {
+  .status-page__code {
+    animation: ui-float 4.5s ease-in-out infinite;
+  }
+}
+
+.status-page__title {
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.status-page__text {
+  max-width: 34rem;
   color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  text-wrap: pretty;
 }
 
-.placeholder-page__link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
+.status-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }

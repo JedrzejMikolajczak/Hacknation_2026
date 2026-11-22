@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { BenefitParams } from '@shared/types';
 import { ApiError } from '../../api/client';
+import { AppBar } from '../../components/AppBar';
+import { AppFooter, type FooterLink } from '../../components/AppFooter';
 import {
   cloneBenefitParams,
   DEFAULT_BENEFIT_PARAMS,
@@ -16,6 +18,11 @@ import {
   rateToPercent,
 } from './adminDiff';
 import './AdminPage.css';
+
+const FOOTER_LINKS: FooterLink[] = [
+  { to: '/guide', label: 'Przewodnik' },
+  { to: '/cases', label: 'Przykładowe sprawy' },
+];
 
 type AdminTabId = 'amounts' | 'leaves' | 'deadlines' | 'premature';
 type RateField = keyof BenefitParams['rates']
@@ -180,14 +187,16 @@ export function AdminPage() {
   return (
     <div className="admin-page">
       <header className="admin-header">
-        <div className="admin-container">
-          <div className="admin-header__top">
-            <Link to="/" className="admin-header__back">
+        <AppBar
+          isStatic
+          actions={
+            <Link to="/" className="ui-btn ui-btn--ghost ui-btn--sm">
               ‹ Strona startowa
             </Link>
-            <span className="admin-badge">Panel administracyjny ZUS – wersja demonstracyjna</span>
-          </div>
-
+          }
+        />
+        <div className="admin-container admin-header__body">
+          <span className="admin-badge">Panel administracyjny ZUS – wersja demonstracyjna</span>
           <h1 className="admin-header__title">Konfiguracja parametrów ustawowych ZUS</h1>
           <p className="admin-header__subtitle">
             Tutaj pracownik merytoryczny ZUS aktualizuje kwoty, stawki procentowe, długości urlopów
@@ -887,6 +896,7 @@ export function AdminPage() {
           </form>
         </div>
       </main>
+      <AppFooter links={FOOTER_LINKS} />
     </div>
   );
 }

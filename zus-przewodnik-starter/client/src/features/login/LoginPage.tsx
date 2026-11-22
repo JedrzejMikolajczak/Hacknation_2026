@@ -10,6 +10,9 @@ import { apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { parseSituation } from '../../app/situation';
+import { AppBar } from '../../components/AppBar';
+import { AppFooter, type FooterLink } from '../../components/AppFooter';
+import { ArrowIcon } from '../../components/icons';
 import { formatPln, formatPolishDate } from '../plan/planScenario';
 import { computeAverageIncome, resolveRightArisesDate } from '../wizard/zusMerge';
 import { ContributionDebtCertificate, SickLeavePreview } from './ZusSimulationPanels';
@@ -22,6 +25,11 @@ const TITLE_LABELS: Record<InsuranceTitle, string> = {
   selfEmployed: 'Działalność gospodarcza (JDG)',
   none: 'Brak tytułu ubezpieczenia',
 };
+
+const FOOTER_LINKS: FooterLink[] = [
+  { to: '/guide', label: 'Przewodnik' },
+  { to: '/cases', label: 'Przykładowe sprawy' },
+];
 
 const applicantOptions = [
   { role: 'MOTHER', label: 'Mama' },
@@ -128,99 +136,118 @@ export function LoginPage() {
   const averageIncome = authSession ? computeAverageIncome(authSession.zusData.incomes) : null;
   const rightArisesDate = resolveRightArisesDate(scenario, manualForm?.answers);
 
+  const backAction = (
+    <Link to={returnTo} className="ui-btn ui-btn--ghost ui-btn--sm">
+      ← Wróć
+    </Link>
+  );
+
   if (isApplicationIdentityFlow) {
     return (
-      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
-        <form className="wizard__card" onSubmit={connectApplicantIdentity}>
-          <h1>Logowanie przez mObywatela (symulacja)</h1>
-          <p>
-            Wybierz gotowy profil testowy. Imię, nazwisko, PESEL i data urodzenia zostaną
-            przeniesione do danych wnioskodawcy.
-          </p>
-          <div className="wizard__input-group">
-            <label className="wizard__field">
-              Wnioskodawca
-              <select
-                value={role ?? ''}
-                disabled={submitting || availableApplicants.length < 2}
-                onChange={(event) => {
-                  const applicant = availableApplicants.find(
-                    (candidate) => candidate.role === event.target.value,
-                  );
-                  if (applicant) setSelectedRole(applicant.role);
-                }}
+      <div className="wizard login-page">
+        <header>
+          <AppBar isStatic actions={backAction} />
+        </header>
+        <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
+          <form className="wizard__card" onSubmit={connectApplicantIdentity}>
+            <h1>Logowanie przez mObywatela (symulacja)</h1>
+            <p className="wizard__help">
+              Wybierz gotowy profil testowy. Imię, nazwisko, PESEL i data urodzenia zostaną
+              przeniesione do danych wnioskodawcy.
+            </p>
+            <div className="wizard__input-group">
+              <label className="wizard__field">
+                Wnioskodawca
+                <select
+                  value={role ?? ''}
+                  disabled={submitting || availableApplicants.length < 2}
+                  onChange={(event) => {
+                    const applicant = availableApplicants.find(
+                      (candidate) => candidate.role === event.target.value,
+                    );
+                    if (applicant) setSelectedRole(applicant.role);
+                  }}
+                >
+                  {availableApplicants.map(({ role: optRole, label }) => (
+                    <option key={optRole} value={optRole}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="wizard__field">
+                Profil testowy
+                <select
+                  value={profileId}
+                  disabled={!profileId || submitting}
+                  onChange={(event) => setSelectedProfile(event.target.value)}
+                >
+                  {!profileId && (
+                    <option value="">{profiles === null ? 'Wczytywanie…' : 'Brak profili'}</option>
+                  )}
+                  {profiles?.map((profile) => (
+                    <option key={profile.profileId} value={profile.profileId}>
+                      {profile.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {error && (
+              <p className="wizard__error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="wizard__actions wizard__actions--split">
+              <Link
+                className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
+                to={returnTo}
               >
-                {availableApplicants.map(({ role: optRole, label }) => (
-                  <option key={optRole} value={optRole}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="wizard__field">
-              Profil testowy
-              <select
-                value={profileId}
-                disabled={!profileId || submitting}
-                onChange={(event) => setSelectedProfile(event.target.value)}
+                Kontynuuj bez logowania
+              </Link>
+              <button
+                className="ui-btn ui-btn--cta wizard__button wizard__button--primary"
+                type="submit"
+                disabled={!role || !profileId || submitting}
               >
-                {!profileId && (
-                  <option value="">{profiles === null ? 'Wczytywanie…' : 'Brak profili'}</option>
-                )}
-                {profiles?.map((profile) => (
-                  <option key={profile.profileId} value={profile.profileId}>
-                    {profile.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {error && <p role="alert">{error}</p>}
-          <div className="wizard__actions">
-            <Link className="wizard__button wizard__button--secondary" to={returnTo}>
-              Kontynuuj bez logowania
-            </Link>
-            <button
-              className="wizard__button wizard__button--primary"
-              type="submit"
-              disabled={!role || !profileId || submitting}
-            >
-              {submitting ? 'Pobieranie danych…' : 'Przekaż dane testowe'}
-            </button>
-          </div>
-        </form>
-      </main>
+                {submitting ? 'Pobieranie danych…' : 'Przekaż dane testowe'}
+              </button>
+            </div>
+          </form>
+        </main>
+        <AppFooter links={FOOTER_LINKS} />
+      </div>
     );
   }
 
   return (
-    <div className="login-page">
-      <div className="login-page__demo-strip">
-        <div className="wizard__shell">
-          Wersja demonstracyjna · logowanie mObywatel i dane ZUS są symulowane
-        </div>
-      </div>
+    <div className="wizard login-page">
+      <header>
+        <AppBar isStatic actions={backAction} />
+      </header>
 
-      <header className="login-page__header">
-        <div className="wizard__shell">
-          <Link to={returnTo} className="wizard__back-link">
-            ← Wróć
-          </Link>
-          <h1>Logowanie przez mObywatela (symulacja)</h1>
-          <p>
+      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
+        <div className="wizard__intro">
+          <span className="wizard__situation">Symulacja · bez prawdziwych danych</span>
+          <h1 className="wizard__title">Logowanie przez mObywatela (symulacja)</h1>
+          <p className="wizard__subtitle">
             Wybierz profil demonstracyjny, aby pobrać symulowane dane z ZUS (ubezpieczenie,
             miesięczne zarobki, e-ZLA z kodem „B” i stan zadłużenia). W formularzu uzupełnimy
             wyłącznie puste pola — bez nadpisywania Twoich wpisów.
           </p>
         </div>
-      </header>
 
-      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
         <div className="login-page__stack">
           <section className="wizard__card" aria-labelledby="mock-login-heading">
             <h2 id="mock-login-heading">Wybierz profil mObywatela (symulacja)</h2>
 
-            {profiles === null && <p role="status">Ładowanie profili demonstracyjnych…</p>}
+            {profiles === null && (
+              <div className="login-page__loading">
+                <p role="status">Ładowanie profili demonstracyjnych…</p>
+                <span className="ui-skeleton login-page__skeleton" />
+                <span className="ui-skeleton login-page__skeleton" />
+              </div>
+            )}
             {error && profiles !== null && profiles.length === 0 && (
               <p className="wizard__notice" role="status">
                 {error}
@@ -229,18 +256,17 @@ export function LoginPage() {
 
             {profiles && profiles.length > 0 && (
               <form onSubmit={handleProfileLogin} className="login-page__stack">
-                <fieldset className="login-page__profile-list">
+                <fieldset className="wizard__choices">
                   <legend className="visually-hidden">Profile demonstracyjne mObywatel</legend>
-                  {profiles.map((item) => {
+                  {profiles.map((item, index) => {
                     const checked = profileId === item.profileId;
                     return (
                       <label
                         key={item.profileId}
                         className={
-                          checked
-                            ? 'login-page__profile-option login-page__profile-option--selected'
-                            : 'login-page__profile-option'
+                          checked ? 'wizard__choice wizard__choice--selected' : 'wizard__choice'
                         }
+                        style={{ ['--i' as string]: index }}
                       >
                         <input
                           type="radio"
@@ -249,7 +275,7 @@ export function LoginPage() {
                           checked={checked}
                           onChange={() => setSelectedProfile(item.profileId)}
                         />
-                        <span>{item.label}</span>
+                        <span className="wizard__choice-label">{item.label}</span>
                       </label>
                     );
                   })}
@@ -261,19 +287,22 @@ export function LoginPage() {
                   </p>
                 )}
 
-                <div className="wizard__actions">
+                <div className="wizard__actions wizard__actions--split">
+                  <Link
+                    className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
+                    to={returnTo}
+                  >
+                    Kontynuuj bez logowania
+                  </Link>
                   <button
                     type="submit"
-                    className="wizard__button wizard__button--primary"
+                    className="ui-btn ui-btn--cta wizard__button wizard__button--primary"
                     disabled={!profileId || submitting}
                   >
                     {submitting
                       ? 'Pobieranie danych z ZUS…'
                       : 'Zaloguj przez mObywatela (symulacja)'}
                   </button>
-                  <Link className="wizard__button wizard__button--secondary" to={returnTo}>
-                    Kontynuuj bez logowania
-                  </Link>
                 </div>
               </form>
             )}
@@ -337,19 +366,21 @@ export function LoginPage() {
 
               <SickLeavePreview certificates={authSession.zusData.sickLeaveCertificates} />
 
-              <div className="wizard__actions">
+              <div className="wizard__actions wizard__actions--end">
                 <button
                   type="button"
-                  className="wizard__button wizard__button--primary"
+                  className="ui-btn ui-btn--cta ui-btn--lg wizard__button wizard__button--primary"
                   onClick={() => navigate(returnTo, { replace: true })}
                 >
-                  Przejdź do formularza z danymi ZUS →
+                  Przejdź do formularza z danymi ZUS <ArrowIcon />
                 </button>
               </div>
             </section>
           )}
         </div>
       </main>
+
+      <AppFooter links={FOOTER_LINKS} />
     </div>
   );
 }

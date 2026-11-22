@@ -1366,6 +1366,15 @@ export interface CaseApplicationsProps {
   params?: BenefitParams;
 }
 
+/** „1 wniosek”, „3 wnioski”, „5 wniosków”, „12 wniosków”, „22 wnioski” – poprawna polska odmiana. */
+function formsCountLabel(count: number): string {
+  if (count === 1) return '1 wniosek';
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const isFew = last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14);
+  return `${count} ${isFew ? 'wnioski' : 'wniosków'}`;
+}
+
 export function CaseApplications({
   documents,
   input: inputProp,
@@ -1808,7 +1817,7 @@ export function CaseApplications({
   );
 
   const introSummaryParts: string[] = [
-    `Przygotowaliśmy ${forms.length === 1 ? '1 wniosek' : `${forms.length} wniosków`}${
+    `Przygotowaliśmy ${formsCountLabel(forms.length)}${
       uniqueAddressees.length > 0 ? ` (do: ${uniqueAddressees.join(', ')})` : ''
     }.`,
   ];

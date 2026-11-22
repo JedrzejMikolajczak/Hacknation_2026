@@ -1,10 +1,12 @@
 /*
- * Design tokens – jedyne źródło kolorów, odstępów, promieni i typografii.
- * Wygląd zgodny z serwisem www.zus.pl (paleta i typografia odczytane z arkusza CSS zus.pl,
- * 2026-11). Zasady: agents/CONVENTIONS.md §7.1. Kontrasty tekstu ≥ 4.5:1 (WCAG 2.1 AA).
+ * Design tokens – jedyne źródło kolorów, odstępów, promieni, cieni, ruchu i typografii.
+ * Wariant „optional-ui”: spokojny, miękki wygląd (duże zaokrąglenia, delikatne cienie, ruch
+ * tłumaczący zmiany). Zachowana paleta ZUS (zieleń, granat, pomarańcz) i krój Lato.
+ * Zasady: agents/CONVENTIONS.md §7.1. Kontrasty tekstu ≥ 4.5:1 (WCAG 2.1 AA).
  *
  * Breakpointy (zmiennych CSS nie da się użyć w @media – wpisuj wartości):
  *   sm: 640px   – od tej szerokości 2 kolumny kafelków, przyciski w rzędzie
+ *   md: 820px   – od tej szerokości układy dwukolumnowe (plan, kreator)
  *   lg: 1024px  – od tej szerokości 4 kolumny kafelków
  * Mobile-first: style bazowe = telefon, potem @media (min-width: ...).
  */
@@ -54,41 +56,49 @@
 }
 
 :root {
-  /* Tło i powierzchnie (zus.pl: białe tło, szare pasy sekcji) */
-  --color-bg: #ffffff;
+  /* Tło i powierzchnie */
+  --color-bg: #f4f8f5;
+  --color-bg-accent: #e3f1e8; /* łagodna zieleń – tła hero i zaznaczeń */
   --color-surface: #ffffff;
-  --color-surface-muted: #f3f3f3;
+  --color-surface-muted: #edf3ee;
 
   /* Tekst */
-  --color-text: #1a1a1a; /* 17.4:1 na białym */
-  --color-text-muted: #4d4d4d; /* 8.5:1 na białym, 7.6:1 na #f3f3f3 */
+  --color-text: #11261b; /* 15.9:1 na białym */
+  --color-text-muted: #46574d; /* 7.7:1 na białym, 7.0:1 na tle strony */
   --color-on-primary: #ffffff;
 
   /* Zieleń ZUS – marka, ikony, linki, akcenty */
   --color-primary: #007834; /* 5.6:1 na białym */
   --color-primary-hover: #025a28; /* 8.4:1 */
-  --color-link: #11783b; /* kolor linków na zus.pl, 5.6:1 */
+  --color-primary-bright: #19a45a; /* tylko dekoracje i gradienty – nigdy tekst */
+  --color-link: #11783b; /* 5.6:1 na białym */
   --color-accent: #007834;
-  --color-accent-soft: #e5f2ea; /* tło zaznaczonego kafelka; zieleń na nim 4.9:1 */
+  --color-accent-soft: #e5f2ea; /* zieleń na nim 4.9:1 */
 
-  /* Granat ZUS – przyciski drugorzędne, ikony dostępności */
+  /* Granat ZUS – przyciski drugorzędne, informacje */
   --color-navy: #00416e; /* 10.6:1 na białym */
   --color-navy-dark: #283754;
   --color-info-soft: #e6eef5;
 
-  /* Pomarańcz ZUS – główne CTA („Zaloguj do PUE/eZUS”): tylko jako TŁO z granatowym tekstem (6.1:1) */
+  /* Pomarańcz ZUS – główne CTA: tylko jako TŁO z granatowym tekstem (6.1:1) */
   --color-cta: #fab856;
+  --color-cta-hover: #f6a940;
   --color-on-cta: #00416e;
 
   /* Obramowania */
-  --color-border: #e7e7e7; /* dekoracyjne – separatory, pasy */
-  --color-border-control: #858585; /* granice kontrolek, 3.7:1 (WCAG 1.4.11) */
+  --color-border: #dce6df; /* dekoracyjne – separatory, krawędzie kart */
+  --color-border-strong: #c3d1c8;
+  --color-border-control: #7d8c83; /* granice kontrolek, 3.5:1 (WCAG 1.4.11) */
 
   /* Stany */
-  --color-focus: #fab856; /* pomarańczowy obrys fokusu jak na zus.pl… */
+  --color-focus: #fab856; /* pomarańczowy obrys fokusu… */
   --color-focus-outer: #00416e; /* …z granatową obwódką, bo sam pomarańcz ma 1.7:1 na białym */
   --color-error: #cd0000; /* 5.8:1 na białym */
   --color-error-soft: #fdecec;
+  --color-warning: #8a5300; /* 5.7:1 na --color-warning-soft */
+  --color-warning-soft: #fff3dc;
+  --color-success: #0a6f35;
+  --color-success-soft: #e3f4ea;
 
   /* Odstępy (skala 4px) */
   --space-1: 0.25rem; /* 4px */
@@ -99,47 +109,64 @@
   --space-6: 2rem; /* 32px */
   --space-7: 3rem; /* 48px */
   --space-8: 4rem; /* 64px */
+  --space-9: 6rem; /* 96px – oddech między sekcjami strony */
 
   /* Układ */
-  --content-max-width: 75rem; /* 1200px – szerokość treści zus.pl */
-  --page-gutter: var(--space-4);
+  --content-max-width: 75rem; /* 1200px */
+  --page-gutter: clamp(1rem, 4vw, 2rem);
   --tap-target-min: 2.75rem; /* 44px – minimalny cel klikalny */
+  --appbar-height: 3.75rem;
 
-  /* Promienie (zus.pl: 3px) */
-  --radius-sm: 3px;
-  --radius-md: 3px;
-  --radius-lg: 3px;
+  /* Promienie – miękkie, „przyjazne” */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --radius-pill: 999px;
 
   /* Obramowania, pasy i fokus */
   --border-width: 1px;
   --border-width-control: 2px;
-  --accent-bar-width: 7px; /* gruby zielony pas – znak rozpoznawczy zus.pl */
-  --divider-bar-width: 8px; /* szary pas pod nagłówkiem */
+  --accent-bar-width: 0px; /* optional-ui: bez grubych pasów – akcent dają ikony i kolory tła */
+  --divider-bar-width: 0px;
   --focus-ring-width: 3px;
   --focus-ring-shadow: 0 0 0 5px var(--color-focus-outer);
 
-  /* Typografia (zus.pl: Lato, nagłówki pogrubione, czarne) */
+  /* Typografia (Lato 400/700 – jedyny krój w aplikacji) */
   --font-family-base: 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-md: 1.125rem;
-  --font-size-lg: 1.25rem;
-  --font-size-xl: 1.5rem;
-  --font-size-2xl: 1.75rem;
-  --font-size-3xl: 2.375rem;
+  --font-family-display: var(--font-family-base);
+  --font-size-sm: 0.9rem;
+  --font-size-base: 1.0625rem;
+  --font-size-md: 1.1875rem;
+  --font-size-lg: 1.3125rem;
+  --font-size-xl: 1.625rem;
+  --font-size-2xl: 2rem;
+  --font-size-3xl: clamp(2.1rem, 1.5rem + 2.6vw, 3.25rem);
   --font-weight-regular: 400;
   --font-weight-semibold: 700; /* Lato ładujemy w 400 i 700 */
   --font-weight-bold: 700;
-  --line-height-tight: 1.2;
-  --line-height-base: 1.5;
+  --line-height-tight: 1.15;
+  --line-height-base: 1.6;
 
-  /* Ikony (liniowe, zielone – jak kafelki usług na zus.pl) */
+  /* Ikony (liniowe) */
   --icon-size-sm: 1rem;
   --icon-size-md: 1.75rem;
   --icon-size-lg: 2.75rem;
 
-  /* Cienie – zus.pl prawie ich nie używa; tylko subtelny hover */
-  --shadow-sm: none;
-  --shadow-md: 0 2px 6px rgb(0 0 0 / 0.12);
+  /* Ikony komunikatów – maski CSS (kolor nadaje background elementu) */
+  --icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 7.5h.01'/%3E%3C/svg%3E");
+  --icon-alert: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.5 22 20H2z'/%3E%3Cpath d='M12 10v5M12 17.5h.01'/%3E%3C/svg%3E");
+  --icon-ok: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 12.5l2.7 2.7L16 9.5'/%3E%3C/svg%3E");
+
+  /* Cienie – miękkie, warstwowe, w odcieniu zieleni tekstu */
+  --shadow-sm: 0 1px 2px rgb(17 38 27 / 0.06), 0 2px 8px rgb(17 38 27 / 0.04);
+  --shadow-md: 0 14px 30px -16px rgb(17 38 27 / 0.3), 0 2px 8px rgb(17 38 27 / 0.06);
+  --shadow-lg: 0 36px 70px -28px rgb(17 38 27 / 0.36), 0 10px 24px rgb(17 38 27 / 0.08);
+
+  /* Ruch – krzywe i czasy (każda animacja ma też wersję „bez ruchu” w global.css) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 280ms;
+  --dur-slow: 560ms;
 }

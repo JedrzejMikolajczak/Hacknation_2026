@@ -54,7 +54,9 @@ function Calculation({ result, input }: { result: CasePlan; input: CaseInputs })
           ))}
         </ul>
       )}
-      <Link to={`/plan/calculator?${query}`}>Otwórz plan</Link>
+      <Link className="ui-btn ui-btn--cta ui-btn--sm" to={`/plan/calculator?${query}`}>
+        Otwórz plan
+      </Link>
     </section>
   );
 }
@@ -268,7 +270,7 @@ function PdfConfirmationForm({ fields }: { fields: ExtractedFields }) {
             />
             Potwierdzam, że sprawdziłem lub sprawdziłam pola przed obliczeniem.
           </label>
-          <button type="submit" disabled={!confirmed || pending}>
+          <button type="submit" className="ui-btn ui-btn--cta" disabled={!confirmed || pending}>
             {pending ? 'Przeliczamy…' : 'Przelicz potwierdzone dane'}
           </button>
         </fieldset>

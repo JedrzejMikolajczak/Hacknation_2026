@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
   BenefitParams,
   CaseInputs,
@@ -12,7 +12,12 @@ import type {
 import { ApiError, apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
+import { AppBar } from '../../components/AppBar';
+import { AppFooter } from '../../components/AppFooter';
+import { PencilIcon } from '../../components/icons';
 import { PlanHub } from './PlanHub';
+import { PlanJourney, StepEyebrow } from './PlanJourney';
+import { useVisitedSteps } from './planProgress';
 import {
   combinedRateUnavailable,
   isPlanTab,
@@ -24,13 +29,11 @@ import { CaseCalculator, CaseRights } from './tabs/CaseResults';
 import { CasePlanner } from './tabs/CasePlanner';
 import { CaseApplications, CaseDocuments } from './tabs/CasePaperwork';
 import { CaseSupport } from './tabs/CaseSupport';
-import { HeroEmblem } from '../landing/HeroEmblem';
-import { usePointerParallax } from '../landing/useLandingMotion';
-import '../landing/LandingMotion.css';
 import './PlanPage.css';
 import './CasePlan.css';
-import './PlanMotion.css';
 import './PlanClean.css';
+import './PlanShell.css';
+import './PlanUI.css';
 
 const editableDateRanges = [
   [
@@ -473,9 +476,7 @@ export function PlanPage() {
   const caseId = query.get('case');
   const search = query.size ? `?${query.toString()}` : '';
   const { scenario, planInputs, updatePlanInputs } = useScenario();
-  const activeTabRef = useRef<HTMLAnchorElement | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  usePointerParallax(rootRef);
+  const { visited, markVisited } = useVisitedSteps();
 
   const [fixture, setFixture] = useState<{ key: string; item: CaseRecord | null } | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -523,7 +524,7 @@ export function PlanPage() {
   const params = visibleResult?.params ?? null;
 
   useEffect(() => {
-    if (!key || !tab || !isPlanTab(tab)) return;
+    if (!key || (tab && !isPlanTab(tab))) return;
     let active = true;
     void Promise.all([
       apiPost<CasePlan>('/plan', JSON.parse(key)),
@@ -547,11 +548,22 @@ export function PlanPage() {
     };
   }, [key, caseId, tab, attempt]);
 
+  // Krok uznajemy za obejrzany, gdy plan jest wyświetlony – wtedy dostaje „ptaszek” na ścieżce.
+  const planReady = Boolean(current?.plan);
   useEffect(() => {
-    if (typeof activeTabRef.current?.scrollIntoView === 'function') {
-      activeTabRef.current.scrollIntoView({ inline: 'nearest', block: 'nearest' });
-    }
-  }, [tab]);
+    if (tab && isPlanTab(tab) && planReady) markVisited(tab);
+  }, [tab, planReady, markVisited]);
+
+  // Kierunek przejścia (do przodu / wstecz) decyduje, z której strony wjeżdża nowy krok.
+  // Pierwsze wyświetlenie strony nie ma kierunku – wchodzi razem z całą stroną.
+  const tabIndex = tab ? PLAN_TABS.findIndex((item) => item.id === tab) : -1;
+  const [navigation, setNavigation] = useState<{
+    index: number;
+    direction?: 'forward' | 'back';
+  }>({ index: tabIndex });
+  if (navigation.index !== tabIndex) {
+    setNavigation({ index: tabIndex, direction: tabIndex > navigation.index ? 'forward' : 'back' });
+  }
 
   if (tab && !isPlanTab(tab)) return <Navigate replace to={`/plan${search}`} />;
 
@@ -575,126 +587,90 @@ export function PlanPage() {
   const repairDates = editableDateRanges
     .flatMap((range) => range.some(({ field }) => planError?.fields.includes(field)) ? [...range] : []);
 
+  const footerLinks = [
+    { to: '/', label: 'Strona startowa' },
+    { to: wizardUrl, label: 'Wróć do kreatora' },
+    { to: '/guide', label: 'Przewodnik' },
+    { to: '/cases', label: 'Przykładowe sprawy' },
+  ];
+
+  const summaryBar = input ? (
+    <PlanDataSummaryBar
+      input={input}
+      params={effectiveParams}
+      caseRecord={currentFixture?.item ?? null}
+      hasUrlEdits={Boolean(serialized)}
+      onUpdate={update}
+      onResetEdits={() => updatePlanInputs(null)}
+    />
+  ) : null;
+
   return (
-    <div className="plan-page" ref={rootRef}>
-      <div className="plan-page__demo-strip">
-        <p className="plan-page__container plan-page__demo-note">
-          Wersja demonstracyjna · integracje z ZUS są symulowane
-        </p>
-      </div>
-
-      <header
-        className={
-          activeTabMeta ? 'plan-page__header plan-page__header--section' : 'plan-page__header'
-        }
-      >
-        <div className="landing__aurora" aria-hidden="true">
-          <span className="landing__blob landing__blob--1" />
-          <span className="landing__blob landing__blob--2" />
-          <span className="landing__blob landing__blob--3" />
-          <span className="landing__spark landing__spark--1" />
-          <span className="landing__spark landing__spark--2" />
-          <span className="landing__spark landing__spark--3" />
-          <span className="landing__spark landing__spark--4" />
-        </div>
-        <div className="plan-page__container">
-          <div className="plan-page__nav-row">
-            {activeTabMeta ? (
-              <nav className="plan-breadcrumb" aria-label="Ścieżka nawigacji">
-                <Link to={`/plan${search}`} className="plan-breadcrumb__back">
-                  ← Twój plan
-                </Link>
-                <span className="plan-breadcrumb__sep" aria-hidden="true">
-                  ›
-                </span>
-                <span className="plan-breadcrumb__current" aria-current="page">
-                  {activeTabMeta.label}
-                </span>
-              </nav>
-            ) : (
-              <span className="plan-page__hub-kicker">Twój plan</span>
-            )}
-
-            <Link to={wizardUrl} className="plan-page__wizard-link">
-              Zmień odpowiedzi
+    <div className="plan-page">
+      <header className={activeTabMeta ? 'plan-top plan-top--section' : 'plan-top'}>
+        <AppBar
+          isStatic
+          actions={
+            <Link to={wizardUrl} className="ui-btn ui-btn--ghost ui-btn--sm plan-top__edit">
+              <PencilIcon className="plan-top__edit-icon" />
+              <span className="plan-top__edit-label">Zmień odpowiedzi</span>
             </Link>
-          </div>
-
-          <div className="plan-page__hero-row">
-            <div className="plan-page__hero-text">
-              <h1 className="plan-page__title">
-                {['Twój plan', 'zasiłkowy i', 'urlopowy'].map((part, index) => (
-                  <Fragment key={part}>
-                    <span className="landing__word" style={{ ['--i' as string]: index }}>
-                      <span className="landing__word-inner">{part}</span>
-                    </span>{' '}
-                  </Fragment>
-                ))}
-              </h1>
-              {!activeTabMeta && (
-                <p className="plan-page__subtitle">
-                  {difficult
-                    ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
-                    : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
-                </p>
-              )}
-            </div>
-            {!activeTabMeta && <HeroEmblem />}
-          </div>
+          }
+        />
+        <div className="ui-container plan-top__body">
+          {activeTabMeta ? (
+            <nav className="plan-breadcrumb" aria-label="Ścieżka nawigacji">
+              <Link to={`/plan${search}`} className="plan-breadcrumb__back">
+                ← Twój plan
+              </Link>
+              <span className="plan-breadcrumb__sep" aria-hidden="true">
+                ›
+              </span>
+              <span className="plan-breadcrumb__current" aria-current="page">
+                {activeTabMeta.label}
+              </span>
+            </nav>
+          ) : (
+            <p className="ui-eyebrow plan-top__kicker ui-rise">Twój plan</p>
+          )}
+          <h1 className={activeTabMeta ? 'visually-hidden' : 'plan-top__title ui-rise'}>
+            Twój plan zasiłkowy i urlopowy
+          </h1>
+          {!activeTabMeta && (
+            <p className="plan-top__subtitle ui-rise" style={{ ['--i' as string]: 1 }}>
+              {difficult
+                ? 'Zestawienie uprawnień, dokumentów i bezpłatnego wsparcia dla Twojej sytuacji.'
+                : 'Uprawnienia, kwoty, urlopy i wnioski dopasowane do Twojej sytuacji.'}
+            </p>
+          )}
         </div>
       </header>
 
-      <main id="main" tabIndex={-1} className="plan-page__main">
-        <div className="plan-page__container">
-          {!tab ? (
-            <>
-              {input && (
-                <PlanDataSummaryBar
-                  input={input}
-                  params={effectiveParams}
-                  caseRecord={currentFixture?.item ?? null}
-                  hasUrlEdits={Boolean(serialized)}
-                  onUpdate={update}
-                  onResetEdits={() => updatePlanInputs(null)}
-                />
-              )}
-              <PlanHub querySuffix={search} />
-            </>
-          ) : (
-            <>
-              <nav className="plan-tabs case-plan-nav" aria-label="Zakładki Twojego planu">
-                <ul className="plan-tabs__list">
-                  {PLAN_TABS.map((item) => (
-                    <li className="plan-tabs__item" key={item.id}>
-                      <NavLink
-                        ref={item.id === tab ? activeTabRef : undefined}
-                        to={`/plan/${item.id}${search}`}
-                        className={({ isActive }) =>
-                          isActive ? 'plan-tabs__link plan-tabs__link--active' : 'plan-tabs__link'
-                        }
-                      >
-                        {item.label}
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-
-              {input && (
-                <PlanDataSummaryBar
-                  input={input}
-                  params={effectiveParams}
-                  caseRecord={currentFixture?.item ?? null}
-                  hasUrlEdits={Boolean(serialized)}
-                  onUpdate={update}
-                  onResetEdits={() => updatePlanInputs(null)}
-                />
-              )}
+      <main id="main" tabIndex={-1} className="plan-main">
+        {!tab ? (
+          <div className="ui-container plan-container">
+            {summaryBar}
+            <PlanHub
+              querySuffix={search}
+              visited={visited}
+              plan={current?.plan ?? null}
+              waiting={waiting}
+              hasData={Boolean(input)}
+              wizardUrl={wizardUrl}
+            />
+          </div>
+        ) : (
+          <>
+            {isPlanTab(tab) && <PlanJourney tab={tab} search={search} visited={visited} />}
+            <div className="ui-container plan-container">
+              {summaryBar}
+              {isPlanTab(tab) && <StepEyebrow tab={tab} />}
 
               <section
                 key={tab}
                 className="plan-panel case-plan-panel"
                 aria-label="Zawartość zakładki"
+                data-dir={navigation.direction}
               >
                 {fixtureError && (
                   <p className="plan-callout plan-callout--warning" role="alert">
@@ -702,9 +678,20 @@ export function PlanPage() {
                   </p>
                 )}
                 {waiting && (
-                  <p role="status">
-                    {plan ? 'Przeliczamy plan. Poniżej widać poprzedni wynik.' : 'Pobieranie planu z API…'}
-                  </p>
+                  <div className="plan-loading" role="status">
+                    <span className="plan-loading__text">
+                      {plan
+                        ? 'Przeliczamy plan. Poniżej widać poprzedni wynik.'
+                        : 'Przygotowujemy Twój plan…'}
+                    </span>
+                    {!plan && (
+                      <span className="plan-loading__blocks" aria-hidden="true">
+                        <span className="ui-skeleton plan-loading__block plan-loading__block--title" />
+                        <span className="ui-skeleton plan-loading__block" />
+                        <span className="ui-skeleton plan-loading__block plan-loading__block--short" />
+                      </span>
+                    )}
+                  </div>
                 )}
                 {!waiting && !fixtureError && !input && (
                   <div className="plan-missing-data plan-callout" role="status">
@@ -763,7 +750,10 @@ export function PlanPage() {
                 )}
                 {input && plan && params && (
                   <>
-                    {current && plan.validation_errors.length > 0 && (
+                    {/* Na zakładce „Plan urlopów” te same uwagi pokazuje sam planer (przy wyborze
+                        scenariusza), więc nie dublujemy czerwonego komunikatu. Na pozostałych
+                        zakładkach dajemy od razu drogę do poprawy. */}
+                    {current && tab !== 'leave-plan' && plan.validation_errors.length > 0 && (
                       <div className="plan-callout plan-callout--warning" role="alert">
                         <strong>Sprawdź plan urlopów</strong>
                         <ul>
@@ -773,6 +763,9 @@ export function PlanPage() {
                             </li>
                           ))}
                         </ul>
+                        <Link className="plan-callout__link" to={`/plan/leave-plan${search}`}>
+                          Popraw w planie urlopów
+                        </Link>
                       </div>
                     )}
                     {tab === 'entitlements' && (
@@ -804,31 +797,12 @@ export function PlanPage() {
                   </>
                 )}
               </section>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </main>
 
-      <footer className="plan-page__footer">
-        <div className="plan-page__container">
-          <nav aria-label="Dodatkowa nawigacja" className="plan-page__footer-nav">
-            <ul className="plan-page__footer-links">
-              <li>
-                <Link to="/">Strona startowa</Link>
-              </li>
-              <li>
-                <Link to={wizardUrl}>Wróć do kreatora</Link>
-              </li>
-              <li>
-                <Link to="/guide">Przewodnik</Link>
-              </li>
-              <li>
-                <Link to="/cases">Przykładowe sprawy</Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </footer>
+      <AppFooter links={footerLinks} />
     </div>
   );
 }

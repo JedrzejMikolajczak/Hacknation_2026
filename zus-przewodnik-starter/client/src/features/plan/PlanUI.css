@@ -1,0 +1,1501 @@
+/*
+ * Zawartość kroków planu – wygląd „optional-ui”.
+ * Ładowany po starszych warstwach (PlanPage, CasePlan, PlanMotion, PlanClean) i nadpisuje je.
+ *
+ * Zasady: najważniejsza odpowiedź jest największa i na górze; reszta jest cichsza; szczegóły są
+ * zwinięte; karty mają miękkie cienie i dużo oddechu; kolory niosą znaczenie (zieleń = dobrze,
+ * pomarańcz = termin, czerwień = uwaga), a nie dekorację.
+ */
+
+.plan-page {
+  /* cienki 1 px zamiast grubych pasów akcentu – kolor niesie znaczenie, ale nie krzyczy */
+  --accent-bar-width: 1px;
+}
+
+/* ================= Podsumowanie danych (pasek „Twoje dane”) ================= */
+.plan-page .plan-controls {
+  margin-block: var(--space-4) 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .plan-controls__summary-bar {
+  padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+  gap: var(--space-3);
+}
+
+.plan-page .plan-controls__summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+
+.plan-page .plan-controls__summary-label {
+  color: var(--color-text);
+}
+
+.plan-page .plan-controls__toggle {
+  min-height: 2.5rem;
+  padding-inline: 1.1rem;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.plan-page .plan-controls__toggle:hover {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+}
+
+.plan-page .plan-controls__toggle:active {
+  transform: scale(0.96);
+}
+
+.plan-page .plan-controls__panel {
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .plan-page .plan-controls__panel {
+    animation: ui-rise var(--dur-base) var(--ease-out) backwards;
+  }
+}
+
+.plan-page .plan-controls__grid {
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .plan-page .plan-controls__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .plan-page .plan-controls__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.plan-page .plan-field__input {
+  min-height: 3rem;
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+
+.plan-page .plan-field__input:hover:not(:disabled) {
+  border-color: var(--color-border-control);
+}
+
+.plan-page .plan-field__input:focus-visible {
+  border-color: var(--color-primary);
+}
+
+.plan-page .plan-controls__case-full {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+/* ================= Tytuły kroków (h2 w każdej zakładce) ================= */
+/* W karcie odpowiedzi tytuł jest małą „pigułką” – bohaterem jest sama odpowiedź pod spodem */
+.plan-page .results-answer__title,
+.plan-page .support-answer__title,
+.plan-page .lp-section-heading {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+/* Karta pomocnicza (np. „Dodatkowy tytuł 1”) – zwykły nagłówek sekcji */
+.plan-page .results-answer--info .results-answer__title {
+  padding: 0;
+  background: none;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+/* Tytuły sekcji pod spodem – spokojniejsze, bez zielonej kreski */
+.plan-page .plan-section__title,
+.plan-page .lp-card__title,
+.plan-page .results-section__title {
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.01em;
+}
+
+.plan-page .plan-section__title::before,
+.plan-page .lp-card__title::before,
+.plan-page .results-section__title::before {
+  display: none;
+}
+
+/* Więcej oddechu między blokami kroku */
+.plan-page .results-tab,
+.plan-page .plan-tab-content,
+.plan-page .lp-view,
+.plan-page .support-tab {
+  gap: var(--space-7);
+}
+
+/* ================= Karty ================= */
+.plan-page .plan-section,
+.plan-page .lp-card,
+.plan-page .results-variant-bar {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .plan-section,
+.plan-page .lp-card {
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+/* ================= Główna odpowiedź ================= */
+.plan-page .results-answer,
+.plan-page .lp-answer,
+.plan-page .docs-answer,
+.plan-page .apps-intro,
+.plan-page .support-answer {
+  gap: var(--space-4);
+  padding: clamp(1.5rem, 3.5vw, 2.5rem);
+  border: var(--border-width) solid rgb(0 120 52 / 0.16);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(25 164 90 / 0.14), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f1f9f4 100%);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-page .results-answer::before,
+.plan-page .lp-answer::before,
+.plan-page .support-answer::before {
+  display: none;
+}
+
+.plan-page .results-answer--none,
+.plan-page .support-answer--warning {
+  border-color: #f0cccc;
+  background: linear-gradient(180deg, #ffffff 0%, var(--color-error-soft) 100%);
+}
+
+.plan-page .results-answer--info,
+.plan-page .support-answer--empathetic,
+.plan-page .support-answer--missing,
+.plan-page .lp-answer--missing {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .results-answer__headline,
+.plan-page .lp-answer__lead {
+  font-size: clamp(1.4rem, 1.05rem + 1.6vw, 2rem);
+  letter-spacing: -0.02em;
+}
+
+.plan-page .results-answer__list {
+  gap: var(--space-3);
+}
+
+.plan-page .results-answer__item {
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.85rem;
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: clamp(1.0625rem, 1rem + 0.45vw, 1.3rem);
+  line-height: 1.4;
+}
+
+.plan-page .results-answer__role {
+  flex: none;
+  padding: 0.18rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  font-size: var(--font-size-sm);
+}
+
+/* ================= Ostrzeżenia i podpowiedzi: ikona zamiast paska ================= */
+/* „Na co zwrócić uwagę” = ciepły bursztyn (uwaga, ale bez alarmu); czerwień zostaje dla błędów */
+.plan-page .results-risk,
+.plan-page .plan-callout {
+  position: relative;
+  padding: var(--space-4) var(--space-5) var(--space-4) 3.6rem;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .results-risk {
+  gap: 0.4rem;
+  border-color: #f0d7a4;
+  background: var(--color-warning-soft);
+}
+
+.plan-page .results-risk--info {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .results-risk__title {
+  font-size: var(--font-size-md);
+}
+
+.plan-page .results-risk__text {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+
+.plan-page .results-risk__action {
+  margin-block: 0.15rem 0.1rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 0.75);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.plan-page .results-risk__action-label {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .results-risk--info .results-risk__action-label {
+  color: var(--color-primary-hover);
+}
+
+.plan-page .plan-callout--warning {
+  border-color: #f2c9c9;
+  background: var(--color-error-soft);
+}
+
+.plan-page .plan-callout--success {
+  border-color: #cfe6d8;
+  background: var(--color-accent-soft);
+}
+
+/* Link „co z tym zrobić” w komunikacie – zawsze widoczna droga do poprawy */
+.plan-page .plan-callout__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  margin-top: var(--space-2);
+  color: var(--color-link);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .results-risk::before,
+.plan-page .plan-callout::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 1.1rem;
+  inset-inline-start: 1.15rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--color-text-muted);
+  -webkit-mask: var(--icon-info) center / contain no-repeat;
+  mask: var(--icon-info) center / contain no-repeat;
+}
+
+.plan-page .results-risk:not(.results-risk--info)::before {
+  background: var(--color-warning);
+  -webkit-mask-image: var(--icon-alert);
+  mask-image: var(--icon-alert);
+}
+
+.plan-page .plan-callout--warning::before {
+  background: var(--color-error);
+  -webkit-mask-image: var(--icon-alert);
+  mask-image: var(--icon-alert);
+}
+
+.plan-page .plan-callout--success::before {
+  background: var(--color-primary);
+  -webkit-mask-image: var(--icon-ok);
+  mask-image: var(--icon-ok);
+}
+
+/* Wąskie ekrany: mniejsza ikona i marginesy, żeby tekst komunikatu miał więcej miejsca */
+@media (max-width: 480px) {
+  .plan-page .results-risk,
+  .plan-page .plan-callout {
+    padding: var(--space-3) var(--space-3) var(--space-3) 2.75rem;
+  }
+
+  .plan-page .results-risk::before,
+  .plan-page .plan-callout::before {
+    inset-block-start: 0.95rem;
+    inset-inline-start: 0.8rem;
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+}
+
+/* ================= Zwijane szczegóły ================= */
+.plan-page .results-details,
+.plan-page .docs-details,
+.plan-page .lp-details {
+  border-radius: var(--radius-md);
+}
+
+.plan-page .results-details__summary::after {
+  content: '';
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-inline-end: 0.2rem;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .results-details[open] > .results-details__summary::after {
+  transform: rotate(225deg);
+}
+
+.plan-page .results-details__summary:hover {
+  color: var(--color-primary-hover);
+}
+
+/* „Szczegóły świadczeń” – jeden zwijany blok pod odpowiedzią i uwagami */
+.plan-page .results-benefits {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .results-benefits__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  min-height: 3.75rem;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .results-benefits__summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-page .results-benefits__summary:hover {
+  background: var(--color-surface-muted);
+}
+
+.plan-page .results-benefits__summary::after {
+  content: '';
+  flex: none;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-inline-start: auto;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .results-benefits[open] > .results-benefits__summary::after {
+  transform: rotate(225deg);
+}
+
+.plan-page .results-benefits__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .results-benefits__count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.plan-page .results-benefits[open] > .results-benefits__summary {
+  border-block-end: var(--border-width) solid var(--color-border);
+}
+
+.plan-page .results-benefits .results-rights-grid {
+  padding: var(--space-5);
+}
+
+@media (min-width: 720px) {
+  .plan-page .results-rights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.plan-page .results-right-item {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+
+.plan-page .results-right-item__status {
+  padding: 0.2rem 0.7rem;
+}
+
+/* ================= Przełącznik wariantu (Kalkulator) jako „segmented control” ================= */
+.plan-page .results-variant-bar__segmented {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .results-variant-bar__btn {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-fast) ease,
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.plan-page .results-variant-bar__btn:hover {
+  color: var(--color-primary-hover);
+}
+
+.plan-page .results-variant-bar__btn--active {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-primary-hover);
+}
+
+/* ================= Przyciski ================= */
+.plan-page .plan-btn {
+  min-height: 3rem;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-pill);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.plan-page .plan-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.plan-page .plan-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.plan-page .plan-btn--primary {
+  background: var(--color-cta);
+  box-shadow: 0 12px 24px -14px rgb(214 140 20 / 0.9);
+  color: var(--color-on-cta);
+}
+
+.plan-page .plan-btn--primary:hover:not(:disabled) {
+  background: var(--color-cta-hover);
+  color: var(--color-on-cta);
+}
+
+.plan-page .plan-btn--secondary {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-navy);
+}
+
+.plan-page .plan-btn--secondary:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+}
+
+/* „Dalej: …” – wyraźny, ten sam przycisk na końcu każdego kroku */
+.plan-page .results-next,
+.plan-page .docs-next-nav,
+.plan-page .apps-next-nav,
+.plan-page .support-next-nav {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: var(--space-5);
+  border-block-start: var(--border-width) solid var(--color-border);
+}
+
+.plan-page .results-next__link,
+.plan-page .apps-next-link,
+.plan-page .docs-next-link,
+.plan-page .docs-next-cta,
+.plan-page .lp-next-link,
+.plan-page .support-next-link {
+  min-height: 3.25rem;
+  padding: 0.7rem 1.9rem;
+  border-color: var(--color-cta);
+  background: var(--color-cta);
+  box-shadow: 0 12px 24px -14px rgb(214 140 20 / 0.9);
+  font-size: var(--font-size-md);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) ease;
+}
+
+.plan-page .results-next__link:hover,
+.plan-page .apps-next-link:hover,
+.plan-page .docs-next-link:hover,
+.plan-page .lp-next-link:hover,
+.plan-page .support-next-link:hover {
+  border-color: var(--color-cta-hover);
+  background: var(--color-cta-hover);
+  color: var(--color-on-cta);
+  transform: translateY(-2px);
+}
+
+/* ================= Plan urlopów ================= */
+/* Podtytuł „Plan urlopów w skrócie” powtarza pigułkę – zostaje tylko dla czytników ekranu */
+.plan-page .lp-answer:not(.lp-answer--missing) > .lp-answer__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.plan-page .lp-answer {
+  position: relative;
+}
+
+.plan-page .lp-answer__lines {
+  gap: var(--space-3);
+}
+
+.plan-page .lp-answer__line {
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: clamp(1.0625rem, 1rem + 0.4vw, 1.2rem);
+  line-height: 1.45;
+}
+
+/* Termin = ciepły pomarańcz, z ikoną zegara */
+.plan-page .lp-answer__deadline {
+  position: relative;
+  padding: var(--space-3) var(--space-4) var(--space-3) 3.1rem;
+  border: var(--border-width) solid #f0d7a4;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  font-size: var(--font-size-base);
+}
+
+.plan-page .lp-answer__deadline::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 1rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  background: var(--color-warning);
+  -webkit-mask: var(--icon-clock) center / contain no-repeat;
+  mask: var(--icon-clock) center / contain no-repeat;
+  transform: translateY(-50%);
+}
+
+.plan-page {
+  --icon-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
+}
+
+.plan-page .lp-past-deadlines {
+  border: var(--border-width) solid #f2c9c9;
+  border-radius: var(--radius-md);
+}
+
+.plan-page .lp-past-chip {
+  border-radius: var(--radius-pill);
+}
+
+.plan-page .lp-sensitive-note {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: rgb(0 120 52 / 0.07);
+  color: var(--color-text-muted);
+}
+
+.plan-page .lp-answer__facts {
+  border-top-color: rgb(0 120 52 / 0.16);
+}
+
+.plan-page .lp-answer__fact {
+  border-radius: var(--radius-md);
+}
+
+/* ----- Oś czasu ----- */
+.plan-page .lp-timeline-tracks {
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .lp-timeline-track__lane {
+  border-radius: 14px;
+}
+
+.plan-page .lp-timeline-bar {
+  --bar-bg: #d8f0e1;
+  --bar-edge: #2f9d63;
+  --bar-ink: #0b3d1f;
+  container-type: inline-size;
+  border: 2px solid var(--bar-edge);
+  border-radius: 12px;
+  background: var(--bar-bg);
+  color: var(--bar-ink);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.plan-page .lp-timeline-bar:hover {
+  z-index: 2;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.plan-page .lp-timeline-bar__meta {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* Rodzaje urlopów – te same klasy mają paski i pastylki legendy */
+.plan-page .lp-timeline-bar--parental,
+.plan-page .lp-timeline-bar--with-work {
+  --bar-bg: #dfeaf6;
+  --bar-edge: #2f6ea6;
+  --bar-ink: #0d3558;
+}
+
+.plan-page .lp-timeline-bar--paternity {
+  --bar-bg: #fff0d3;
+  --bar-edge: #d98a12;
+  --bar-ink: #5b3600;
+  border-style: dashed;
+}
+
+.plan-page .lp-timeline-bar--supplementary {
+  --bar-bg: #e9f7ef;
+  --bar-edge: #19a45a;
+  border-style: solid;
+}
+
+.plan-page .lp-timeline-bar--extension {
+  --bar-bg: #eef7f1;
+  --bar-edge: #19a45a;
+  border-style: dotted;
+}
+
+/* Z pracą w trakcie – kreskowane tło */
+.plan-page .lp-timeline-bar--with-work {
+  background: repeating-linear-gradient(135deg, var(--bar-bg) 0 9px, #f6f9fc 9px 15px);
+}
+
+/* Wąskie paski: najpierw znika nazwa, potem stawka, na końcu cały podpis (jest w legendzie i tooltipie) */
+@container (max-width: 8rem) {
+  .lp-timeline-bar__title {
+    display: none;
+  }
+}
+
+@container (max-width: 5.5rem) {
+  .lp-timeline-bar__rate {
+    display: none;
+  }
+}
+
+@container (max-width: 3.4rem) {
+  .lp-timeline-bar__meta {
+    display: none;
+  }
+}
+
+.plan-page .lp-timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-block: calc(var(--space-2) * -1) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  list-style: none;
+}
+
+.plan-page .lp-timeline-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plan-page :where(.lp-timeline-legend__swatch) {
+  display: inline-block;
+  width: 1.1rem;
+  height: 0.8rem;
+  border: 2px solid var(--bar-edge, #2f9d63);
+  border-radius: 4px;
+  background: var(--bar-bg, #d8f0e1);
+}
+
+/* ----- Zwijane sekcje planu urlopów ----- */
+.plan-page .lp-details,
+.plan-page .lp-details--card {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.plan-page .lp-details__summary {
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .lp-details__summary:hover {
+  background: var(--color-surface-muted);
+}
+
+.plan-page .lp-details__summary::after {
+  content: '';
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-inline-end: 0.2rem;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  font-size: 0;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .lp-details[open] > .lp-details__summary::after {
+  transform: rotate(225deg);
+}
+
+/* ----- Planer podziału: komunikaty i gotowe scenariusze ----- */
+.plan-page .lp-planner-errors,
+.plan-page .lp-planner-warnings,
+.plan-page .lp-planner-success {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+}
+
+.plan-page .lp-planner-errors {
+  border-color: #f2c9c9;
+  background: var(--color-error-soft);
+}
+
+.plan-page .lp-planner-errors__title {
+  color: var(--color-error);
+}
+
+.plan-page .lp-planner-warnings {
+  border-color: #f0d7a4;
+  background: var(--color-warning-soft);
+}
+
+.plan-page .lp-planner-success {
+  border-color: #cfe6d8;
+  background: var(--color-accent-soft);
+}
+
+.plan-page .lp-preset-card {
+  position: relative;
+  padding: var(--space-4);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.plan-page .lp-preset-card:hover:not(:disabled) {
+  border-color: var(--color-primary-bright);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+.plan-page .lp-preset-card:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.plan-page .lp-preset-card--active {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 4px rgb(0 120 52 / 0.12);
+}
+
+/* „Zaznaczone” widać też bez koloru – kółko z ptaszkiem w rogu */
+.plan-page .lp-preset-card--active::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0.7rem;
+  inset-inline-end: 0.7rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 12.5l3.5 3.5 7.5-8'/%3E%3C/svg%3E")
+      center / 100% no-repeat,
+    var(--color-primary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .plan-page .lp-preset-card--active::after {
+    animation: ui-pop var(--dur-base) var(--ease-spring) backwards;
+  }
+}
+
+.plan-page .lp-preset-card--active .lp-preset-card__title {
+  padding-inline-end: 1.6rem;
+}
+
+.plan-page .lp-pool-progress {
+  border: 0;
+  border-radius: var(--radius-md);
+}
+
+.plan-page .lp-pool-progress__track {
+  border-radius: var(--radius-pill);
+}
+
+.plan-page .lp-pool-progress__fill {
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-bright));
+}
+
+/* ================= Dokumenty i terminy ================= */
+/* Tytuł kroku jest już w ścieżce u góry i w okruszkach – tu zostaje dla czytników ekranu */
+.plan-page .case-paperwork__heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.plan-page .docs-answer--overdue {
+  border-color: #f2c9c9;
+  background: linear-gradient(180deg, #ffffff 0%, var(--color-error-soft) 100%);
+}
+
+.plan-page .docs-answer__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.plan-page .docs-answer--overdue .docs-answer__eyebrow {
+  background: #fbdcdc;
+  color: var(--color-error);
+}
+
+.plan-page .docs-answer__step {
+  font-size: clamp(1.3rem, 1.05rem + 1.3vw, 1.85rem);
+  letter-spacing: -0.015em;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+
+.plan-page .docs-answer__payers {
+  border-top-color: rgb(0 120 52 / 0.16);
+}
+
+.plan-page .docs-answer__payer-row {
+  gap: 0.2rem;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.plan-page .docs-answer__payer-row dt {
+  font-weight: var(--font-weight-bold);
+}
+
+/* Najbliższy termin = pomarańcz */
+.plan-page .docs-next-deadline {
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid #f0d7a4;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+}
+
+.plan-page .docs-next-deadline--overdue {
+  border-color: #f2c9c9;
+  background: var(--color-error-soft);
+}
+
+.plan-page .docs-next-deadline .plan-badge--yes {
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+}
+
+.plan-page .docs-deadlines-list__item {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .docs-deadlines-list__item--overdue {
+  background: var(--color-error-soft);
+}
+
+.plan-page .docs-deadlines-list__date {
+  min-width: 6.5rem;
+}
+
+.plan-page .docs-plan-assumption {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: rgb(0 120 52 / 0.07);
+}
+
+.plan-page .docs-details {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.plan-page .docs-details__summary {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .docs-details__summary::after {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .docs-details[open] > .docs-details__summary::after {
+  content: '';
+  transform: rotate(225deg);
+}
+
+.plan-page .docs-details__body {
+  padding: var(--space-4);
+  line-height: 1.55;
+}
+
+/* ----- Mapa składania dokumentów ----- */
+.plan-page .fmap {
+  gap: var(--space-3);
+}
+
+.plan-page .fmap__head {
+  align-items: center;
+}
+
+.plan-page .fmap__progress {
+  padding: 0.3rem 0.9rem;
+}
+
+.plan-page .fmap__bar {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+}
+
+.plan-page .fmap__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-bright));
+  transform: scaleX(var(--p, 0));
+  transform-origin: 0 50%;
+  transition: transform 700ms var(--ease-out);
+}
+
+/* Poza pierwszą szóstką kroki są pod przyciskiem „Pokaż pozostałe kroki” */
+.plan-page .fmap__list .fmap__step--extra {
+  display: none;
+}
+
+.plan-page .fmap__more {
+  align-self: flex-start;
+  margin-block-start: var(--space-2);
+}
+
+.plan-page .fmap__node {
+  padding: var(--space-3) var(--space-4);
+}
+
+.plan-page .fmap__dot {
+  border-color: var(--color-border-strong);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+
+.plan-page .fmap__step--active .fmap__dot {
+  transform: scale(1.08);
+}
+
+.plan-page .fmap__detail {
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-page .fmap__facts > div {
+  border: 0;
+  background: var(--color-surface-muted);
+}
+
+.plan-page .fmap__todo > li::before {
+  background: var(--color-primary);
+}
+
+/* ================= Wnioski ================= */
+.plan-page .apps-intro .plan-section__title {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 0;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.plan-page .apps-intro__lead {
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.6rem);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.plan-page .apps-open {
+  border-color: rgb(0 120 52 / 0.2);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-page .apps-open__kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+}
+
+.plan-page .apps-compact-list {
+  gap: var(--space-4);
+}
+
+.plan-page .apps-card {
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) ease;
+}
+
+.plan-page .apps-card:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-page .apps-card__title {
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.01em;
+}
+
+.plan-page .apps-card__recipient {
+  line-height: 1.6;
+}
+
+.plan-page .apps-card__action {
+  min-height: 2.75rem;
+}
+
+.plan-page .apps-preview {
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .apps-preview__summary {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .apps-preview__summary:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.plan-page .apps-preview__summary::after {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .apps-preview[open] > .apps-preview__summary::after {
+  content: '';
+  transform: rotate(225deg);
+}
+
+.plan-page .apps-preview__body {
+  padding: var(--space-4);
+}
+
+.plan-page .apps-preview__fields {
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+/* Dane osobowe: grupa pól z podpisem „Matka” / „Ojciec” */
+.plan-page fieldset.plan-section {
+  min-width: 0;
+  margin-block-start: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  box-shadow: none;
+}
+
+.plan-page fieldset.plan-section > legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page fieldset.plan-section > legend + * {
+  clear: both;
+}
+
+.plan-page .apps-personal-note {
+  max-width: 60ch;
+  line-height: 1.55;
+}
+
+/* ================= Wsparcie ================= */
+.plan-page .case-support__heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.plan-page .support-answer--warning {
+  border-color: rgb(0 120 52 / 0.16);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(25 164 90 / 0.14), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f1f9f4 100%);
+}
+
+.plan-page .support-answer__text {
+  max-width: 60ch;
+  font-size: clamp(1.0625rem, 1rem + 0.45vw, 1.25rem);
+  line-height: 1.5;
+}
+
+.plan-page .support-risk-list {
+  gap: var(--space-3);
+  margin-block-start: var(--space-2);
+}
+
+/* Ryzyka = ciepły bursztyn z ikoną (tak samo jak „Na co zwrócić uwagę” w Uprawnieniach) */
+.plan-page .support-risk-card {
+  position: relative;
+  gap: 0.35rem;
+  padding: var(--space-4) var(--space-5) var(--space-4) 3.6rem;
+  border: var(--border-width) solid #f0d7a4;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+}
+
+.plan-page .support-risk-card--info {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .support-risk-card::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 1.1rem;
+  inset-inline-start: 1.15rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--color-warning);
+  -webkit-mask: var(--icon-alert) center / contain no-repeat;
+  mask: var(--icon-alert) center / contain no-repeat;
+}
+
+.plan-page .support-risk-card--info::before {
+  background: var(--color-text-muted);
+  -webkit-mask-image: var(--icon-info);
+  mask-image: var(--icon-info);
+}
+
+.plan-page .support-risk-card__action {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+
+.plan-page .support-inline-details {
+  margin-block-start: var(--space-2);
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+.plan-page .support-inline-details__summary {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 0.8);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .support-inline-details__summary:hover {
+  background: #fff;
+}
+
+.plan-page .support-inline-details__summary::after,
+.plan-page .support-accordion__summary::after,
+.plan-page .support-special-card__summary::after {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: none;
+  border-inline-end: 2px solid var(--color-primary);
+  border-block-end: 2px solid var(--color-primary);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.plan-page .support-inline-details[open] > .support-inline-details__summary::after,
+.plan-page .support-accordion[open] > .support-accordion__summary::after,
+.plan-page .support-special-card[open] > .support-special-card__summary::after {
+  content: '';
+  transform: rotate(225deg);
+}
+
+/* Sytuacje szczególne – zwijane karty (z listy widać same tytuły) */
+.plan-page .support-special-list {
+  gap: var(--space-3);
+}
+
+.plan-page .support-special-card {
+  overflow: hidden;
+  padding: 0;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.plan-page .support-special-card__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-5);
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .support-special-card__summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-page .support-special-card__summary:hover {
+  background: var(--color-surface-muted);
+}
+
+.plan-page .support-special-card__title {
+  font-size: var(--font-size-md);
+}
+
+.plan-page .support-special-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border-block-start: var(--border-width) solid var(--color-border);
+}
+
+.plan-page .support-special-card__text,
+.plan-page .support-special-card__steps {
+  font-size: var(--font-size-base);
+  line-height: 1.55;
+}
+
+/* Asystent AI – spokojna karta, bez granatowych ramek */
+.plan-page .support-ai {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .support-ai__disclaimer {
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.plan-page .support-faq-chip {
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.plan-page .support-faq-chip:hover {
+  border-color: var(--color-primary);
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  transform: translateY(-2px);
+}
+
+.plan-page .support-faq-answer {
+  border: 0;
+  border-radius: var(--radius-md);
+}
+
+.plan-page .support-ai__source-tag--ai {
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+}
+
+/* Akordeony „Dodatkowe informacje, pomoc i narzędzia” */
+.plan-page .support-accordion {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.plan-page .support-accordion__summary {
+  padding: var(--space-3) var(--space-5);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.plan-page .support-accordion__body {
+  padding: var(--space-5);
+}
+
+.plan-page .support-general-card,
+.plan-page .support-org-tile {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.plan-page .support-more__title {
+  font-size: var(--font-size-xl);
+  letter-spacing: -0.01em;
+}
+
+/* ================= Pola wyboru: jeden wygląd w całym planie ================= */
+.plan-page input[type='checkbox'] {
+  flex: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.plan-page .apps-card__recipient,
+.plan-page .fmap__done,
+.plan-page .plan-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  cursor: pointer;
+}

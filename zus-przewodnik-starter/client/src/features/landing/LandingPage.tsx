@@ -1,55 +1,46 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { SituationType } from '@shared/types';
 import { useScenario } from '../../app/ScenarioContext';
 import { parseSituation } from '../../app/situation';
+import { AppBar } from '../../components/AppBar';
+import { AppFooter, type FooterLink } from '../../components/AppFooter';
+import {
+  ArrowIcon,
+  CheckIcon,
+  CoinIcon,
+  DocumentIcon,
+  CalendarIcon,
+} from '../../components/icons';
+import { CountUp, usePointerParallax } from '../../components/motion';
 import { SITUATION_OPTIONS } from './situationOptions';
 import { SituationTiles } from './SituationTiles';
-import { HeroEmblem } from './HeroEmblem';
-import { CountUp, usePointerParallax, useScrollReveal } from './useLandingMotion';
 import './LandingPage.css';
-import './LandingMotion.css';
 
 const SITUATION_QUERY_KEY = 'situation';
 
-/** Strzałka „›” w przyciskach – jak w przyciskach nagłówka zus.pl. */
-function ButtonChevron() {
-  return (
-    <svg
-      className="button__chevron"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M6 3l5 5-5 5" />
-    </svg>
-  );
-}
-
-const EXTERNAL_LINKS = [
+const FOOTER_LINKS: FooterLink[] = [
+  { to: '/guide', label: 'Przewodnik' },
+  { to: '/cases', label: 'Przykładowe sprawy' },
   { href: 'https://www.zus.pl', label: 'Zakład Ubezpieczeń Społecznych (zus.pl)' },
-  {
-    href: 'https://www.gov.pl/web/rodzina/urlop-rodzicielski',
-    label: 'Urlop rodzicielski (gov.pl)',
-  },
+  { href: 'https://www.gov.pl/web/rodzina/urlop-rodzicielski', label: 'Urlop rodzicielski (gov.pl)' },
   {
     href: 'https://www.pip.gov.pl/dla-pracodawcow/porady-prawne/rodzicielstwo',
     label: 'Rodzicielstwo – Państwowa Inspekcja Pracy',
   },
 ];
 
-const TITLE_WORDS = ['Przewodnik', 'Przyszłego', 'Rodzica'];
-
-/** Podstawowe wymiary urlopów dla jednego dziecka – szczegóły zależą od sytuacji. */
-const QUICK_FACTS = [
-  { value: 20, unit: 'tygodni', label: 'urlopu macierzyńskiego' },
-  { value: 2, unit: 'tygodnie', label: 'urlopu ojcowskiego' },
-  { value: 41, unit: 'tygodni', label: 'urlopu rodzicielskiego' },
+/** Nagłówek rozbity na słowa – każde „wynurza się” po kolei; wyróżnione słowa dostają zakreślenie. */
+const TITLE_WORDS: { text: string; mark?: boolean }[] = [
+  { text: 'Dowiedz' },
+  { text: 'się,' },
+  { text: 'co' },
+  { text: 'Ci' },
+  { text: 'przysługuje', mark: true },
+  { text: 'i' },
+  { text: 'co' },
+  { text: 'musisz' },
+  { text: 'złożyć', mark: true },
 ];
 
 const REASSURANCES = [
@@ -58,10 +49,35 @@ const REASSURANCES = [
   'Możesz zacząć bez logowania',
 ];
 
-const BENEFITS = [
-  'Sprawdzisz, jakie świadczenia Ci przysługują.',
-  'Policzysz okres i wysokość zasiłku.',
-  'Dostaniesz listę dokumentów i terminów.',
+interface Step {
+  title: string;
+  text: string;
+  icon: ReactNode;
+}
+
+const STEPS: Step[] = [
+  {
+    title: 'Odpowiedz na pytania',
+    text: 'Kilka prostych pytań o Twoją sytuację. Zapisujemy na bieżąco, więc możesz wrócić później.',
+    icon: <CheckIcon className="home__step-icon" />,
+  },
+  {
+    title: 'Zobacz swój plan',
+    text: 'Co Ci przysługuje, ile dostaniesz i jak rozłożyć urlopy w czasie.',
+    icon: <CalendarIcon className="home__step-icon" />,
+  },
+  {
+    title: 'Pobierz gotowe wnioski',
+    text: 'Lista dokumentów z terminami oraz wnioski wypełnione Twoimi danymi.',
+    icon: <DocumentIcon className="home__step-icon" />,
+  },
+];
+
+/** Podstawowe wymiary urlopów dla jednego dziecka – szczegóły zależą od sytuacji. */
+const QUICK_FACTS = [
+  { value: 20, unit: 'tygodni', label: 'urlopu macierzyńskiego' },
+  { value: 2, unit: 'tygodnie', label: 'urlopu ojcowskiego' },
+  { value: 41, unit: 'tygodni', label: 'urlopu rodzicielskiego' },
 ];
 
 export function LandingPage() {
@@ -70,7 +86,6 @@ export function LandingPage() {
   const { scenario, setSituation } = useScenario();
   const [selectionRequested, setSelectionRequested] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  useScrollReveal(rootRef);
   usePointerParallax(rootRef);
 
   // Query string ma pierwszeństwo; bez parametru pokazujemy wybór zapamiętany w kontekście.
@@ -104,180 +119,167 @@ export function LandingPage() {
   }
 
   return (
-    <div className="landing" ref={rootRef}>
-      <div className="landing__progress" aria-hidden="true" />
-      <div className="landing__demo-strip">
-        <div className="landing__container">
-          <p className="landing__demo-label">
-            Wersja demonstracyjna – dane i logowanie są symulowane
-          </p>
-        </div>
-      </div>
-
-      <header className="landing__header">
-        <div className="landing__aurora" aria-hidden="true">
-          <span className="landing__blob landing__blob--1" />
-          <span className="landing__blob landing__blob--2" />
-          <span className="landing__blob landing__blob--3" />
-          <span className="landing__spark landing__spark--1" />
-          <span className="landing__spark landing__spark--2" />
-          <span className="landing__spark landing__spark--3" />
-          <span className="landing__spark landing__spark--4" />
-        </div>
-        <div className="landing__container">
-          <div className="landing__hero">
-            <div className="landing__hero-text">
-              <h1 className="landing__title">
-                {TITLE_WORDS.map((word, index) => (
-                  <Fragment key={word}>
-                    <span className="landing__word" style={{ ['--i' as string]: index }}>
-                      <span className="landing__word-inner">{word}</span>
-                    </span>{' '}
-                  </Fragment>
-                ))}
-              </h1>
-              <p className="landing__subtitle">
-                Sprawdź, jakie świadczenia z ZUS Ci przysługują – w kilka minut.
-              </p>
-              <ul className="landing__reassurances">
-                {REASSURANCES.map((item, index) => (
-                  <li
-                    key={item}
-                    className="landing__reassurance"
-                    style={{ ['--i' as string]: index }}
-                  >
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <HeroEmblem />
-          </div>
-        </div>
+    <div className="home" ref={rootRef}>
+      <header>
+        <AppBar brandLink={false} />
       </header>
 
-      <main id="main" tabIndex={-1} className="landing__main">
-        <div className="landing__container">
-          <section
-            className="landing__section landing__card"
-            aria-labelledby="situation-heading"
-            data-reveal
-          >
-            <h2 id="situation-heading" className="landing__section-title">
-              W jakiej jesteś sytuacji?
-            </h2>
-            <p className="landing__section-lead">Wybierz jedną opcję, aby przejść dalej.</p>
+      <main id="main" tabIndex={-1} className="home__main">
+        <div className="ui-container home__hero">
+          <div className="home__intro">
+            <p className="ui-eyebrow ui-rise">Zasiłki i urlopy rodzicielskie</p>
+            <h1 className="home__title">
+              {TITLE_WORDS.map((word, index) => (
+                <Fragment key={`${word.text}-${index}`}>
+                  <span className="home__word" style={{ ['--i' as string]: index }}>
+                    <span
+                      className={
+                        word.mark ? 'home__word-inner home__word-inner--mark' : 'home__word-inner'
+                      }
+                    >
+                      {word.text}
+                    </span>
+                  </span>{' '}
+                </Fragment>
+              ))}
+            </h1>
+            <p className="home__lead ui-rise" style={{ ['--i' as string]: 5 }}>
+              Odpowiedz na kilka prostych pytań. My policzymy zasiłek, ułożymy urlopy i
+              przygotujemy gotowe wnioski – krok po kroku.
+            </p>
+            <ul className="home__reassurances">
+              {REASSURANCES.map((item, index) => (
+                <li
+                  key={item}
+                  className="home__reassurance ui-rise"
+                  style={{ ['--i' as string]: index + 6 }}
+                >
+                  <CheckIcon className="home__reassurance-icon" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-            <SituationTiles
-              options={SITUATION_OPTIONS}
-              value={selected}
-              onChange={handleSelect}
-              labelledBy="situation-heading"
-              describedBy={showSelectionError ? 'situation-error' : undefined}
-            />
-
-            {showSelectionError && (
-              <p id="situation-error" className="landing__error" role="alert">
-                Wybierz swoją sytuację, aby przejść dalej
+          <section className="home__choose" aria-labelledby="situation-heading">
+            <span className="home__pulse home__pulse--a" aria-hidden="true" />
+            <span className="home__pulse home__pulse--b" aria-hidden="true" />
+            <div className="home__card ui-rise" style={{ ['--i' as string]: 3 }}>
+              <p className="home__card-step" aria-hidden="true">
+                Pierwszy krok
               </p>
-            )}
+              <h2 id="situation-heading" className="home__card-title">
+                W jakiej jesteś sytuacji?
+              </h2>
+              <p className="home__card-lead">Wybierz jedną opcję, aby przejść dalej.</p>
 
-            <div className="landing__actions">
-              <div className="landing__action">
-                <button
-                  type="button"
-                  className="button button--primary"
-                  aria-describedby="login-hint"
-                  onClick={() => goTo('/login')}
-                >
-                  Zaloguj się przez mObywatela
-                  <ButtonChevron />
-                </button>
-                <p id="login-hint" className="landing__action-hint">
-                  Pobierzemy Twoje dane z ZUS – symulacja
+              <SituationTiles
+                options={SITUATION_OPTIONS}
+                value={selected}
+                onChange={handleSelect}
+                labelledBy="situation-heading"
+                describedBy={showSelectionError ? 'situation-error' : undefined}
+              />
+
+              {showSelectionError && (
+                <p id="situation-error" className="home__error" role="alert">
+                  Wybierz swoją sytuację, aby przejść dalej
                 </p>
-              </div>
-              <div className="landing__action">
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => goTo('/wizard')}
-                >
-                  Kontynuuj bez logowania
-                  <ButtonChevron />
-                </button>
+              )}
+
+              <div className="home__actions">
+                <div className="home__action">
+                  <button
+                    type="button"
+                    className={
+                      selected
+                        ? 'ui-btn ui-btn--primary ui-btn--lg home__cta home__cta--ready'
+                        : 'ui-btn ui-btn--primary ui-btn--lg home__cta'
+                    }
+                    aria-describedby="login-hint"
+                    onClick={() => goTo('/login')}
+                  >
+                    Zaloguj się przez mObywatela
+                    <ArrowIcon />
+                  </button>
+                  <p id="login-hint" className="home__action-hint">
+                    Pobierzemy Twoje dane z ZUS – symulacja
+                  </p>
+                </div>
+                <div className="home__action">
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn--ghost ui-btn--lg home__cta"
+                    onClick={() => goTo('/wizard')}
+                  >
+                    Kontynuuj bez logowania
+                    <ArrowIcon />
+                  </button>
+                </div>
               </div>
             </div>
           </section>
+        </div>
 
-          <section
-            className="landing__section landing__facts"
-            aria-labelledby="facts-heading"
-            data-reveal
-          >
-            <h2 id="facts-heading" className="landing__facts-title">
-              W skrócie
-            </h2>
-            <ul className="landing__facts-list">
-              {QUICK_FACTS.map((fact, index) => (
-                <li key={fact.label} className="landing__fact" style={{ ['--i' as string]: index }}>
-                  <CountUp className="landing__fact-value" value={fact.value} />
-                  <span className="landing__fact-unit">{fact.unit}</span>
-                  <span className="landing__fact-label">{fact.label}</span>
+        <section className="ui-container home__how" aria-labelledby="how-heading">
+          <h2 id="how-heading" className="home__section-title" data-reveal>
+            Jak to działa
+          </h2>
+          <ol className="home__steps">
+            {STEPS.map((step, index) => (
+              <li
+                key={step.title}
+                className="home__step"
+                style={{ ['--i' as string]: index }}
+                data-reveal
+              >
+                <span className="home__step-badge">
+                  <span className="home__step-number" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  {step.icon}
+                </span>
+                <h3 className="home__step-title">{step.title}</h3>
+                <p className="home__step-text">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="ui-container home__facts" aria-labelledby="facts-heading" data-reveal>
+          <div className="home__facts-card">
+            <div className="home__facts-head">
+              <CoinIcon className="home__facts-icon" />
+              <div>
+                <h2 id="facts-heading" className="home__facts-title">
+                  W skrócie
+                </h2>
+                <p className="home__facts-note">
+                  Dotyczy jednego dziecka. Dokładny wymiar zależy od Twojej sytuacji – sprawdzisz go
+                  w planie.
+                </p>
+              </div>
+            </div>
+            <ul className="home__facts-list">
+              {QUICK_FACTS.map((fact) => (
+                <li key={fact.label} className="home__fact">
+                  <span className="home__fact-number">
+                    <CountUp className="home__fact-value" value={fact.value} />
+                    <span className="home__fact-unit">{fact.unit}</span>
+                  </span>
+                  <span className="home__fact-label">{fact.label}</span>
                 </li>
               ))}
             </ul>
-            <p className="landing__facts-note">
-              Dotyczy jednego dziecka. Dokładny wymiar zależy od Twojej sytuacji – sprawdzisz go w
-              planie.
-            </p>
-          </section>
-
-          <section
-            className="landing__section landing__benefits-section"
-            aria-labelledby="benefits-heading"
-            data-reveal
-          >
-            <h2 id="benefits-heading" className="landing__benefits-title">
-              Co tu zrobisz
-            </h2>
-            <ol className="landing__benefits">
-              {BENEFITS.map((benefit, index) => (
-                <li key={benefit} className="landing__benefit" style={{ ['--i' as string]: index }}>
-                  {benefit}
-                </li>
-              ))}
-            </ol>
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
 
-      <footer className="landing__footer">
-        <div className="landing__container">
-          <nav aria-label="Przydatne linki" className="landing__footer-nav">
-            <ul className="landing__footer-links">
-              <li>
-                <Link to="/guide">Przewodnik</Link>
-              </li>
-              <li>
-                <Link to="/cases">Przykładowe sprawy</Link>
-              </li>
-              {EXTERNAL_LINKS.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href} target="_blank" rel="noopener noreferrer">
-                    {link.label}
-                    <span className="visually-hidden"> (otwiera się w nowej karcie)</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <p className="landing__privacy-note">
-            Odpowiedzi z formularza zapisujemy tylko w tej przeglądarce, aby można było do nich
-            wrócić.
-          </p>
-        </div>
-      </footer>
+      <AppFooter
+        links={FOOTER_LINKS}
+        navLabel="Przydatne linki"
+        note="Odpowiedzi z formularza zapisujemy tylko w tej przeglądarce, aby można było do nich wrócić."
+      />
     </div>
   );
 }

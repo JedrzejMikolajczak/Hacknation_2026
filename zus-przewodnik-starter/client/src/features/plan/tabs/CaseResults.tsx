@@ -85,6 +85,19 @@ function splitFirstSentence(text: string): { lead: string; rest: string } {
   return { lead: match[1], rest: match[2].trim() };
 }
 
+/**
+ * Ostrzeżenia silnika mają postać „<co się dzieje>. <kontekst>. Co zrobić: <działanie>”.
+ * Rodzic najpierw widzi pierwsze zdanie i wyróżnione „Co zrobić”; kontekst chowamy w szczegółach.
+ */
+function splitWarningMessage(text: string): { lead: string; context: string; action: string } {
+  const marker = 'Co zrobić:';
+  const index = text.indexOf(marker);
+  const before = (index >= 0 ? text.slice(0, index) : text).trim();
+  const action = index >= 0 ? text.slice(index + marker.length).trim() : '';
+  const { lead, rest } = splitFirstSentence(before);
+  return { lead, context: rest, action };
+}
+
 function buildParentRightSummary(
   role: ApplicantRole,
   items: CaseEntitlement[],
@@ -221,22 +234,14 @@ function buildParentRightSummary(
   };
 }
 
-function WarningList({
-  warnings,
-  params,
-  compact = false,
-}: {
-  warnings: CaseWarning[];
-  params: BenefitParams;
-  compact?: boolean;
-}) {
+function WarningList({ warnings, params }: { warnings: CaseWarning[]; params: BenefitParams }) {
   if (warnings.length === 0) return null;
   return (
     <ul className="results-risks__list">
       {warnings.map((warning, index) => {
         const info = isInfoWarning(warning);
-        const { lead, rest } = splitFirstSentence(warning.message_pl);
-        const hasDetails = Boolean(rest || warning.legal_basis);
+        const { lead, context, action } = splitWarningMessage(warning.message_pl);
+        const hasDetails = Boolean(context || warning.legal_basis);
         return (
           <li
             key={`${warning.code}-${index}`}
@@ -244,12 +249,17 @@ function WarningList({
             role={info ? undefined : 'alert'}
           >
             <strong className="results-risk__title">{warningTitle(warning.code, params)}</strong>
-            <p className="results-risk__text">{compact ? lead : warning.message_pl}</p>
+            <p className="results-risk__text">{lead}</p>
+            {action && (
+              <p className="results-risk__action">
+                <span className="results-risk__action-label">Co zrobić:</span> {action}
+              </p>
+            )}
             {hasDetails && (
               <details className="results-details results-details--inline">
                 <summary className="results-details__summary">Szczegóły i podstawa prawna</summary>
                 <div className="results-details__body">
-                  {compact && rest && <p>{warning.message_pl}</p>}
+                  {context && <p>{context}</p>}
                   {warning.legal_basis && (
                     <p className="results-legal">Podstawa prawna: {warning.legal_basis}</p>
                   )}
@@ -261,6 +271,18 @@ function WarningList({
       })}
     </ul>
   );
+}
+
+/** „4 przysługują · 4 do sprawdzenia” – skrót stanu świadczeń na zwiniętym bloku szczegółów. */
+function summarizeBenefitCounts(items: CasePlan['entitlements']): string {
+  const yes = items.filter((item) => item.is_qualified === true).length;
+  const unknown = items.filter((item) => item.is_qualified === null).length;
+  const no = items.filter((item) => item.is_qualified === false).length;
+  const parts: string[] = [];
+  if (yes > 0) parts.push(`${yes} ${yes === 1 ? 'przysługuje' : 'przysługują'}`);
+  if (unknown > 0) parts.push(`${unknown} do sprawdzenia`);
+  if (no > 0) parts.push(`${no} ${no === 1 ? 'nie przysługuje' : 'nie przysługują'}`);
+  return parts.join(' · ');
 }
 
 export function CaseRights({
@@ -290,13 +312,46 @@ export function CaseRights({
   const visibleEntitlements = plan.entitlements.filter((item) =>
     activeRoles.includes(item.parent_role),
   );
+  const benefitCountSummary = summarizeBenefitCounts(visibleEntitlements);
 
   return (
     <div className="results-tab">
-      <section className="results-section" aria-labelledby="rights-details-heading">
-        <h3 id="rights-details-heading" className="results-section__title">
-          Szczegóły świadczeń
-        </h3>
+      <section
+        className={anyQualified ? 'results-answer' : 'results-answer results-answer--none'}
+        aria-labelledby="rights-answer-heading"
+      >
+        <h2 id="rights-answer-heading" className="results-answer__title">
+          Uprawnienia
+        </h2>
+        <ul className="results-answer__list">
+          {parentSummaries.map((summary) => (
+            <li key={summary.role} className="results-answer__item">
+              <span className="results-answer__role">{summary.label}:</span>
+              <span>{summary.sentence}</span>
+            </li>
+          ))}
+        </ul>
+        {plan.outcome.warnings.length === 0 && (
+          <p className="results-answer__note">
+            Nie wykryto ryzyk utraty świadczeń dla podanych danych.
+          </p>
+        )}
+      </section>
+
+      {plan.outcome.warnings.length > 0 && (
+        <section className="results-section" aria-labelledby="rights-warnings-heading">
+          <h3 id="rights-warnings-heading" className="results-section__title">
+            Na co zwrócić uwagę
+          </h3>
+          <WarningList warnings={plan.outcome.warnings} params={params} />
+        </section>
+      )}
+
+      <details className="results-benefits" open={!anyQualified || undefined}>
+        <summary className="results-benefits__summary">
+          <span className="results-benefits__title">Szczegóły świadczeń</span>
+          <span className="results-benefits__count">{benefitCountSummary}</span>
+        </summary>
         <div className="results-rights-grid">
           {visibleEntitlements.map((item) => {
             const statusClass =
@@ -342,38 +397,7 @@ export function CaseRights({
             );
           })}
         </div>
-      </section>
-
-      <section
-        className={anyQualified ? 'results-answer' : 'results-answer results-answer--none'}
-        aria-labelledby="rights-answer-heading"
-      >
-        <h2 id="rights-answer-heading" className="results-answer__title">
-          Uprawnienia
-        </h2>
-        <ul className="results-answer__list">
-          {parentSummaries.map((summary) => (
-            <li key={summary.role} className="results-answer__item">
-              <span className="results-answer__role">{summary.label}:</span>
-              <span>{summary.sentence}</span>
-            </li>
-          ))}
-        </ul>
-        {plan.outcome.warnings.length === 0 && (
-          <p className="results-answer__note">
-            Nie wykryto ryzyk utraty świadczeń dla podanych danych.
-          </p>
-        )}
-      </section>
-
-      {plan.outcome.warnings.length > 0 && (
-        <section className="results-section" aria-labelledby="rights-warnings-heading">
-          <h3 id="rights-warnings-heading" className="results-section__title">
-            Na co zwrócić uwagę
-          </h3>
-          <WarningList warnings={plan.outcome.warnings} params={params} compact />
-        </section>
-      )}
+      </details>
 
       {authSession &&
         (input?.employment_type === 'B2B' ||
@@ -739,6 +763,39 @@ export function CaseCalculator({
         )}
       </section>
 
+      {showVariantSwitch && (
+        <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">
+          <span className="plan-field__label">Wariant wypłaty</span>
+          <div className="results-variant-bar__segmented" role="group" aria-label="Wariant wypłaty">
+            <button
+              type="button"
+              className={
+                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
+                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
+                  : 'results-variant-bar__btn'
+              }
+              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
+              disabled={combinedUnavailable}
+              onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
+            >
+              {formatRate(params.rates.combined)} za cały okres
+            </button>
+            <button
+              type="button"
+              className={
+                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
+                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
+                  : 'results-variant-bar__btn'
+              }
+              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
+              onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
+            >
+              {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
+            </button>
+          </div>
+        </section>
+      )}
+
       {additionalTitles?.map(({ employment_type: title, outcome: result, documents }, index) => {
         const titleLabel = { UOP: 'Umowa o pracę', ZLECENIE: 'Umowa zlecenie', B2B: 'JDG' }[title];
         const periods = [...result.periods, ...result.employer_sick_pay];
@@ -781,39 +838,6 @@ export function CaseCalculator({
       {specificWarnings.length > 0 && (
         <section aria-label="Ostrzeżenia kalkulatora">
           <WarningList warnings={specificWarnings} params={params} />
-        </section>
-      )}
-
-      {showVariantSwitch && (
-        <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">
-          <span className="plan-field__label">Wariant wypłaty</span>
-          <div className="results-variant-bar__segmented" role="group" aria-label="Wariant wypłaty">
-            <button
-              type="button"
-              className={
-                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
-              disabled={combinedUnavailable}
-              onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
-            >
-              {formatRate(params.rates.combined)} za cały okres
-            </button>
-            <button
-              type="button"
-              className={
-                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
-              onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
-            >
-              {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
-            </button>
-          </div>
         </section>
       )}
 
