@@ -47,8 +47,9 @@ Przepisy wokół zasiłku macierzyńskiego, urlopu rodzicielskiego i zwolnień w
 | ![Wnioski](docs/screens/Wnioski1.png) | ![Wsparcie](docs/screens/Wsparcie1.png) |
 
 <details>
-<summary><strong>Zobacz wszystkie zrzuty ekranu (15 widoków)</strong></summary>
+<summary><strong>Zobacz wszystkie zrzuty ekranu (16 widoków)</strong></summary>
 
+- **Plan (widok główny):** [`Opening1.png`](docs/screens/Opening1.png) · [`Opening2.png`](docs/screens/Opening2.png)
 - **Kalkulator:** [`Kalkulator2.png`](docs/screens/Kalkulator2.png) · [`Kalkulator3.png`](docs/screens/Kalkulator3.png)
 - **Plan urlopów:** [`Urlop2.png`](docs/screens/Urlop2.png) · [`Urlop3.png`](docs/screens/Urlop3.png)
 - **Dokumenty i terminy:** [`Dokumenty2.png`](docs/screens/Dokumenty2.png) · [`Dokumenty3.png`](docs/screens/Dokumenty3.png)
