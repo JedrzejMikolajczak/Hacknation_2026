@@ -1,0 +1,21 @@
+# Frontend (Vite SPA) na Netlify. API działa osobno na Render – Netlify przekazuje do niego /api/*.
+[build]
+  command = "npm run build -w shared && npm run build -w client"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Proxy do API na Render (bez CORS po stronie przeglądarki).
+# ZMIEŃ adres, jeśli Render nadał Twojej usłudze inną nazwę niż zus-przewodnik-api.
+[[redirects]]
+  from = "/api/*"
+  to = "https://zus-przewodnik-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Fallback SPA (BrowserRouter) – bezpośrednie wejście na /plan, /cases/case-04 itd.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
