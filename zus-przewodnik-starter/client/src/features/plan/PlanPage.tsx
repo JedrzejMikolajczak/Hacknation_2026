@@ -35,6 +35,7 @@ import './CasePlan.css';
 import './PlanClean.css';
 import './PlanShell.css';
 import './PlanUI.css';
+import { SuperText } from '../../components/SuperText';
 
 const editableDateRanges = [
   [
@@ -121,7 +122,7 @@ interface PlanDataSummaryBarProps {
   params: BenefitParams;
   caseRecord: CaseRecord | null;
   warnings: CasePlan['outcome']['warnings'];
-  hasUrlEdits: boolean;
+  hasPlanEdits: boolean;
   onUpdate: (patch: Partial<CaseInputs>) => void;
   onResetEdits: () => void;
 }
@@ -131,7 +132,7 @@ function PlanDataSummaryBar({
   params,
   caseRecord,
   warnings,
-  hasUrlEdits,
+  hasPlanEdits,
   onUpdate,
   onResetEdits,
 }: PlanDataSummaryBarProps) {
@@ -145,13 +146,16 @@ function PlanDataSummaryBar({
     ? (input.adopted_or_foster_child_acceptance_date ?? '')
     : (input.due_or_birth_date ?? '');
 
-  function handleCopyShareLink() {
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(window.location.href).catch(() => {
-        // Ignoruj brak uprawnień schowka w środowisku testowym.
-      });
+  async function handleCopyShareLink() {
+    if (!caseRecord || !navigator.clipboard?.writeText) return;
+    const address = new URL(window.location.pathname, window.location.origin);
+    address.searchParams.set('case', caseRecord.case_id);
+    try {
+      await navigator.clipboard.writeText(address.href);
+      setShareCopied(true);
+    } catch {
+      setShareCopied(false);
     }
-    setShareCopied(true);
   }
 
   return (
@@ -208,7 +212,14 @@ function PlanDataSummaryBar({
                           mother_maternity_days_used: undefined,
                           mother_was_insured_at_abandonment: undefined,
                           father_stops_gainful_activity: undefined,
+                          mother_death_date: undefined,
+                          mother_was_insured_at_death: undefined,
+                          child_death_date: undefined,
                         }),
+                    adopted_or_foster_child_birth_date: nextStage === 'ADOPTION'
+                      ? input.adopted_or_foster_child_birth_date : undefined,
+                    adoption_order_final_date: nextStage === 'ADOPTION'
+                      ? input.adoption_order_final_date : undefined,
                     adopted_or_foster_child_acceptance_date:
                       nextStage === 'ADOPTION'
                         ? (input.adopted_or_foster_child_acceptance_date ??
@@ -275,6 +286,32 @@ function PlanDataSummaryBar({
               />
             </label>
 
+            {isAdoption && (
+              <>
+                <label className="plan-field">
+                  <span className="plan-field__label">Data urodzenia przyjętego dziecka</span>
+                  <input
+                    type="date"
+                    className="plan-field__input"
+                    max={eventDateValue || undefined}
+                    value={input.adopted_or_foster_child_birth_date ?? ''}
+                    onChange={(event) => onUpdate({ adopted_or_foster_child_birth_date: event.target.value || undefined })}
+                  />
+                </label>
+                {input.adoption_type !== 'FOSTER_FAMILY' && (
+                  <label className="plan-field">
+                    <span className="plan-field__label">Data uprawomocnienia przysposobienia</span>
+                    <input
+                      type="date"
+                      className="plan-field__input"
+                      min={input.adopted_or_foster_child_birth_date}
+                      value={input.adoption_order_final_date ?? ''}
+                      onChange={(event) => onUpdate({ adoption_order_final_date: event.target.value || undefined })}
+                    />
+                  </label>
+                )}
+              </>
+            )}
             <label className="plan-field">
               <span className="plan-field__label">Liczba dzieci</span>
               <select
@@ -294,7 +331,9 @@ function PlanDataSummaryBar({
                         ? count - deceased
                         : input.living_children_count === undefined
                           ? undefined
-                          : Math.min(input.living_children_count, count),
+                          : input.special_circumstances.stillbirth_or_child_death === 'NONE'
+                            ? count
+                            : Math.min(input.living_children_count, count - 1),
                   });
                 }}
               >
@@ -324,6 +363,22 @@ function PlanDataSummaryBar({
                 }
               />
             </label>
+
+            {input.sickness_leave_start_date && input.title_start_date && (
+              <label className="plan-field">
+                <span className="plan-field__label">Dni poprzedniego ubezpieczenia zaliczone do wyczekiwania</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="plan-field__input"
+                  value={input.sickness_prior_credited_days ?? ''}
+                  onChange={(event) => onUpdate({
+                    sickness_prior_credited_days: event.target.value ? Number(event.target.value) : undefined,
+                  })}
+                />
+              </label>
+            )}
 
             <label className="plan-field">
               <span className="plan-field__label">Wariant wypłaty</span>
@@ -456,18 +511,16 @@ function PlanDataSummaryBar({
               Zmiany od razu przeliczają plan i zapisują się w adresie URL.
             </p>
             <div className="plan-controls__actions">
-              {hasUrlEdits && (
+              {hasPlanEdits && (
                 <button type="button" className="plan-btn plan-btn--ghost" onClick={onResetEdits}>
                   Cofnij zmiany
                 </button>
               )}
-              <button
-                type="button"
-                className="plan-btn plan-btn--secondary"
-                onClick={handleCopyShareLink}
-              >
-                {shareCopied ? 'Skopiowano link ✓' : 'Kopiuj link do planu'}
-              </button>
+              {caseRecord && (
+                <button type="button" className="plan-btn plan-btn--secondary" onClick={() => void handleCopyShareLink()}>
+                  {shareCopied ? 'Skopiowano link ✓' : 'Kopiuj link do sprawy katalogowej'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -480,8 +533,10 @@ export function PlanPage() {
   const { tab } = useParams();
   const [query] = useSearchParams();
   const caseId = query.get('case');
-  const search = query.size ? `?${query.toString()}` : '';
-  const { scenario, planInputs, updatePlanInputs } = useScenario();
+  const safeQuery = new URLSearchParams(query);
+  safeQuery.delete('inputs');
+  const search = safeQuery.size ? `?${safeQuery.toString()}` : '';
+  const { scenario, planInputs, hasPlanEdits, updatePlanInputs } = useScenario();
   const { visited, markVisited } = useVisitedSteps();
 
   const [fixture, setFixture] = useState<{ key: string; item: CaseRecord | null } | null>(null);
@@ -494,7 +549,6 @@ export function PlanPage() {
     error?: ReturnType<typeof planRequestError>;
   } | null>(null);
 
-  const serialized = query.get('inputs');
   const currentFixture = fixture?.key === caseId ? fixture : null;
 
   useEffect(() => {
@@ -513,13 +567,13 @@ export function PlanPage() {
   }, [caseId]);
 
   const input = useMemo(() => {
-    if (serialized) return planInputs;
+    if (hasPlanEdits) return planInputs;
     if (caseId)
       return currentFixture?.item
         ? { ...currentFixture.item.inputs, reference_date: todayIsoDate() }
         : null;
     return planInputs;
-  }, [serialized, caseId, currentFixture, planInputs]);
+  }, [hasPlanEdits, caseId, currentFixture, planInputs]);
 
   const key = input ? JSON.stringify(input) : '';
   const current = computed?.key === key && computed.caseId === caseId ? computed : null;
@@ -606,7 +660,7 @@ export function PlanPage() {
       params={effectiveParams}
       caseRecord={currentFixture?.item ?? null}
       warnings={visibleResult?.plan?.outcome.warnings ?? []}
-      hasUrlEdits={Boolean(serialized)}
+      hasPlanEdits={hasPlanEdits}
       onUpdate={update}
       onResetEdits={() => updatePlanInputs(null)}
     />
@@ -748,7 +802,7 @@ export function PlanPage() {
                         Spróbuj ponownie
                       </button>
                     )}
-                    {serialized && (
+                    {hasPlanEdits && (
                       <button type="button" className="plan-btn plan-btn--secondary" onClick={() => updatePlanInputs(null)}>
                         Cofnij zmiany
                       </button>
@@ -766,7 +820,7 @@ export function PlanPage() {
                         <ul>
                           {plan.validation_errors.map((item, index) => (
                             <li key={`${item.code}-${index}`}>
-                              {item.message_pl} <small>{item.legal_basis}</small>
+                              {item.message_pl} <small>{item.legal_basis && <SuperText text={item.legal_basis} />}</small>
                             </li>
                           ))}
                         </ul>

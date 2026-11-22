@@ -43,7 +43,7 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
     const fetchMock = vi.fn(async () =>
       geminiOkResponse(
         'Przy JDG dług 500 zł przekracza 1% minimalnego wynagrodzenia i wstrzymuje wypłatę do czasu spłaty.',
-        ['Ustawa zasiłkowa art. 2a', 'Poradnik dla rodziców ZUS 2026'],
+        ['ZASILKOWA_2A', 'ZUS_PORADNIK_2026'],
       ),
     );
 
@@ -88,7 +88,9 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
     );
     expect(calledInit.headers).toMatchObject({ 'x-goog-api-key': 'test-gemini-key' });
     const sentBody = JSON.parse(String(calledInit.body));
-    expect(sentBody.systemInstruction.parts[0].text).toContain('SELF_EMPLOYED_DEBT');
+    expect(sentBody.systemInstruction.parts[0].text).not.toContain('SELF_EMPLOYED_DEBT');
+    expect(sentBody.contents[0].parts[1].text).toContain('SELF_EMPLOYED_DEBT');
+    expect(sentBody.contents[0].parts[1].text).not.toContain('debt_amount_pln');
     expect(sentBody.contents[0].parts[0].text).not.toContain('92031400006');
     expect(sentBody.contents[0].parts[0].text).toContain('[PESEL_UKRYTY]');
 
@@ -104,7 +106,7 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
       .fn()
       .mockResolvedValueOnce(new Response('busy', { status: 503 }))
       .mockResolvedValueOnce(
-        geminiOkResponse('Odpowiedź z modelu zapasowego.', ['Kodeks pracy art. 180']),
+        geminiOkResponse('Odpowiedź z modelu zapasowego.', ['KP_180']),
       );
     const fallbackApp = createTestApp(
       new GeminiAssistantProvider({
@@ -136,7 +138,7 @@ describe('Asystent AI (/api/v1/assistant/*)', () => {
 
     // 3) Rate limit chroni pulę tokenów i zwraca odpowiedź z lokalnej bazy
     const limitedFetch = vi.fn(async () =>
-      geminiOkResponse('Odpowiedź AI.', ['Poradnik ZUS 2026']),
+      geminiOkResponse('Odpowiedź AI.', ['ZUS_PORADNIK_2026']),
     );
     const limitedApp = createTestApp(
       new GeminiAssistantProvider({ apiKey: 'test-key', fetchImpl: limitedFetch }),

@@ -1,4 +1,5 @@
 import type { BenefitParams, CaseInputs, CaseWarning } from '@shared/types';
+import { debtThresholdPln } from '@shared/engine/caseRules';
 import { formatRate } from '../../app/benefitParams';
 import { formatPln, formatPolishDate } from '../plan/planScenario';
 
@@ -35,11 +36,7 @@ export interface SpecialSituationGuide {
 }
 
 export function getDebtThresholdPln(params: BenefitParams): number {
-  return (
-    Math.round(
-      params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
-    ) / 100
-  );
+  return debtThresholdPln(params);
 }
 
 function getSupplementaryThresholds(params: BenefitParams) {
@@ -50,8 +47,6 @@ function getSupplementaryThresholds(params: BenefitParams) {
 }
 
 export function getCaseWarningGuide(warning: CaseWarning, params: BenefitParams): WarningGuide {
-  const debtThreshold = formatPln(getDebtThresholdPln(params));
-  const debtShare = formatRate(params.selfEmployedDebtThresholdShareOfMinimumWage);
   const combinedRate = formatRate(params.rates.combined);
   const maternityRate = formatRate(params.rates.maternity);
   const parentalRate = formatRate(params.rates.parental);
@@ -61,7 +56,7 @@ export function getCaseWarningGuide(warning: CaseWarning, params: BenefitParams)
     case 'SELF_EMPLOYED_DEBT':
       return {
         title: 'Zadłużenie składkowe (JDG)',
-        action: `Sprawdź saldo składek na PUE/eZUS i spłać zaległość. Dług powyżej ${debtShare} płacy minimalnej (${debtThreshold}) wstrzymuje wypłatę zasiłku do czasu spłaty.`,
+        action: 'Sprawdź saldo składek w eZUS i próg obowiązujący w dniu powstania prawa. Spłać zaległość, jeśli przekracza próg.',
       };
     case 'NO_INSURANCE_ON_BIRTH_DATE':
       return {

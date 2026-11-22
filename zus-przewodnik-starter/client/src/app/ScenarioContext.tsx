@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type {
   ApplicantRole,
   AuthSession,
@@ -9,7 +9,7 @@ import type {
   ZusData,
 } from '@shared/types';
 import { apiGet, apiPost } from '../api/client';
-import { readPlanAddress } from './planAddress';
+import { clearSessionPlans, readPlanAddress, readSessionPlan, writeSessionPlan } from './planAddress';
 import { wizardCase } from '../features/plan/caseScenario';
 import { buildScenario } from '../features/wizard/wizardModel';
 import {
@@ -31,6 +31,7 @@ export interface MockAuthSession {
 interface ScenarioContextValue {
   scenario: ScenarioDraft;
   planInputs: CaseInputs | null;
+  hasPlanEdits: boolean;
   updatePlanInputs: (inputs: CaseInputs | null) => void;
   manualForm: ManualFormState | null;
   storageAvailable: boolean;
@@ -159,22 +160,43 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
     (role, identity) => setSimulatedIdentities((current) => ({ ...current, [role]: identity })),
     [],
   );
-  const [query, setQuery] = useSearchParams();
-  const serialized = query.get('inputs');
-  const hasCase = query.has('case');
+  const [query] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const caseId = query.get('case');
+  const fromPdf = query.get('source') === 'pdf';
+  const legacyInputs = query.get('inputs');
+  const incomingInputs = fromPdf ? (location.state?.pdfPlanInputs as CaseInputs | undefined) : undefined;
+  const planKey = caseId ? `case:${caseId}` : fromPdf ? 'pdf' : 'wizard';
+  const [, refreshPlan] = useReducer((revision: number) => revision + 1, 0);
+  const storedEdits = readSessionPlan(planKey);
+  const importedPlan = fromPdf ? readSessionPlan('pdf:source') : null;
+  const legacyPlan = useMemo(() => readPlanAddress(legacyInputs), [legacyInputs]);
+  const editedPlanInputs = incomingInputs ? null : legacyPlan ?? storedEdits;
   const planInputs = useMemo(
-    () => (serialized ? readPlanAddress(serialized) : hasCase ? null : wizardCase(state.scenario)),
-    [serialized, hasCase, state.scenario],
+    () => incomingInputs ?? editedPlanInputs ?? (fromPdf ? importedPlan : caseId ? null : wizardCase(state.scenario)),
+    [incomingInputs, editedPlanInputs, importedPlan, caseId, fromPdf, state.scenario],
   );
-  const updatePlanInputs = useCallback(
-    (inputs: CaseInputs | null) => {
-      const next = new URLSearchParams(query);
-      if (inputs) next.set('inputs', JSON.stringify(inputs));
-      else next.delete('inputs');
-      setQuery(next, { replace: true });
-    },
-    [query, setQuery],
-  );
+  const updatePlanInputs = useCallback((inputs: CaseInputs | null) => {
+    writeSessionPlan(planKey, inputs);
+    refreshPlan();
+  }, [planKey]);
+
+  useEffect(() => {
+    if (!legacyInputs && !incomingInputs) return;
+    if (incomingInputs) {
+      writeSessionPlan('pdf:source', incomingInputs);
+      writeSessionPlan(planKey, null);
+    } else if (legacyPlan) {
+      writeSessionPlan(planKey, legacyPlan);
+    }
+    const safeQuery = new URLSearchParams(location.search);
+    safeQuery.delete('inputs');
+    void navigate({ pathname: location.pathname, search: safeQuery.toString(), hash: location.hash }, {
+      replace: true,
+      state: null,
+    });
+  }, [legacyInputs, incomingInputs, legacyPlan, location.pathname, location.search, location.hash, navigate, planKey]);
 
   const commit = useCallback((next: ScenarioState) => {
     setState(next);
@@ -227,6 +249,7 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
   const setSituation = useCallback(
     (situation: SituationType | null) => {
       if (state.scenario.situation === situation) return;
+      writeSessionPlan('wizard', null);
       if (!situation) {
         commit({ scenario: { situation: null }, manualForm: null });
         return;
@@ -255,12 +278,14 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
 
   const saveManualForm = useCallback(
     (manualForm: ManualFormState, scenario: ScenarioDraft) => {
+      writeSessionPlan('wizard', null);
       commit({ manualForm, scenario });
     },
     [commit],
   );
 
   const clearScenario = useCallback(() => {
+    clearSessionPlans();
     setSimulatedIdentities({});
     setAuthSession(null);
     commit({ scenario: { situation: null }, manualForm: null });
@@ -317,6 +342,7 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       ...state,
       storageAvailable,
       planInputs,
+      hasPlanEdits: Boolean(editedPlanInputs),
       updatePlanInputs,
       setSituation,
       updateScenario,
@@ -333,6 +359,7 @@ export function ScenarioProvider({ children, initialScenario }: ScenarioProvider
       state,
       storageAvailable,
       planInputs,
+      editedPlanInputs,
       updatePlanInputs,
       setSituation,
       updateScenario,

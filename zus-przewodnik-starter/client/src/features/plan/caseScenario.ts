@@ -9,6 +9,8 @@ import type {
   MonthlyBase,
   ParentData,
 } from '@shared/types';
+import { maternityWeeks, supplementaryDays } from '@shared/engine/casePeriods';
+import { debtThresholdPln } from '@shared/engine/caseRules';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
 import type { ScenarioDraft } from '../../app/scenarioDraft';
 import { addDaysIso, diffDaysIso, todayIsoDate } from './planScenario';
@@ -73,10 +75,7 @@ function hasB2bDebtAboveThreshold(
   params: BenefitParams,
 ): boolean | null {
   if (parent.insuranceTitle !== 'selfEmployed' || parent.contributionDebt == null) return null;
-  const threshold =
-    Math.round(
-      params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
-    ) / 100;
+  const threshold = debtThresholdPln(params);
   return parent.contributionDebt > threshold;
 }
 
@@ -110,22 +109,26 @@ function defaultPaternityStartDate(
   event: IsoDate,
   referenceDate: IsoDate,
   father: Partial<ParentData>,
-  isAdoption: boolean,
   params: BenefitParams,
+  adoptionBirth?: IsoDate,
+  earliest?: IsoDate,
 ): IsoDate | undefined {
-  const deadlineMonths = isAdoption
+  const deadlineMonths = adoptionBirth
     ? params.paternityLeave.adoptionDeadlineMonthsFromAdoption
     : params.paternityLeave.deadlineChildAgeMonths;
-  const paternityEnd = addDaysIso(addMonthsIso(event, deadlineMonths), -1);
+  const calendarDeadline = addMonthsIso(event, deadlineMonths);
+  const birthday = adoptionBirth ? addMonthsIso(adoptionBirth, params.paternityLeave.adoptionMaxChildAgeYears * 12) : null;
+  const paternityEnd = addDaysIso(birthday && birthday < calendarDeadline ? birthday : calendarDeadline, -1);
   if (referenceDate > paternityEnd) return undefined;
   const paternityDays = params.paternityLeave.weeks * params.calendar.daysPerWeek;
   const noticeDays =
     father.insuranceTitle === 'employment' ? params.applicationDeadlinesDays.paternityLeave : 0;
   const earliestWithoutOverdue = addDaysIso(referenceDate, noticeDays);
-  const candidate = event >= earliestWithoutOverdue ? event : earliestWithoutOverdue;
+  const firstAllowed = earliest && earliest > event ? earliest : event;
+  const candidate = firstAllowed >= earliestWithoutOverdue ? firstAllowed : earliestWithoutOverdue;
   if (addDaysIso(candidate, paternityDays - 1) <= paternityEnd) return candidate;
   const latestStart = addDaysIso(paternityEnd, -(paternityDays - 1));
-  return latestStart >= event ? latestStart : undefined;
+  return latestStart >= firstAllowed ? latestStart : undefined;
 }
 
 function additionalInsuranceTitle(
@@ -229,10 +232,8 @@ export function wizardCase(
       draft.childAgeYears != null &&
       draft.childAgeYears >= params.paternityLeave.adoptionMaxChildAgeYears
     );
-  const paternityStart =
-    canTakePaternity && draft.father && event
-      ? defaultPaternityStartDate(event, referenceDate, draft.father, isAdoption, params)
-      : undefined;
+  const paternityEvent = isAdoption ? draft.adoptionOrderFinalDate : event;
+  const adoptionBirth = isAdoption ? draft.childAdoptionBirthDate ?? undefined : undefined;
 
   const motherWantsResignTakeover =
     !fatherOnly &&
@@ -270,7 +271,7 @@ export function wizardCase(
   const additional = additionalInsuranceTitle(draft, applicant, params, durationTarget);
   const applicantHasB2bArrears = hasB2bDebtAboveThreshold(applicant, params);
 
-  return {
+  const input: CaseInputs = {
     employment_type: applicantInsurance.employment_type,
     payer_insured_count_nov_30: applicantInsurance.payer_insured_count_nov_30,
     benefit_base_amount_pln: applicantInsurance.benefit_base_amount_pln,
@@ -298,7 +299,7 @@ export function wizardCase(
     special_circumstances: {
       has_code_b_on_ezla: sick?.startDate ? true : null,
       premature_or_hospitalized_newborn:
-        hospital !== undefined || special.pregnancyWeekAtBirth != null,
+        hospital !== undefined || Boolean(draft.childHospitalizationStartDate) || special.pregnancyWeekAtBirth != null,
       za_zyciem_certificate: !!special.zaZyciemCertificate,
       stillbirth_or_child_death:
         special.stillbirth || death
@@ -322,6 +323,8 @@ export function wizardCase(
     title_start_date: applicant.insuredSince ?? undefined,
     debt_amount_pln: applicant.contributionDebt ?? undefined,
     adopted_or_foster_child_acceptance_date: draft.childAcceptanceDate ?? undefined,
+    adopted_or_foster_child_birth_date: adoptionBirth,
+    adoption_order_final_date: isAdoption && draft.adoptionType === 'adoption' ? draft.adoptionOrderFinalDate ?? undefined : undefined,
     adoption_type: draft.adoptionType
       ? draft.adoptionType === 'adoption'
         ? 'ADOPTION'
@@ -333,10 +336,11 @@ export function wizardCase(
     sickness_leave_end_date: sick?.endDate ?? undefined,
     pregnancy_week_at_birth: special.pregnancyWeekAtBirth?.toString(),
     birth_weight_grams: special.birthWeightGrams ?? undefined,
-    newborn_hospitalization_start: hospital ? birth! : undefined,
-    newborn_hospitalization_end: hospital,
-    paternity_leave_start_date: paternityStart,
+    newborn_hospitalization_start: isAdoption ? draft.childHospitalizationStartDate ?? undefined : hospital ? birth! : undefined,
+    newborn_hospitalization_end: isAdoption ? draft.childHospitalizationEndDate ?? undefined : hospital,
     father_takeover_date: fatherTakeoverDate,
+    mother_death_date: special.motherDeceased ? draft.motherDeathDate ?? undefined : undefined,
+    mother_was_insured_at_death: special.motherDeceased ? draft.motherWasInsuredAtDeath : undefined,
     ...(hasAbandonment
       ? {
           mother_abandonment_date: draft.motherAbandonmentDate ?? undefined,
@@ -348,4 +352,15 @@ export function wizardCase(
     additional_insurance_titles: additional ? [additional] : undefined,
     monthly_bases: applicantMonthlyBases,
   };
+  if (canTakePaternity && draft.father && paternityEvent && (!isAdoption || adoptionBirth)) {
+    let earliest: IsoDate | undefined;
+    if (!isAdoption && birth && fatherTakeoverDate) {
+      const maternityEnd = addDaysIso(birth, maternityWeeks(input, birth, birth, params).days - 1);
+      earliest = addDaysIso(maternityEnd, supplementaryDays(input, birth, maternityEnd, params) + 1);
+    }
+    input.paternity_leave_start_date = defaultPaternityStartDate(
+      paternityEvent, referenceDate, draft.father, params, adoptionBirth, earliest,
+    );
+  }
+  return input;
 }

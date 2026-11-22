@@ -57,7 +57,7 @@ Przepisy wokół zasiłku macierzyńskiego, urlopu rodzicielskiego i zwolnień w
 | Moduł | Co daje użytkownikowi |
 | --- | --- |
 | **Kreator sytuacji** (`/wizard`) | Zbiera tylko te informacje, które faktycznie wpływają na uprawnienia i kwoty — bez żargonu, z obsługą m.in. JDG, umowy zlecenia, drugiego tytułu ubezpieczenia, wcześniaków i trudnych sytuacji życiowych (ze spokojnym, empatycznym tonem). |
-| **Symulacja mObywatela i ZUS** (`/login`) | Pozwala zalogować się na fikcyjny profil (np. UoP, zlecenie, JDG z długiem lub bez), automatycznie uzupełnić puste pola w formularzu z oznaczeniem źródła danych, obejrzeć **e-ZLA z kodem „B”** oraz **zaświadczenie o zadłużeniu składkowym**. |
+| **Symulacja mObywatela i ZUS** (`/login`) | Pozwala zalogować się na fikcyjny profil demonstracyjny (**Anna Testowa**, **Jan Testowy**), automatycznie uzupełnić puste pola w formularzu z oznaczeniem źródła danych oraz wyświetlić panel danych ubezpieczeniowych, **e-ZLA z kodem „B”** i **zaświadczenia o zadłużeniu składkowym**. |
 | **Twój plan** (`/plan`) | Sześć czytelnych zakładek w jednym miejscu: **Uprawnienia** (ze zwijanymi szczegółami świadczeń), **Kalkulator** (porównanie 81,5% vs 100% + 70%), **Plan urlopów** (oś czasu mamy i taty, presety podziału, kalendarz i łączenie urlopu z pracą), **Dokumenty i terminy**, **Wnioski** (podgląd, mapa składania i generator wypełnionych PDF-ów **ZAM** / **ZAS-53**) oraz **Wsparcie**. |
 | **Centrum powiadomień „Uwagi”** | Wspólny przycisk z licznikiem w górnym pasku planu zbiera w jednym miejscu wszystkie ryzyka i kluczowe terminy (np. zadłużenie JDG, termin 21 dni, okres wyczekiwania), żeby nie dublować ostrzeżeń między zakładkami. |
 | **Asystent AI w zakładce Wsparcie** | Odpowiada na pytania w kontekście zanonimizowanego planu użytkownika (Google Gemini `gemini-3.1-flash-lite`), maskuje wrażliwe dane (PESEL, numer konta), blokuje wklejanie zdjęć, chroni limity cache'em i rate limiterem, a bez klucza API płynnie przechodzi na lokalną bazę ZUS 2026. |
@@ -109,7 +109,7 @@ Po uruchomieniu:
 
 ### Ścieżka 1 — najszybsza (1 kliknięcie)
 1. Otwórz [**Przykładowe sprawy**](http://localhost:5173/cases), wybierz np. **sprawę 04** i kliknij **„Otwórz w planie”** — zobaczysz od razu uprawnienia, kalkulator, oś czasu obojga rodziców, powiadomienia **Uwagi**, dokumenty i wnioski PDF.
-2. Możesz też wejść w [**Logowanie (mObywatel – symulacja)**](http://localhost:5173/login), wybrać profil np. **Katarzyna (JDG z zadłużeniem)** i zobaczyć zaświadczenie o długu oraz alert w powiadomieniach.
+2. Możesz też wejść w [**Logowanie (mObywatel – symulacja)**](http://localhost:5173/login), wybrać profil **Anna Testowa** lub **Jan Testowy** i przejść do kreatora z automatycznym oznaczeniem źródeł danych oraz panelem symulacji ZUS.
 
 ### Ścieżka 2 — pełny test ręczny z fikcyjną rodziną
 
@@ -151,7 +151,7 @@ W repozytorium znajduje się także automatyczny workflow [GitHub Actions CI](.g
 
 ### Znane ograniczenia prototypu i dalszy rozwój
 - Symulacja mObywatela, danych ZUS i wysyłki PUE/eZUS wymagałaby docelowo podpięcia rzeczywistych interfejsów uwierzytelniania i integracji ZUS.
-- Silnik korzysta obecnie z jednego aktywnego zestawu parametrów (`shared/params.json` dla stanu prawnego 2026); obsługa historycznego wersjonowania przepisów według daty zdarzenia oraz szczegółowych przypadków brzegowych została zinwentaryzowana w **[audycie reguł ZUS i macierzy testowej](docs/test-cases.md)** jako mapa rozwoju przed wdrożeniem produkcyjnym.
+- Silnik zawiera testy regresyjne **AUD-01–AUD-24** (24 ustalenia z audytu prawno-technicznego rozwiązane w `main`) oraz progi historyczne dla lat 2025–2026; pełna analiza przypadków brzegowych i dokumentacja rozbieżności (m.in. `case-05`) znajduje się w **[audycie reguł ZUS i macierzy testowej](docs/test-cases.md)**.
 
 ---
 

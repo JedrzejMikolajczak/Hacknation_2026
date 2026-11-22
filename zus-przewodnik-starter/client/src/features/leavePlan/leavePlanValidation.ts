@@ -7,11 +7,11 @@ import type {
   IsoDate,
   PlannedParentalPart,
 } from '@shared/types';
+import { casePaternityDeadline as getPaternityDeadline } from '@shared/engine/caseRules';
 import { formatRate } from '../../app/benefitParams';
 import { payerLabel } from '../plan/caseLabels';
 import {
   addDaysIso,
-  addMonthsIso,
   diffDaysIso,
   formatPolishDate,
   formatWorkFraction,
@@ -40,28 +40,8 @@ export interface CalendarMilestone {
   parentRole?: ApplicantRole;
 }
 
-const MONTHS_IN_YEAR = 12;
 
-export function getPaternityDeadline(input: CaseInputs, params: BenefitParams): IsoDate | null {
-  const event = getEventDate(input);
-  if (!event) return null;
-
-  if (input.stage === 'ADOPTION') {
-    const monthsDeadline = addDaysIso(
-      addMonthsIso(event, params.paternityLeave.adoptionDeadlineMonthsFromAdoption),
-      -1,
-    );
-    const childAge = input.special_circumstances.adopted_or_foster_child_age_years;
-    if (childAge !== null) {
-      const yearsLeft = Math.max(0, params.paternityLeave.adoptionMaxChildAgeYears - childAge);
-      const ageDeadline = addDaysIso(addMonthsIso(event, yearsLeft * MONTHS_IN_YEAR), -1);
-      return monthsDeadline <= ageDeadline ? monthsDeadline : ageDeadline;
-    }
-    return monthsDeadline;
-  }
-
-  return addDaysIso(addMonthsIso(event, params.paternityLeave.deadlineChildAgeMonths), -1);
-}
+export { getPaternityDeadline };
 
 function getParentEmploymentType(input: CaseInputs, role: ApplicantRole) {
   return role === input.applicant_role
@@ -327,12 +307,13 @@ export function validateLeavePlan(
     const patEnd = addDaysIso(patStart, params.paternityLeave.weeks * daysPerWeek - 1);
     const patDeadline = getPaternityDeadline(input, params);
 
-    if (eventDate && patStart < eventDate) {
+    const patEarliest = input.stage === 'ADOPTION' ? input.adoption_order_final_date : eventDate;
+    if (patEarliest && patStart < patEarliest) {
       coveredEngineCodes.add('PATERNITY_DATES');
       issues.push({
         code: 'PATERNITY_BEFORE_EVENT',
         severity: 'error',
-        message: `Urlop ojcowski (${formatPolishDate(patStart)}) nie może rozpocząć się przed ${input.stage === 'ADOPTION' ? 'datą przyjęcia dziecka' : 'datą porodu'} (${formatPolishDate(eventDate)}).`,
+        message: `Urlop ojcowski (${formatPolishDate(patStart)}) nie może rozpocząć się przed ${input.stage === 'ADOPTION' ? 'datą uprawomocnienia przysposobienia' : 'datą porodu'} (${formatPolishDate(patEarliest)}).`,
         legalBasis: 'KP art. 182³ § 1',
       });
     }
@@ -344,7 +325,7 @@ export function validateLeavePlan(
         severity: 'error',
         message:
           input.stage === 'ADOPTION'
-            ? `Urlop ojcowski kończy się ${formatPolishDate(patEnd)}, czyli po upływie ${params.paternityLeave.adoptionDeadlineMonthsFromAdoption} mies. od przyjęcia dziecka lub po ukończeniu przez dziecko ${params.paternityLeave.adoptionMaxChildAgeYears} lat (granica: ${formatPolishDate(patDeadline)}).`
+            ? `Urlop ojcowski kończy się ${formatPolishDate(patEnd)}, czyli po upływie ${params.paternityLeave.adoptionDeadlineMonthsFromAdoption} mies. od uprawomocnienia przysposobienia lub po ukończeniu przez dziecko ${params.paternityLeave.adoptionMaxChildAgeYears} lat (granica: ${formatPolishDate(patDeadline)}).`
             : `Urlop ojcowski kończy się ${formatPolishDate(patEnd)}, czyli po ukończeniu przez dziecko ${params.paternityLeave.deadlineChildAgeMonths} miesięcy życia (granica: ${formatPolishDate(patDeadline)}).`,
         legalBasis: 'KP art. 182³ § 1',
       });

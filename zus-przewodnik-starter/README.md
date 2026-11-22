@@ -59,7 +59,7 @@ Oficjalne źródła to [serwis ZUS](https://www.zus.pl), [informacja o urlopie r
 | [`shared/types.ts`](shared/types.ts) i [`shared/params.json`](shared/params.json) | Wspólny kontrakt oraz domyślne parametry obliczeń. |
 | [`agents/`](agents/) | Instrukcje pracy i [konwencje API](agents/CONVENTIONS.md). |
 
-Kreator przekazuje dane scenariusza do `POST /api/v1/plan`. Link do planu może zawierać dane scenariusza w parametrze `inputs`. Do testów i udostępniania linków używaj danych fikcyjnych.
+Kreator przekazuje dane scenariusza do `POST /api/v1/plan`. Edycje planu i potwierdzone dane z importu PDF są w pamięci sesji karty (w tym po przeładowaniu). Opcja kopiowania linku w planie sprawy katalogowej udostępnia tylko jej publiczny identyfikator. Przy otwarciu starego linku aplikacja przenosi dane do sesji karty i usuwa parametr `inputs` z bieżącego adresu.
 
 ## 5. Ścieżki demonstracyjne
 
@@ -78,7 +78,13 @@ npm test
 npm run build
 ```
 
-`npm test` uruchamia Vitest w pakietach `shared`, `server` i `client`. Aby sprawdzić porównanie z decyzją w wybranej sprawie, otwórz ją w katalogu lub wyślij `POST /api/v1/cases/:caseId/evaluate`. [Audyt reguł i matryca spraw](../docs/test-cases.md) · [Raport weryfikacji E2E](docs/E2E_BUGI.md) · [Historia integracji](../docs/FIX_ALL_REPORT.md)
+`npm test` uruchamia Vitest w pakietach `shared`, `server` i `client`, w tym testy regresyjne `AUD-01–AUD-24`. Testy API wymagają lokalnych połączeń z `127.0.0.1`. Aby sprawdzić porównanie z decyzją w wybranej sprawie, otwórz ją w katalogu lub wyślij `POST /api/v1/cases/:caseId/evaluate`. [Audyt reguł i matryca spraw](../docs/test-cases.md) · [Raport weryfikacji E2E](docs/E2E_BUGI.md) · [Historia integracji](../docs/FIX_ALL_REPORT.md)
+
+### Zakres obliczeń
+
+- Kalkulator sygnalizuje brak obsługi macierzyńskiego i powiązanych urlopów przed 26.04.2023. Dla JDG wybiera próg zadłużenia według daty powstania prawa. W konfiguracji są wartości źródłowe dla lat 2025 i 2026. [Reforma](https://eli.gov.pl/eli/DU/2023/641/ogl) · [Płaca minimalna 2025](https://eli.gov.pl/eli/DU/2024/1362/ogl) · [Płaca minimalna 2026](https://eli.gov.pl/eli/DU/2025/1242/ogl)
+- Przy adopcji podaj datę urodzenia dziecka i, dla ojcowskiego, datę uprawomocnienia przysposobienia. W razie hospitalizacji po przyjęciu potrzebne są także daty pobytu i tydzień ciąży przy porodzie. [ZUS o ojcowskim](https://bip.zus.pl/pl/web/guest/swiadczenia/zasilki/zasilek-macierzynski/prawo-do-zasilku-i-okres-przyslugiwania/za-okres-dodatkowego-urlopu-ojcowskiego) · [ZUS o urlopie uzupełniającym](https://bip.zus.pl/pl/web/guest/swiadczenia/zasilki/zasilek-macierzynski/prawo-do-zasilku-i-okres-przyslugiwania/za-okres-uzupelniajacego-urlopu-macierzynskiego)
+- `case-05` pokazuje rozbieżność między wyciągiem (14 dni uzupełniającego) a obliczeniem dla podanych danych (7 dni). Katalog zachowuje wyciąg do weryfikacji z dokumentami źródłowymi. [Audyt reguł i matryca spraw](../docs/test-cases.md)
 
 ## 7. Praca nad projektem
 

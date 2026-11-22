@@ -1,4 +1,5 @@
 import type { BenefitParams } from '@shared/types';
+import { debtThresholdPln } from '@shared/engine/caseRules';
 
 export interface ParamChangeItem {
   id: string;
@@ -24,10 +25,7 @@ function formatPln(amount: number): string {
 }
 
 export function computeDerivedMetrics(params: BenefitParams) {
-  const jdgDebtThresholdPln =
-    Math.round(
-      params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage * 100,
-    ) / 100;
+  const jdgDebtThresholdPln = debtThresholdPln(params);
   const minBenefitBasePln =
     Math.round(
       params.benefitBase.minimumWage * (1 - params.benefitBase.socialContributionDeduction) * 100,

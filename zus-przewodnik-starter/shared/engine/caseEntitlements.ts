@@ -1,5 +1,5 @@
 import type { BenefitParams, CaseEntitlement, CaseInputs, CaseOutcome } from '../types';
-import { insured, KP, parentDenial, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
+import { hasMaternityRightAfterInsurance, insured, KP, parentDenial, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
 
 export function caseEntitlements(
   input: CaseInputs,
@@ -38,6 +38,8 @@ export function caseEntitlements(
     const person = applicant ? input : input.other_parent;
     const courtMaternity = applicant && event !== null && params !== undefined &&
       qualifiesAfterUnlawfulTermination(input, event, params);
+    const afterInsurance = applicant && event !== null && params !== undefined &&
+      hasMaternityRightAfterInsurance(input, event, params);
     const state = applicant ? (event ? denial === null : null) : absentOther ? null : otherInsured;
     const rolePeriods = outcome.periods.filter(
       (period) => period.parent_role === role && !period.denied,
@@ -58,7 +60,7 @@ export function caseEntitlements(
           ? null
           : benefit_type === 'SICKNESS' && outcome.who_pays === 'SPLIT_EMPLOYER_THEN_ZUS'
             ? outcome.who_pays
-            : courtMaternity && benefit_type !== 'SICKNESS'
+            : afterInsurance && benefit_type !== 'SICKNESS'
               ? 'ZUS'
               : person
                 ? payer(person)
@@ -100,10 +102,14 @@ export function caseEntitlements(
             ? 'Wniosek obejmuje wyłącznie późniejszy okres rodzicielskiego.'
             : courtMaternity
               ? 'Prawomocny wyrok potwierdzający rozwiązanie stosunku pracy z naruszeniem prawa daje podstawę do zasiłku od dnia porodu.'
-              : state
-                ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
-                : insuranceReason,
-        courtMaternity ? KP.unlawfulTermination : kind === 'MATERNITY' ? KP.maternity : KP.adoption,
+              : afterInsurance
+                ? 'ZUS wypłaca zasiłek po ustaniu ubezpieczenia z powodu upadłości lub likwidacji pracodawcy.'
+                : state
+                  ? 'Ubezpieczenie w dniu zdarzenia daje prawo do świadczenia.'
+                  : insuranceReason,
+        courtMaternity ? KP.unlawfulTermination : afterInsurance
+          ? 'Ustawa zasiłkowa, art. 30 ust. 1 pkt 1 i art. 61 ust. 1 pkt 2 lit. d'
+          : kind === 'MATERNITY' ? KP.maternity : KP.adoption,
       );
     } else {
       const takeover = rolePeriods.some((period) => period.leave_type === 'MATERNITY');
@@ -124,13 +130,17 @@ export function caseEntitlements(
     }
     if (role === 'FATHER') {
       const expired = today && paternityEnd && today > paternityEnd;
-      const canUse =
-        hasLivingChildren && !expired && !fosterFamily && !adoptionOverPaternityAge ? state : false;
+      const missingAdoptionDates = input.stage === 'ADOPTION' && !paternityEnd && !fosterFamily;
+      const canUse = hasLivingChildren && !expired && !fosterFamily && !adoptionOverPaternityAge
+        ? missingAdoptionDates ? null : state
+        : false;
       add(
         'PATERNITY',
         canUse,
         fosterFamily
           ? 'Urlop ojcowski nie przysługuje w ramach rodziny zastępczej – dotyczy ojców biologicznych i adopcyjnych.'
+          : missingAdoptionDates
+            ? 'Podaj datę urodzenia dziecka i datę uprawomocnienia postanowienia o przysposobieniu.'
           : adoptionOverPaternityAge
             ? 'Wiek dziecka przekracza ustawowy limit dla urlopu ojcowskiego przy adopcji.'
             : !hasLivingChildren

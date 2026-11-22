@@ -44,6 +44,7 @@ export function calculateAdditionalTitleOutcomes(
         debt_amount_pln: title.debt_amount_pln ?? undefined,
         monthly_bases: title.monthly_bases,
         sickness_waiting_period_confirmed: undefined,
+        sickness_prior_credited_days: undefined,
         sickness_benefit_start_date: undefined,
         sick_pay_days_already_used: undefined,
         sickness_base_changes: undefined,

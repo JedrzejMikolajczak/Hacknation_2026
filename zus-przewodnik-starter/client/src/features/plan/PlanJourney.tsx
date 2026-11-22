@@ -1,6 +1,5 @@
 import type { Ref } from 'react';
 import { NavLink } from 'react-router-dom';
-import { CheckIcon } from '../../components/icons';
 import { PLAN_TABS, type PlanTabId } from './planScenario';
 
 /** Jednozdaniowe „co tu robię” każdego kroku – pokazywane nad treścią kroku. */
@@ -17,15 +16,16 @@ interface PlanJourneyProps {
   tab: PlanTabId;
   /** Zachowany query string scenariusza, np. „?dzieci=2”. */
   search: string;
-  visited: ReadonlySet<PlanTabId>;
+  /** Zachowane dla zgodności z wywołaniem; stan kroków wynika z kolejności, nie z historii. */
+  visited?: ReadonlySet<PlanTabId>;
   activeRef?: Ref<HTMLAnchorElement>;
 }
 
 /**
  * Ścieżka planu: 6 kroków jako przyklejony pasek z postępem. Zielona linia „dopływa” do bieżącego
- * kroku, obejrzane kroki mają ptaszek – rodzic zawsze widzi, gdzie jest, co zrobił i co dalej.
+ * kroku, kroki przed bieżącym są wypełnione zielenią, wszystkie mają numer – rodzic zawsze widzi, gdzie jest, co zrobił i co dalej.
  */
-export function PlanJourney({ tab, search, visited, activeRef }: PlanJourneyProps) {
+export function PlanJourney({ tab, search, activeRef }: PlanJourneyProps) {
   const activeIndex = Math.max(0, PLAN_TABS.findIndex((item) => item.id === tab));
   const progress = activeIndex / (PLAN_TABS.length - 1);
 
@@ -38,7 +38,7 @@ export function PlanJourney({ tab, search, visited, activeRef }: PlanJourneyProp
           </div>
           <ol className="journey__list">
             {PLAN_TABS.map((item, index) => {
-              const state = item.id === tab ? 'current' : visited.has(item.id) ? 'done' : 'todo';
+              const state = index === activeIndex ? 'current' : index < activeIndex ? 'done' : 'todo';
               return (
                 <li key={item.id} className={`journey__item journey__item--${state}`}>
                   <NavLink
@@ -47,7 +47,7 @@ export function PlanJourney({ tab, search, visited, activeRef }: PlanJourneyProp
                     className="journey__link"
                   >
                     <span className="journey__dot" aria-hidden="true">
-                      {state === 'done' ? <CheckIcon className="journey__check" /> : index + 1}
+                      {index + 1}
                     </span>
                     <span className="journey__label">{item.label}</span>
                   </NavLink>

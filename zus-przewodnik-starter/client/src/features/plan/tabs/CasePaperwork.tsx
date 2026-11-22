@@ -1,3 +1,4 @@
+import { z3bRepresentativeNotice } from '@shared/engine/formNotices';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type {
@@ -25,6 +26,7 @@ import { buildMailto, deliveryGuide, filingKind, type DeliveryGuide } from './fi
 import './DocumentsTab.css';
 import './ApplicationsTab.css';
 import './CasePaperwork.css';
+import { SuperText } from '../../../components/SuperText';
 
 const PREGNANCY_SICKNESS_IDS = new Set(['e-ZLA', 'ZAS-53', 'ZAS-12']);
 const PAYER_CERTIFICATE_IDS = new Set(['Z-3', 'Z-3a', 'ZAS-12']);
@@ -482,6 +484,9 @@ export function CaseDocuments({
               zasiłku chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
               chorobowy) lub ZUS ZAM (zasiłek macierzyński).
             </p>
+            <p className="docs-details__sub">
+              {z3bRepresentativeNotice.text} <a href={z3bRepresentativeNotice.url} target="_blank" rel="noreferrer">Komunikat ZUS</a>
+            </p>
           </div>
         </details>
 
@@ -608,7 +613,7 @@ export function CaseDocuments({
                   {deadlineDocs.map((doc) => (
                     <li key={`legal-${documentKey(doc)}`}>
                       <strong>{formatPolishDate(doc.deadline)}</strong> – {doc.name_pl}:{' '}
-                      {doc.legal_basis}
+                      <SuperText text={doc.legal_basis} />
                     </li>
                   ))}
                 </ul>

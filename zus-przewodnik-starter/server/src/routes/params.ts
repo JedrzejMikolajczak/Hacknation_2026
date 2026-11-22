@@ -45,14 +45,37 @@ function matchesShape(example: unknown, input: unknown): boolean {
   return typeof example === typeof input;
 }
 
-const paramsSchema = z.custom<BenefitParams>((input) => {
+function addDefaultStandardSicknessLimit(input: unknown): unknown {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    !('sickness' in input) ||
+    !input.sickness ||
+    typeof input.sickness !== 'object' ||
+    Object.hasOwn(input.sickness, 'maxStandardBenefitPeriodDays')
+  )
+    return input;
+  return {
+    ...input,
+    sickness: {
+      ...input.sickness,
+      maxStandardBenefitPeriodDays: defaultParams.sickness.maxStandardBenefitPeriodDays,
+    },
+  };
+}
+
+const benefitParamsSchema = z.custom<BenefitParams>((input) => {
   if (!matchesShape(defaultParams, input)) return false;
   const params = input as BenefitParams;
   return (
     Object.values(params.rates).every((rate) => rate <= 1) &&
-    params.calendar.daysPerWeek > 0 &&
-    params.calendar.dailyBenefitDivisor > 0 &&
+    params.calendar.daysPerWeek === defaultParams.calendar.daysPerWeek &&
+    params.calendar.dailyBenefitDivisor === defaultParams.calendar.dailyBenefitDivisor &&
+    Number.isInteger(params.benefitBase.lookbackMonths) &&
     params.benefitBase.lookbackMonths > 0 &&
+    Number.isInteger(params.sickness.maxStandardBenefitPeriodDays) &&
+    params.sickness.maxStandardBenefitPeriodDays > 0 &&
+    params.sickness.maxStandardBenefitPeriodDays <= params.sickness.maxBenefitPeriodDays &&
     params.benefitBase.socialContributionDeduction < 1 &&
     params.parentalLeave.maxWorkTimeFraction < 1 &&
     params.parentalLeave.nonTransferableWeeksPerParent <=
@@ -88,7 +111,7 @@ paramsRouter.put('/admin/params', (req, res, next) => {
     return;
   }
   try {
-    active = paramsSchema.parse(req.body);
+    active = benefitParamsSchema.parse(addDefaultStandardSicknessLimit(req.body));
     res.json(ok(getParams()));
   } catch (error) {
     next(error);

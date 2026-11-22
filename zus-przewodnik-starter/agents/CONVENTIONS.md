@@ -29,7 +29,7 @@
 
 ## 3. Formaty
 
-Daty kalendarzowe w formacie `YYYY-MM-DD`, miesiące w formacie `YYYY-MM`. Kwoty w PLN są zaokrąglane do grosza na wyjściu. Stawki świadczeń mają wartości procentowe, np. `81.5`, `70` i `100`. `work_fraction` jest częścią etatu, np. `0.5`. Nieustalone wyniki mają wartość `null`. Opcjonalne pola wejściowe mogą być pominięte.
+Daty kalendarzowe w formacie `YYYY-MM-DD`, miesiące w formacie `YYYY-MM`. Pola pieniężne `CaseInputs` przyjmują kwoty od 0 do 1 000 000 000 PLN. Kwoty okresów świadczeń powstają przez pomnożenie stawki dziennej w groszach przez liczbę dni. Stawki świadczeń mają wartości procentowe, np. `81.5`, `70` i `100`. `work_fraction` jest częścią etatu, np. `0.5`. Nieustalone wyniki mają wartość `null`. Opcjonalne pola wejściowe mogą być pominięte.
 
 ## 4. Typy i parametry
 
@@ -69,7 +69,7 @@ Obowiązuje prefiks `/api/v1` i koperta `{ data, error }`. Sukces zwraca `error:
 
 ## 7. Frontend
 
-`/plan/:tab` obsługuje `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`. Kontekst scenariusza odczytuje i zapisuje aktualne wejście do obliczeń w URL. `?case=case-04` wskazuje sprawę katalogową, a zapisane edycje są w `inputs`. Wnioski demo przechowują wpisane wartości tylko w pamięci komponentu. Klient wywołuje HTTP przez `client/src/api/client.ts`.
+`/plan/:tab` obsługuje `entitlements`, `calculator`, `leave-plan`, `documents`, `applications`, `support`. `?case=case-04` wskazuje publiczną sprawę katalogową. Edycje planu i dane importu PDF trafiają do sesji karty. Starsze adresy z `inputs` są obsługiwane przy otwarciu i zastępowane adresem bez tego parametru. Wnioski demo przechowują wpisane wartości tylko w pamięci komponentu. Klient wywołuje HTTP przez `client/src/api/client.ts`.
 
 ### 7.1 Wygląd
 
@@ -98,4 +98,5 @@ Minimalna podstawa dla pracownika w brakującej tabeli, różnice w decyzji case
 | 2026-11-21 | Rozszerzenie kontraktu o przypadki z PDF: `mother_abandoned_child`, `unlawful_termination_confirmed_by_court`, `WizardScenario.mother: ParentData \| null` (samotny ojciec), `secondary_employment_type` / `secondary_voluntary_sickness_insured` (dwa tytuły naraz) oraz `deceased_children_count` (poród mnogi) |
 | 2026-11-21 | Dane przejęcia po porzuceniu wymagają daty i informacji o ubezpieczeniu matki. `CaseInputs.additional_insurance_titles` przechowuje odrębne dane każdego tytułu, a `CasePlan.additional_title_outcomes` jego wyliczenie. Pola `secondary_*` pozostają obsługiwane jako starszy format. |
 | 2026-11-21 | Dodano katalog i logowanie profili testowych oraz pola `pesel` i `birthDate` w `UserProfile` |
+| 2026-11-22 | Opcjonalne daty urodzenia przyjętego dziecka i prawomocności przysposobienia, data śmierci i ubezpieczenie matki oraz dni poprzedniego ubezpieczenia zaliczone do wyczekiwania. Dodano `sickness.maxStandardBenefitPeriodDays` i walidację przeliczników kalendarza. Formaty tras i odpowiedzi pozostały bez zmian. |
 | 2026-11-22 | Uzupełniono dokumentację REST API o `GET /assistant/status`, `GET /mock/zus-data`, opcjonalne `context`/`history` w `POST /assistant/ask` oraz obsługę `413` |

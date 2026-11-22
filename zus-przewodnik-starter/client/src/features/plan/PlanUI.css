@@ -15,7 +15,8 @@
 /* ================= Podsumowanie danych (pasek „Twoje dane”) ================= */
 .plan-page .plan-controls {
   margin-block: var(--space-4) 0;
-  overflow: hidden;
+  /* widoczne, bo w pasku otwiera się panel „Uwagi” – ucięty był niewidoczny */
+  overflow: visible;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);

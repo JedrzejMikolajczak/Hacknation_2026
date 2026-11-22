@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { ScenarioProvider, useScenario } from '../../../app/ScenarioContext';
 import { expect, it, vi } from 'vitest';
 import { apiPost } from '../../../api/client';
 
@@ -9,6 +10,11 @@ import { readCasePdf } from '../readCasePdf';
 
 vi.mock('../readCasePdf', () => ({ MAX_PDF_BYTES: 12 * 1024 * 1024, readCasePdf: vi.fn() }));
 vi.mock('../../../api/client', () => ({ apiPost: vi.fn() }));
+
+function ImportedPlan() {
+  const { planInputs } = useScenario();
+  return <p>Podstawa w otwartym planie {planInputs?.benefit_base_amount_pln}</p>;
+}
 
 it('wymaga potwierdzenia i wysyła tylko poprawione pola do kalkulatora', async () => {
   vi.mocked(readCasePdf).mockResolvedValue(
@@ -24,7 +30,16 @@ it('wymaga potwierdzenia i wysyła tylko poprawione pola do kalkulatora', async 
     validation_errors: [],
   });
   const user = userEvent.setup();
-  render(<MemoryRouter><CasePdfUpload /></MemoryRouter>);
+  render(
+    <MemoryRouter>
+      <ScenarioProvider>
+        <Routes>
+          <Route path="/" element={<CasePdfUpload />} />
+          <Route path="/plan/calculator" element={<ImportedPlan />} />
+        </Routes>
+      </ScenarioProvider>
+    </MemoryRouter>,
+  );
   expect(screen.getByText(/Dane z oficjalnych formularzy ZUS/)).toBeInTheDocument();
   await user.upload(
     screen.getByLabelText(/Plik PDF/),
@@ -50,7 +65,10 @@ it('wymaga potwierdzenia i wysyła tylko poprawione pola do kalkulatora', async 
   const href = screen.getByRole('link', { name: 'Otwórz plan' }).getAttribute('href')!;
   const plan = new URL(href, 'http://localhost');
   expect(plan.pathname).toBe('/plan/calculator');
-  expect(JSON.parse(plan.searchParams.get('inputs')!)).toEqual(vi.mocked(apiPost).mock.calls[0][1]);
+  expect(plan.searchParams.has('inputs')).toBe(false);
+  expect(plan.searchParams.get('source')).toBe('pdf');
+  await user.click(screen.getByRole('link', { name: 'Otwórz plan' }));
+  expect(await screen.findByText('Podstawa w otwartym planie 6200')).toBeInTheDocument();
   expect(apiPost).toHaveBeenCalledOnce();
   expect(apiPost).toHaveBeenCalledWith(
     '/plan',
