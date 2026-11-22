@@ -102,6 +102,22 @@ export function LeaveSplitPlanner({
     );
   }, [parts, plan, input]);
 
+  const singleParentPlan = !input.co_parenting;
+  const canAssignMother = motherAvailable || (singleParentPlan && input.applicant_role === 'MOTHER');
+  const canAssignFather = fatherAvailable && (input.co_parenting || input.applicant_role === 'FATHER');
+  const canChooseParent = canAssignMother && canAssignFather;
+  const visiblePresets = useMemo(
+    () =>
+      singleParentPlan
+        ? presets.filter((preset) =>
+            input.applicant_role === 'MOTHER'
+              ? preset.id === 'onlyMother'
+              : preset.id === 'onlyFather',
+          )
+        : presets,
+    [presets, singleParentPlan, input.applicant_role],
+  );
+
   function editPart(index: number, patch: Partial<PlannedParentalPart>) {
     onUpdate({
       parental_leave_parts: parts.map((part, i) => (index === i ? { ...part, ...patch } : part)),
@@ -110,12 +126,15 @@ export function LeaveSplitPlanner({
 
   function handleAddPart() {
     if (!nextStartBase) return;
-    const defaultRole: ApplicantRole =
-      usage.remainingByRole.FATHER > 0 && fatherAvailable && usage.remainingByRole.MOTHER === 0
+    const defaultRole: ApplicantRole = !canAssignFather
+      ? 'MOTHER'
+      : !canAssignMother
         ? 'FATHER'
-        : usage.remainingByRole.MOTHER > 0 && motherAvailable
-          ? 'MOTHER'
-          : input.applicant_role;
+        : usage.remainingByRole.FATHER > 0 && usage.remainingByRole.MOTHER === 0
+          ? 'FATHER'
+          : usage.remainingByRole.MOTHER > 0
+            ? 'MOTHER'
+            : input.applicant_role;
     const availableWeeks = Math.max(
       1,
       Math.min(
@@ -136,18 +155,33 @@ export function LeaveSplitPlanner({
   const mandatoryMotherWeeks = input.special_circumstances.mother_hospitalized_or_incapable
     ? params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate
     : params.maternityLeave.motherMandatoryWeeksAfterBirth;
+  const showMaternityStartCard = input.applicant_role === 'MOTHER' && input.stage !== 'ADOPTION';
+  const showPaternityStartCard = canAssignFather;
+  const showFatherTakeoverCard =
+    input.applicant_role === 'MOTHER' &&
+    input.stage !== 'ADOPTION' &&
+    input.co_parenting &&
+    canAssignFather;
+  const showExtraLeavesSection =
+    showMaternityStartCard || showPaternityStartCard || showFatherTakeoverCard;
 
   return (
     <section className="lp-card" aria-labelledby="planner-heading">
       <div className="lp-card__header">
         <div>
           <h3 id="planner-heading" className="lp-card__title">
-            Jak chcecie podzielić urlop?
+            {singleParentPlan ? 'Jak chcesz ułożyć urlop?' : 'Jak chcecie podzielić urlop?'}
           </h3>
           {childLossNoParental ? (
             <p className="lp-card__lead">
               W tej sytuacji przysługuje skrócony urlop macierzyński. Urlop rodzicielski nie
               przysługuje.
+            </p>
+          ) : singleParentPlan ? (
+            <p className="lp-card__lead">
+              Możesz wykorzystać cały swój wymiar ({usage.individualLimitWeeks} tyg.) naraz albo
+              podzielić go nawet na {params.parentalLeave.maxParts} części (np. z przerwą lub
+              pracą do {formatWorkFraction(params.parentalLeave.maxWorkTimeFraction)}).
             </p>
           ) : (
             <p className="lp-card__lead">
@@ -189,9 +223,12 @@ export function LeaveSplitPlanner({
       {!childLossNoParental && usage.poolWeeks > 0 && errors.length === 0 && parts.length > 0 && (
         <div className="lp-planner-success" role="status">
           <strong>Podział zgodny z Kodeksem pracy.</strong> Wykorzystano{' '}
-          {formatWeeksPl(usage.totalWeeks)} z {usage.poolWeeks} tyg. urlopu rodzicielskiego (Mama:{' '}
-          {formatWeeksPl(usage.motherWeeks)}
-          {fatherAvailable && <>, Tata: {formatWeeksPl(usage.fatherWeeks)}</>}).
+          {formatWeeksPl(usage.totalWeeks)} z{' '}
+          {singleParentPlan ? `${usage.individualLimitWeeks} tyg. (pula ${usage.poolWeeks} tyg.)` : `${usage.poolWeeks} tyg.`}{' '}
+          urlopu rodzicielskiego (
+          {canAssignMother && <>Mama: {formatWeeksPl(usage.motherWeeks)}</>}
+          {canAssignMother && canAssignFather && ', '}
+          {canAssignFather && <>Tata: {formatWeeksPl(usage.fatherWeeks)}</>}).
         </div>
       )}
 
@@ -200,7 +237,7 @@ export function LeaveSplitPlanner({
           {/* Gotowe scenariusze podziału */}
           <div className="lp-presets-section" aria-label="Gotowe scenariusze podziału urlopu">
             <div className="lp-presets-grid">
-              {presets.map((preset) => {
+              {visiblePresets.map((preset) => {
                 const isSelected = activePreset === preset.id;
                 const missingFather = preset.requiresFather && !fatherAvailable;
                 const missingMother = preset.requiresMother && !motherAvailable;
@@ -217,7 +254,11 @@ export function LeaveSplitPlanner({
                     aria-pressed={isSelected}
                     onClick={() => onSelectPreset(preset.id)}
                   >
-                    <span className="lp-preset-card__title">{preset.title}</span>
+                    <span className="lp-preset-card__title">
+                      {singleParentPlan
+                        ? `Cały urlop naraz (${usage.individualLimitWeeks} tyg.)`
+                        : preset.title}
+                    </span>
                     <span className="lp-preset-card__desc">
                       {missingFather
                         ? 'Wymaga potwierdzonego ubezpieczenia taty w planie.'
@@ -228,6 +269,22 @@ export function LeaveSplitPlanner({
                   </button>
                 );
               })}
+              {singleParentPlan && (
+                <button
+                  type="button"
+                  className={manualOpen ? 'lp-preset-card lp-preset-card--active' : 'lp-preset-card'}
+                  aria-pressed={manualOpen}
+                  onClick={() => setManualOpen(true)}
+                >
+                  <span className="lp-preset-card__title">
+                    Podziel na części (do {params.parentalLeave.maxParts}) / połącz z pracą
+                  </span>
+                  <span className="lp-preset-card__desc">
+                    Rozłóż swoje {usage.individualLimitWeeks} tyg. na maks.{' '}
+                    {params.parentalLeave.maxParts} części (np. z przerwą lub pracą na część etatu).
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -242,9 +299,12 @@ export function LeaveSplitPlanner({
               <div className="lp-manual-intro">
                 <p className="lp-card__lead">
                   Urlop rodzicielski można podzielić na maksymalnie {params.parentalLeave.maxParts}{' '}
-                  części i wykorzystać jednocześnie lub naprzemiennie
-                  {parentalDeadline ? ` do ${formatPolishDate(parentalDeadline)}` : ''}. Po{' '}
-                  {usage.nonTransferableWeeks} tyg. jest nieprzenoszalne dla każdego z rodziców.
+                  części
+                  {!singleParentPlan && ' i wykorzystać jednocześnie lub naprzemiennie'}
+                  {parentalDeadline ? ` do ${formatPolishDate(parentalDeadline)}` : ''}.{' '}
+                  {singleParentPlan
+                    ? `Twój limit to ${usage.individualLimitWeeks} tyg. (${usage.nonTransferableWeeks} tyg. jest ustawowo nieprzenoszalne dla drugiego rodzica).`
+                    : `Po ${usage.nonTransferableWeeks} tyg. jest nieprzenoszalne dla każdego z rodziców.`}
                 </p>
                 {input.parental_leave_parts && !input.parental_only && (
                   <button
@@ -264,13 +324,14 @@ export function LeaveSplitPlanner({
               >
                 <div className="lp-pool-progress__top">
                   <strong>
-                    Wykorzystano {formatWeeksPl(usage.totalWeeks)} z {usage.poolWeeks} tyg. urlopu
-                    rodzicielskiego
+                    Wykorzystano {formatWeeksPl(usage.totalWeeks)} z{' '}
+                    {singleParentPlan ? `${usage.individualLimitWeeks} tyg.` : `${usage.poolWeeks} tyg.`}{' '}
+                    urlopu rodzicielskiego
                   </strong>
                   <span className="lp-pool-progress__breakdown">
-                    Mama: {formatWeeksPl(usage.motherWeeks)} · Tata:{' '}
-                    {formatWeeksPl(usage.fatherWeeks)} · Części: {parts.length}/
-                    {params.parentalLeave.maxParts}
+                    {canAssignMother && <>Mama: {formatWeeksPl(usage.motherWeeks)} · </>}
+                    {canAssignFather && <>Tata: {formatWeeksPl(usage.fatherWeeks)} · </>}
+                    Części: {parts.length}/{params.parentalLeave.maxParts}
                   </span>
                 </div>
                 <div
@@ -278,14 +339,37 @@ export function LeaveSplitPlanner({
                   role="progressbar"
                   aria-valuenow={Math.round(usage.totalWeeks)}
                   aria-valuemin={0}
-                  aria-valuemax={usage.poolWeeks}
+                  aria-valuemax={singleParentPlan ? usage.individualLimitWeeks : usage.poolWeeks}
                 >
-                  <div className="lp-pool-progress__fill" style={{ width: `${poolPct}%` }} />
+                  <div
+                    className="lp-pool-progress__fill"
+                    style={{
+                      width: `${
+                        singleParentPlan && usage.individualLimitWeeks > 0
+                          ? Math.min(100, Math.round((usage.totalWeeks / usage.individualLimitWeeks) * 100))
+                          : poolPct
+                      }%`,
+                    }}
+                  />
                 </div>
                 <p className="lp-pool-progress__note">
-                  Pozostało w puli: <strong>{usage.remainingTotalWeeks} tyg.</strong> (Mama: do{' '}
-                  {usage.remainingByRole.MOTHER} tyg.
-                  {fatherAvailable && <>, Tata: do {usage.remainingByRole.FATHER} tyg.</>}).
+                  {singleParentPlan ? (
+                    <>
+                      Pozostało do zaplanowania:{' '}
+                      <strong>
+                        {canAssignMother
+                          ? `${usage.remainingByRole.MOTHER} tyg.`
+                          : `${usage.remainingByRole.FATHER} tyg.`}
+                      </strong>{' '}
+                      (z maks. {usage.individualLimitWeeks} tyg. dla jednego rodzica).
+                    </>
+                  ) : (
+                    <>
+                      Pozostało w puli: <strong>{usage.remainingTotalWeeks} tyg.</strong> (Mama: do{' '}
+                      {usage.remainingByRole.MOTHER} tyg.
+                      {canAssignFather && <>, Tata: do {usage.remainingByRole.FATHER} tyg.</>}).
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -323,22 +407,35 @@ export function LeaveSplitPlanner({
                         </legend>
 
                         <div className="lp-part-fields">
-                          <label className="lp-field">
-                            <span>Rodzic</span>
-                            <select
-                              className="plan-field__input"
-                              value={role}
-                              onChange={(event) =>
-                                editPart(index, {
-                                  parent_role:
-                                    event.target.value === roles[1] ? roles[1] : roles[0],
-                                })
-                              }
-                            >
-                              <option value="MOTHER">Matka</option>
-                              <option value="FATHER">Ojciec</option>
-                            </select>
-                          </label>
+                          {canChooseParent ? (
+                            <label className="lp-field">
+                              <span>Rodzic</span>
+                              <select
+                                className="plan-field__input"
+                                value={role}
+                                onChange={(event) =>
+                                  editPart(index, {
+                                    parent_role:
+                                      event.target.value === roles[1] ? roles[1] : roles[0],
+                                  })
+                                }
+                              >
+                                <option value="MOTHER">Matka</option>
+                                <option value="FATHER">Ojciec</option>
+                              </select>
+                            </label>
+                          ) : (
+                            <label className="lp-field">
+                              <span>Rodzic</span>
+                              <input
+                                type="text"
+                                className="plan-field__input"
+                                value={canAssignMother ? 'Matka' : 'Ojciec'}
+                                readOnly
+                                disabled
+                              />
+                            </label>
+                          )}
 
                           <label className="lp-field">
                             <span>Początek</span>
@@ -465,74 +562,83 @@ export function LeaveSplitPlanner({
               </div>
 
               {/* Pozostałe daty: macierzyński przed porodem, ojcowski, przejęcie macierzyńskiego */}
-              <div className="lp-extra-leaves" aria-labelledby="extra-leaves-heading">
-                <h4 id="extra-leaves-heading" className="lp-planner-subtitle">
-                  Pozostałe daty (macierzyński i ojcowski)
-                </h4>
-                <div className="lp-extra-grid">
-                  {input.applicant_role === 'MOTHER' && input.stage !== 'ADOPTION' && (
-                    <div className="lp-extra-card">
-                      <label className="lp-field">
-                        <span>Początek macierzyńskiego</span>
-                        <input
-                          type="date"
-                          className="plan-field__input"
-                          value={input.maternity_leave_start_date ?? input.due_or_birth_date ?? ''}
-                          onChange={(event) =>
-                            onUpdate({
-                              maternity_leave_start_date: event.target.value || undefined,
-                            })
-                          }
-                        />
-                      </label>
-                      <p className="lp-extra-card__hint">
-                        Można rozpocząć do {params.maternityLeave.maxWeeksBeforeBirth} tyg. przed
-                        przewidywaną datą porodu (stawka {formatRate(params.rates.maternity)} lub{' '}
-                        {formatRate(params.rates.combined)}).
-                      </p>
-                    </div>
-                  )}
+              {showExtraLeavesSection && (
+                <div className="lp-extra-leaves" aria-labelledby="extra-leaves-heading">
+                  <h4 id="extra-leaves-heading" className="lp-planner-subtitle">
+                    {showPaternityStartCard || showFatherTakeoverCard
+                      ? 'Pozostałe daty (macierzyński i ojcowski)'
+                      : 'Początek urlopu macierzyńskiego'}
+                  </h4>
+                  <div className="lp-extra-grid">
+                    {showMaternityStartCard && (
+                      <div className="lp-extra-card">
+                        <label className="lp-field">
+                          <span>Początek macierzyńskiego</span>
+                          <input
+                            type="date"
+                            className="plan-field__input"
+                            value={input.maternity_leave_start_date ?? input.due_or_birth_date ?? ''}
+                            onChange={(event) =>
+                              onUpdate({
+                                maternity_leave_start_date: event.target.value || undefined,
+                              })
+                            }
+                          />
+                        </label>
+                        <p className="lp-extra-card__hint">
+                          Można rozpocząć do {params.maternityLeave.maxWeeksBeforeBirth} tyg. przed
+                          przewidywaną datą porodu (stawka {formatRate(params.rates.maternity)} lub{' '}
+                          {formatRate(params.rates.combined)}).
+                        </p>
+                      </div>
+                    )}
 
-                  <div className="lp-extra-card">
-                    <label className="lp-field">
-                      <span>Początek ojcowskiego</span>
-                      <input
-                        type="date"
-                        className="plan-field__input"
-                        value={input.paternity_leave_start_date ?? ''}
-                        onChange={(event) =>
-                          onUpdate({ paternity_leave_start_date: event.target.value || undefined })
-                        }
-                      />
-                    </label>
-                    <p className="lp-extra-card__hint">
-                      {params.paternityLeave.weeks} tyg. ({formatRate(params.rates.paternity)}), do
-                      wykorzystania w ciągu {params.paternityLeave.deadlineChildAgeMonths} mies.
-                      {paternityDeadline ? ` (do ${formatPolishDate(paternityDeadline)})` : ''}.
-                    </p>
+                    {showPaternityStartCard && (
+                      <div className="lp-extra-card">
+                        <label className="lp-field">
+                          <span>Początek ojcowskiego</span>
+                          <input
+                            type="date"
+                            className="plan-field__input"
+                            value={input.paternity_leave_start_date ?? ''}
+                            onChange={(event) =>
+                              onUpdate({
+                                paternity_leave_start_date: event.target.value || undefined,
+                              })
+                            }
+                          />
+                        </label>
+                        <p className="lp-extra-card__hint">
+                          {params.paternityLeave.weeks} tyg. ({formatRate(params.rates.paternity)}),
+                          do wykorzystania w ciągu {params.paternityLeave.deadlineChildAgeMonths}{' '}
+                          mies.
+                          {paternityDeadline ? ` (do ${formatPolishDate(paternityDeadline)})` : ''}.
+                        </p>
+                      </div>
+                    )}
+
+                    {showFatherTakeoverCard && (
+                      <div className="lp-extra-card">
+                        <label className="lp-field">
+                          <span>Przejęcie macierzyńskiego przez ojca</span>
+                          <input
+                            type="date"
+                            className="plan-field__input"
+                            value={input.father_takeover_date ?? ''}
+                            onChange={(event) =>
+                              onUpdate({ father_takeover_date: event.target.value || undefined })
+                            }
+                          />
+                        </label>
+                        <p className="lp-extra-card__hint">
+                          Możliwe po wykorzystaniu przez matkę pierwszych {mandatoryMotherWeeks}{' '}
+                          tyg. po porodzie (wymaga ubezpieczenia chorobowego ojca).
+                        </p>
+                      </div>
+                    )}
                   </div>
-
-                  {input.applicant_role === 'MOTHER' && input.stage !== 'ADOPTION' && (
-                    <div className="lp-extra-card">
-                      <label className="lp-field">
-                        <span>Przejęcie macierzyńskiego przez ojca</span>
-                        <input
-                          type="date"
-                          className="plan-field__input"
-                          value={input.father_takeover_date ?? ''}
-                          onChange={(event) =>
-                            onUpdate({ father_takeover_date: event.target.value || undefined })
-                          }
-                        />
-                      </label>
-                      <p className="lp-extra-card__hint">
-                        Możliwe po wykorzystaniu przez matkę pierwszych {mandatoryMotherWeeks} tyg.
-                        po porodzie (wymaga ubezpieczenia chorobowego ojca).
-                      </p>
-                    </div>
-                  )}
                 </div>
-              </div>
+              )}
             </div>
           </details>
         </>

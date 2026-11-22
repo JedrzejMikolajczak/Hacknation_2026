@@ -204,4 +204,40 @@ describe('CasePlanner', () => {
     expect(screen.queryByRole('button', { name: /Po połowie/ })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Urlop rodzicielski nie przysługuje/i).length).toBeGreaterThan(0);
   });
+
+  it('dla samej matki (co_parenting: false) blokuje przełączanie na ojca i ukrywa opcje ojca, ale pozwala dzielić urlop na części', () => {
+    const update = vi.fn();
+    const soloMother = makeCoupleInputs({
+      co_parenting: false,
+      other_parent_insured: false,
+      other_parent: undefined,
+      father_parental_weeks: 0,
+      parental_leave_parts: [
+        {
+          parent_role: 'MOTHER',
+          start_date: '2027-03-30',
+          end_date: '2027-07-19',
+          work_fraction: 0,
+        },
+      ],
+    });
+    renderPlanner(soloMother, update);
+
+    // Brak scenariuszy i opcji ojca
+    expect(screen.queryByRole('button', { name: /Po połowie/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tylko tata/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Początek ojcowskiego')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Przejęcie macierzyńskiego przez ojca')).not.toBeInTheDocument();
+
+    // Otwarcie dzielenia na części dla samej mamy
+    fireEvent.click(screen.getByRole('button', { name: /Podziel na części/ }));
+    expect(screen.queryByRole('option', { name: 'Ojciec' })).not.toBeInTheDocument();
+
+    // Mama może dodać kolejną część dla siebie (zgodnie z KP art. 182¹c do 5 części)
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj część' }));
+    expect(update).toHaveBeenCalledTimes(1);
+    const patch = update.mock.calls[0][0] as Partial<CaseInputs>;
+    expect(patch.parental_leave_parts).toHaveLength(2);
+    expect(patch.parental_leave_parts?.[1].parent_role).toBe('MOTHER');
+  });
 });

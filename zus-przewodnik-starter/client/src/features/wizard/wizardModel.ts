@@ -15,6 +15,8 @@ import { addDaysIso, formatPolishDate } from '../plan/planScenario';
 export const STAGES = ['Rodzina', 'Dziecko', 'Ubezpieczenie', 'Plany i kwoty', 'Podsumowanie'];
 export const MIN_WIZARD_YEAR = 1900;
 export const MAX_WIZARD_YEAR = 3000;
+/** Górny limit wieku dziecka (osoba małoletnia w rozumieniu KC/KRO: 0–17 pełnych lat). */
+export const MAX_MINOR_CHILD_AGE_YEARS = 17;
 export const SITUATION_LABELS: Record<SituationType, string> = {
   planning: 'Planuję dziecko',
   pregnant: 'Jestem w ciąży',
@@ -67,6 +69,13 @@ const ADDITIONAL_INSURANCE_OPTIONS: QuestionOption[] = INSURANCE_OPTIONS.map((op
 export function todayLocal(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function shiftYearsIso(date: IsoDate, years: number): IsoDate {
+  const [y, m, d] = date.split('-').map(Number);
+  const targetYear = y + years;
+  const lastDay = new Date(Date.UTC(targetYear, m, 0)).getUTCDate();
+  return `${String(targetYear).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
 }
 
 export function parentRoles(answers: Record<string, string>): ParentRole[] {
@@ -126,6 +135,8 @@ export function getQuestions(
 ): WizardQuestion[] {
   const today = todayLocal();
   const roles = applicableParents(situation, answers);
+  const isJoint = roles.length > 1;
+  const isSingle = roles.length === 1;
   const motherDeceased =
     situation === 'afterBirth' &&
     answers.motherSituation === 'deceased' &&
@@ -183,12 +194,21 @@ export function getQuestions(
         label: 'Etap przyjęcia dziecka',
         options: [
           { value: 'accepted', label: 'Tak, dziecko jest już pod opieką' },
-          { value: 'planned', label: 'Dopiero planujemy przyjęcie dziecka' },
+          {
+            value: 'planned',
+            label: isJoint
+              ? 'Dopiero planujemy przyjęcie dziecka'
+              : 'Dopiero planuję przyjęcie dziecka',
+          },
         ],
       },
     );
     if (answers.adoptionStage) {
       const accepted = answers.adoptionStage === 'accepted';
+      const isFoster = answers.adoptionType === 'fosterFamily';
+      const adoptionAgeHint = isFoster
+        ? `Przy rodzinie zastępczej niezawodowej urlop przysługuje do ukończenia ${params.adoptionMaternityLeave.fosterFamilyMaxChildAgeYears}. roku życia dziecka (lub ${params.adoptionMaternityLeave.fosterFamilyMaxChildAgeYearsDeferredSchool}. roku życia przy odroczeniu obowiązku szkolnego). Wpisz pełne lata od 0 do ${MAX_MINOR_CHILD_AGE_YEARS}.`
+        : `Przy przysposobieniu (adopcji) urlop przysługuje do ukończenia ${params.adoptionMaternityLeave.adoptionMaxChildAgeYears}. roku życia dziecka. Wpisz pełne lata od 0 do ${MAX_MINOR_CHILD_AGE_YEARS}.`;
       questions.push(
         {
           id: 'childAcceptanceDate',
@@ -199,8 +219,11 @@ export function getQuestions(
             : 'Na kiedy planowane jest przyjęcie dziecka?',
           label: accepted ? 'Data przyjęcia dziecka' : 'Planowana data przyjęcia dziecka',
           ...(accepted
-            ? { max: todayLocal() }
-            : { min: todayLocal(), unknownLabel: 'Nie znamy jeszcze terminu' }),
+            ? { max: today }
+            : {
+                min: today,
+                unknownLabel: isJoint ? 'Nie znamy jeszcze terminu' : 'Nie znam jeszcze terminu',
+              }),
         },
         {
           id: 'childAgeYears',
@@ -210,19 +233,23 @@ export function getQuestions(
             ? 'Ile lat ma dziecko?'
             : 'W jakim wieku będzie dziecko w dniu przyjęcia?',
           label: 'Wiek dziecka (pełne lata)',
+          hint: adoptionAgeHint,
           min: 0,
+          max: MAX_MINOR_CHILD_AGE_YEARS,
           step: '1',
-          unknownLabel: 'Nie znamy jeszcze wieku',
+          unknownLabel: isJoint ? 'Nie znamy jeszcze wieku' : 'Nie znam jeszcze wieku',
         },
-        {
+      );
+      if (isFoster) {
+        questions.push({
           id: 'schoolObligationDeferred',
           stage: 1,
           type: 'choice',
           title: 'Czy dziecko ma odroczony obowiązek szkolny?',
           label: 'Odroczenie obowiązku szkolnego',
           options: YES_NO,
-        },
-      );
+        });
+      }
     }
   } else {
     const afterBirth = situation === 'afterBirth';
@@ -233,11 +260,20 @@ export function getQuestions(
       title: afterBirth
         ? 'Kiedy urodziło się dziecko?'
         : situation === 'planning'
-          ? 'Czy znacie orientacyjny termin narodzin?'
+          ? isJoint
+            ? 'Czy znacie orientacyjny termin narodzin?'
+            : 'Czy znasz orientacyjny termin narodzin?'
           : 'Jaki jest przewidywany termin porodu?',
       label: afterBirth ? 'Data urodzenia dziecka' : 'Przewidywany termin porodu',
-      ...(afterBirth ? { max: todayLocal() } : { unknownLabel: 'Nie znamy jeszcze terminu' }),
-      hint: situation === 'planning' ? 'Możecie pominąć datę i wrócić do niej później.' : undefined,
+      ...(afterBirth
+        ? { min: shiftYearsIso(today, -(MAX_MINOR_CHILD_AGE_YEARS + 1)), max: today }
+        : { unknownLabel: isJoint ? 'Nie znamy jeszcze terminu' : 'Nie znam jeszcze terminu' }),
+      hint:
+        situation === 'planning'
+          ? isJoint
+            ? 'Możecie pominąć datę i wrócić do niej później.'
+            : 'Możesz pominąć datę i wrócić do niej później.'
+          : undefined,
     });
   }
 
@@ -252,12 +288,16 @@ export function getQuestions(
       situation === 'planning'
         ? 'Dla ilu dzieci przygotować wstępną symulację?'
         : situation === 'pregnant'
-          ? 'Ilu dzieci spodziewacie się z tego porodu?'
+          ? isJoint
+            ? 'Ilu dzieci spodziewacie się z tego porodu?'
+            : 'Ilu dzieci spodziewasz się z tego porodu?'
           : situation === 'afterBirth'
             ? 'Ile dzieci urodziło się z tego porodu?'
-            : 'Ile dzieci przyjmujecie jednocześnie?',
+            : isJoint
+              ? 'Ile dzieci przyjmujecie jednocześnie?'
+              : 'Ile dzieci przyjmujesz jednocześnie?',
     ...(situation === 'planning' || situation === 'pregnant' || answers.adoptionStage === 'planned'
-      ? { unknownLabel: 'Jeszcze nie wiemy' }
+      ? { unknownLabel: isJoint ? 'Jeszcze nie wiemy' : 'Jeszcze nie wiem' }
       : {}),
   });
 
@@ -277,7 +317,9 @@ export function getQuestions(
       id: 'birthOutcome',
       stage: 1,
       type: 'choice',
-      title: 'Czy dotyczy Was któraś z tych sytuacji?',
+      title: isJoint
+        ? 'Czy dotyczy Was któraś z tych sytuacji?'
+        : 'Czy dotyczy Cię któraś z tych sytuacji?',
       label: 'Szczególne okoliczności',
       hint: 'Pytamy, ponieważ w takiej sytuacji przysługuje urlop w innym wymiarze. Uwzględnimy to w planie.',
       options: [
@@ -307,7 +349,7 @@ export function getQuestions(
         title: multipleChildren ? 'Kiedy zmarło ostatnie z tych dzieci?' : 'Kiedy zmarło dziecko?',
         label: multipleChildren ? 'Data śmierci ostatniego z tych dzieci' : 'Data śmierci dziecka',
         min: answers.birthDate && answers.birthDate !== 'unknown' ? answers.birthDate : undefined,
-        max: todayLocal(),
+        max: today,
       });
     }
   }
@@ -365,7 +407,9 @@ export function getQuestions(
       id: 'zaZyciemCertificate',
       stage: 1,
       type: 'choice',
-      title: 'Czy macie zaświadczenie „Za życiem”?',
+      title: isJoint
+        ? 'Czy macie zaświadczenie „Za życiem”?'
+        : 'Czy masz zaświadczenie „Za życiem”?',
       label: 'Zaświadczenie „Za życiem”',
       hint: 'Lekarz wystawia je w ciąży albo po porodzie. Wydłuża urlop rodzicielski.',
       options: YES_NO,
@@ -453,20 +497,28 @@ export function getQuestions(
       id: `${role}.insuranceTitle`,
       stage: 2,
       type: 'choice',
-      title: `Jaka jest sytuacja zawodowa ${person}?`,
+      title: isSingle
+        ? 'Jaka jest Twoja sytuacja zawodowa?'
+        : `Jaka jest sytuacja zawodowa ${person}?`,
       label: `Zatrudnienie ${person}`,
       options: INSURANCE_OPTIONS,
-      hint: 'Wybierzcie tytuł ubezpieczenia, którego ma dotyczyć ten plan.',
+      hint: isJoint
+        ? 'Wybierzcie tytuł ubezpieczenia, którego ma dotyczyć ten plan.'
+        : 'Wybierz tytuł ubezpieczenia, którego ma dotyczyć ten plan.',
     });
     if (title === 'mandateContract' || title === 'selfEmployed') {
       questions.push({
         id: `${role}.sicknessInsurance`,
         stage: 2,
         type: 'choice',
-        title: `Czy za ${person === 'mamy' ? 'mamę' : 'tatę'} jest opłacana dobrowolna składka chorobowa?`,
+        title: isSingle
+          ? 'Czy opłacasz dobrowolną składkę chorobową?'
+          : `Czy za ${person === 'mamy' ? 'mamę' : 'tatę'} jest opłacana dobrowolna składka chorobowa?`,
         label: `Składka chorobowa ${person}`,
         options: YES_NO,
-        hint: 'Jeśli nie macie pewności, możecie uzupełnić tę informację później.',
+        hint: isJoint
+          ? 'Jeśli nie macie pewności, możecie uzupełnić tę informację później.'
+          : 'Jeśli nie masz pewności, możesz uzupełnić tę informację później.',
       });
     }
     if (role === 'father' && motherAbandoned &&
@@ -475,7 +527,9 @@ export function getQuestions(
         id: 'fatherStopsGainfulActivity',
         stage: 2,
         type: 'choice',
-        title: 'Czy tata przerwie działalność zarobkową, by osobiście opiekować się dzieckiem?',
+        title: isSingle
+          ? 'Czy przerwiesz działalność zarobkową, by osobiście opiekować się dzieckiem?'
+          : 'Czy tata przerwie działalność zarobkową, by osobiście opiekować się dzieckiem?',
         label: 'Przerwa w działalności zarobkowej taty',
         options: YES_NO,
       });
@@ -485,10 +539,12 @@ export function getQuestions(
         id: `${role}.insuredSince`,
         stage: 2,
         type: 'date',
-        title: `Od kiedy trwa obecne ubezpieczenie chorobowe ${person}?`,
+        title: isSingle
+          ? 'Od kiedy trwa Twoje obecne ubezpieczenie chorobowe?'
+          : `Od kiedy trwa obecne ubezpieczenie chorobowe ${person}?`,
         label: `Początek ubezpieczenia ${person}`,
-        max: todayLocal(),
-        unknownLabel: 'Sprawdzimy to później',
+        max: today,
+        unknownLabel: isJoint ? 'Sprawdzimy to później' : 'Sprawdzę to później',
       });
     }
     if (title === 'employment' || title === 'mandateContract') {
@@ -496,7 +552,9 @@ export function getQuestions(
         id: `${role}.insuranceEndDate`,
         stage: 2,
         type: 'date',
-        title: `Czy znana jest data końca umowy ${person}?`,
+        title: isSingle
+          ? 'Czy znasz datę końca swojej umowy?'
+          : `Czy znana jest data końca umowy ${person}?`,
         label: `Koniec umowy ${person}`,
         min:
           answers[`${role}.insuredSince`] !== 'unknown'
@@ -511,12 +569,14 @@ export function getQuestions(
         id: `${role}.employerInsuredCount`,
         stage: 2,
         type: 'number',
-        title: `Ile osób ${payerName} ${person} zgłasza do ubezpieczenia chorobowego?`,
+        title: isSingle
+          ? `Ile osób Twój ${payerName} zgłasza do ubezpieczenia chorobowego?`
+          : `Ile osób ${payerName} ${person} zgłasza do ubezpieczenia chorobowego?`,
         label: `Liczba osób zgłoszonych przez płatnika ${person}`,
         min: 1,
         step: '1',
         hint: `Jeśli więcej niż ${DEFAULT_PARAMS.payerThresholdInsuredCount}, zasiłek wypłaca ${payerName}. W innym przypadku wypłaca ZUS. Wystarczy przybliżona liczba.`,
-        unknownLabel: 'Nie wiem – sprawdzimy to później',
+        unknownLabel: isJoint ? 'Nie wiem – sprawdzimy to później' : 'Nie wiem – sprawdzę to później',
       });
     }
     if (role === 'mother' && title === 'employment' && situation !== 'adoption') {
@@ -524,7 +584,7 @@ export function getQuestions(
         id: 'mother.age',
         stage: 2,
         type: 'number',
-        title: 'Ile lat ma mama?',
+        title: isSingle ? 'Ile masz lat?' : 'Ile lat ma mama?',
         label: 'Wiek mamy',
         min: 15,
         max: 70,
@@ -542,8 +602,9 @@ export function getQuestions(
         id: 'employerBankruptcyOrLiquidation',
         stage: 2,
         type: 'choice',
-        title:
-          'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
+        title: isSingle
+          ? 'Czy Twoja umowa rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?'
+          : 'Czy umowa mamy rozwiązała się (albo rozwiąże) z powodu upadłości lub likwidacji pracodawcy?',
         label: 'Szczególny powód rozwiązania umowy',
         hint: 'Wybierz także prawomocny wyrok, jeśli sąd potwierdził bezprawne rozwiązanie umowy w ciąży.',
         options: [
@@ -557,7 +618,7 @@ export function getQuestions(
           id: 'unlawfulTerminationDate',
           stage: 2,
           type: 'date',
-          title: 'Kiedy ustało zatrudnienie mamy?',
+          title: isSingle ? 'Kiedy ustało Twoje zatrudnienie?' : 'Kiedy ustało zatrudnienie mamy?',
           label: 'Data ustania zatrudnienia',
           min: dateOrNull(answers['mother.insuredSince']) ?? undefined,
           max: answers.birthDate && answers.birthDate < today ? answers.birthDate : today,
@@ -576,9 +637,13 @@ export function getQuestions(
         id: 'mother.pregnancySickLeave',
         stage: 2,
         type: 'choice',
-        title: pregnant
-          ? 'Czy mama jest albo była na zwolnieniu lekarskim w tej ciąży?'
-          : 'Czy mama była na zwolnieniu lekarskim w ciąży?',
+        title: isSingle
+          ? pregnant
+            ? 'Czy jesteś albo byłaś na zwolnieniu lekarskim w tej ciąży?'
+            : 'Czy byłaś na zwolnieniu lekarskim w ciąży?'
+          : pregnant
+            ? 'Czy mama jest albo była na zwolnieniu lekarskim w tej ciąży?'
+            : 'Czy mama była na zwolnieniu lekarskim w ciąży?',
         label: 'Zwolnienie lekarskie w ciąży',
         hint: 'Od daty zwolnienia zależy zasiłek chorobowy. Gdy zwolnienie trwa do porodu, wpływa też na podstawę zasiłku macierzyńskiego.',
         options: YES_NO,
@@ -587,7 +652,6 @@ export function getQuestions(
         const start = dateOrNull(answers['mother.sickLeaveStart']);
         const birth = dateOrNull(answers[pregnant ? 'expectedBirthDate' : 'birthDate']);
         const untilBirth = answers['mother.sickLeaveUntilBirth'] === 'yes';
-        const today = todayLocal();
         const lastDayBeforeBirth = birth && addDays(birth, -1);
         const latestStart =
           untilBirth && lastDayBeforeBirth && lastDayBeforeBirth < today
@@ -644,12 +708,16 @@ export function getQuestions(
         id: `${role}.contributionDebt`,
         stage: 2,
         type: 'number',
-        title: `Czy ${person === 'mamy' ? 'mama ma' : 'tata ma'} zaległości w składkach ZUS?`,
+        title: isSingle
+          ? 'Czy masz zaległości w składkach ZUS?'
+          : `Czy ${person === 'mamy' ? 'mama ma' : 'tata ma'} zaległości w składkach ZUS?`,
         label: `Zaległość w składkach ${person} (zł)`,
         min: 0,
         step: '0.01',
-        hint: 'Wpiszcie kwotę zadłużenia albo 0, jeśli składki są rozliczone.',
-        unknownLabel: 'Sprawdzimy to później',
+        hint: isJoint
+          ? 'Wpiszcie kwotę zadłużenia albo 0, jeśli składki są rozliczone.'
+          : 'Wpisz kwotę zadłużenia albo 0, jeśli składki są rozliczone.',
+        unknownLabel: isJoint ? 'Sprawdzimy to później' : 'Sprawdzę to później',
       });
     }
   }
@@ -660,10 +728,14 @@ export function getQuestions(
       id: `${role}.wantsLeave`,
       stage: 3,
       type: 'choice',
-      title: `Czy ${role === 'mother' ? 'mama' : 'tata'} planuje korzystać z urlopu lub zasiłku?`,
+      title: isSingle
+        ? 'Czy planujesz korzystać z urlopu lub zasiłku?'
+        : `Czy ${role === 'mother' ? 'mama' : 'tata'} planuje korzystać z urlopu lub zasiłku?`,
       label: `Plan urlopu ${person}`,
       options: YES_NO,
-      hint: 'To wstępny plan. Możecie go zmienić później.',
+      hint: isJoint
+        ? 'To wstępny plan. Możecie go zmienić później.'
+        : 'To wstępny plan. Możesz go zmienić później.',
     });
     if (
       ['employment', 'mandateContract', 'selfEmployed'].includes(answers[`${role}.insuranceTitle`])
@@ -672,12 +744,16 @@ export function getQuestions(
         id: `${role}.benefitBase`,
         stage: 3,
         type: 'number',
-        title: `Czy znacie podstawę wymiaru zasiłku ${person}?`,
+        title: isSingle
+          ? 'Czy znasz swoją podstawę wymiaru zasiłku?'
+          : `Czy znacie podstawę wymiaru zasiłku ${person}?`,
         label: `Podstawa wymiaru zasiłku ${person} (zł)`,
         min: 0,
         step: '0.01',
-        hint: 'Wpiszcie tylko znaną podstawę zasiłku. Jeśli znacie jedynie wynagrodzenie, wybierzcie uzupełnienie później.',
-        unknownLabel: 'Podstawę ustalimy później',
+        hint: isJoint
+          ? 'Wpiszcie tylko znaną podstawę zasiłku. Jeśli znacie jedynie wynagrodzenie, wybierzcie uzupełnienie później.'
+          : 'Wpisz tylko znaną podstawę zasiłku. Jeśli znasz jedynie wynagrodzenie, wybierz uzupełnienie później.',
+        unknownLabel: isJoint ? 'Podstawę ustalimy później' : 'Podstawę ustalę później',
       });
     }
     // Bez znanej podstawy pytamy o zarobki – z nich silnik policzy podstawę wymiaru.
@@ -689,18 +765,24 @@ export function getQuestions(
           id: `${role}.averageGross`,
           stage: 3,
           type: 'number',
-          title: `Ile wynosiło przeciętne miesięczne wynagrodzenie brutto ${person} w ostatnich ${lookback} miesiącach?`,
+          title: isSingle
+            ? `Ile wynosiło Twoje przeciętne miesięczne wynagrodzenie brutto w ostatnich ${lookback} miesiącach?`
+            : `Ile wynosiło przeciętne miesięczne wynagrodzenie brutto ${person} w ostatnich ${lookback} miesiącach?`,
           label: `Przeciętne wynagrodzenie brutto ${person} (zł)`,
           min: 0,
           step: '0.01',
-          hint: `Na tej podstawie policzymy podstawę wymiaru zasiłku. Jeśli zarobki się zmieniały, podajcie średnią. Przy zatrudnieniu krótszym niż ${lookback} miesięcy – średnią z przepracowanych miesięcy.`,
+          hint: isJoint
+            ? `Na tej podstawie policzymy podstawę wymiaru zasiłku. Jeśli zarobki się zmieniały, podajcie średnią. Przy zatrudnieniu krótszym niż ${lookback} miesięcy – średnią z przepracowanych miesięcy.`
+            : `Na tej podstawie policzymy podstawę wymiaru zasiłku. Jeśli zarobki się zmieniały, podaj średnią. Przy zatrudnieniu krótszym niż ${lookback} miesięcy – średnią z przepracowanych miesięcy.`,
           unknownLabel: 'Uzupełnię później',
         });
         questions.push({
           id: `${role}.contractSalary`,
           stage: 3,
           type: 'number',
-          title: `Jakie jest miesięczne wynagrodzenie brutto ${person} według umowy?`,
+          title: isSingle
+            ? 'Jakie jest Twoje miesięczne wynagrodzenie brutto według umowy?'
+            : `Jakie jest miesięczne wynagrodzenie brutto ${person} według umowy?`,
           label: `Wynagrodzenie z umowy ${person} (zł)`,
           min: 0,
           step: '0.01',
@@ -713,7 +795,9 @@ export function getQuestions(
           id: `${role}.declaredContributionBase`,
           stage: 3,
           type: 'number',
-          title: `Od jakiej miesięcznej kwoty ${person} opłaca składkę chorobową?`,
+          title: isSingle
+            ? 'Od jakiej miesięcznej kwoty opłacasz składkę chorobową?'
+            : `Od jakiej miesięcznej kwoty ${person} opłaca składkę chorobową?`,
           label: `Zadeklarowana podstawa składek ${person} (zł)`,
           min: 0,
           step: '0.01',
@@ -733,7 +817,9 @@ export function getQuestions(
       id: 'additionalInsurance.insuranceTitle',
       stage: 3,
       type: 'choice',
-      title: `Czy ${applicant} równocześnie drugi tytuł do ubezpieczeń?`,
+      title: isSingle
+        ? 'Czy masz równocześnie drugi tytuł do ubezpieczeń?'
+        : `Czy ${applicant} równocześnie drugi tytuł do ubezpieczeń?`,
       label: 'Drugi tytuł do ubezpieczeń',
       hint: 'Dotyczy sytuacji, gdy oprócz głównej umowy jest druga praca, zlecenie lub własna firma.',
       options: ADDITIONAL_INSURANCE_OPTIONS,
@@ -744,7 +830,9 @@ export function getQuestions(
         id: 'additionalInsurance.sicknessInsured',
         stage: 3,
         type: 'choice',
-        title: `Czy ${applicantSubject} ubezpieczeniu chorobowemu także z drugiego tytułu?`,
+        title: isSingle
+          ? 'Czy podlegasz ubezpieczeniu chorobowemu także z drugiego tytułu?'
+          : `Czy ${applicantSubject} ubezpieczeniu chorobowemu także z drugiego tytułu?`,
         label: 'Ubezpieczenie chorobowe z drugiego tytułu',
         options: YES_NO,
       });
@@ -852,7 +940,9 @@ export function getQuestions(
       type: 'choice',
       title: expired
         ? 'Obowiązują stawki rozdzielone'
-        : 'Jak chcecie otrzymywać zasiłek macierzyński?',
+        : isJoint
+          ? 'Jak chcecie otrzymywać zasiłek macierzyński?'
+          : 'Jak chcesz otrzymywać zasiłek macierzyński?',
       label: 'Wariant wysokości zasiłku',
       hint: expired
         ? `Termin na złożenie nowego wniosku o ${formatRate(rates.combined)} upłynął ${formatPolishDate(addDaysIso(event!, deadline))}.`
@@ -866,7 +956,12 @@ export function getQuestions(
               description: 'Ta sama kwota co miesiąc przez urlop macierzyński i rodzicielski.',
             },
             standard,
-            { value: 'unknown', label: 'Jeszcze nie wiemy – pokażcie porównanie' },
+            {
+              value: 'unknown',
+              label: isJoint
+                ? 'Jeszcze nie wiemy – pokażcie porównanie'
+                : 'Jeszcze nie wiem – pokażcie porównanie',
+            },
           ],
     });
   }
@@ -920,8 +1015,12 @@ export function validateAnswer(question: WizardQuestion, value: string | undefin
       return 'Wpisz poprawną liczbę.';
     if (typeof question.min === 'number' && amount < question.min)
       return `Wpisz liczbę nie mniejszą niż ${question.min}.`;
-    if (typeof question.max === 'number' && amount > question.max)
+    if (typeof question.max === 'number' && amount > question.max) {
+      if (question.id === 'childAgeYears') {
+        return `Wpisz wiek dziecka od 0 do ${question.max} lat (przysposobienie i rodzina zastępcza dotyczą osób małoletnich).`;
+      }
       return `Wpisz liczbę nie większą niż ${question.max}.`;
+    }
     return null;
   }
   if (!isIsoCalendarDate(value)) return 'Wybierz poprawny dzień, miesiąc i rok.';

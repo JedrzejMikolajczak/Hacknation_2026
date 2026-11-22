@@ -639,4 +639,28 @@ describe('Twój plan', () => {
       0,
     );
   });
+
+  it('w Kalkulatorze pokazuje porównanie obu wariantów i wyraźnie oznacza korzystniejszy', async () => {
+    openPlan('calculator', {
+      ...fixture.inputs,
+      children_count: 2,
+      living_children_count: 2,
+      due_or_birth_date: '2026-11-10',
+      application_date: '2026-11-15',
+      application_to_payer_date: '2026-11-15',
+      days_from_birth_to_application: 5,
+      reference_date: '2026-11-21',
+      benefit_base_amount_pln: 6500,
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Kalkulator', level: 2 }),
+    ).toBeInTheDocument();
+    const compareRegion = screen.getByRole('region', {
+      name: 'Porównanie i wybór wariantu wypłaty',
+    });
+    expect(within(compareRegion).getByRole('button', { name: /81,5% za cały okres/ })).toBeInTheDocument();
+    expect(within(compareRegion).getByRole('button', { name: /100% \+ 70%/ })).toBeInTheDocument();
+    expect(within(compareRegion).getAllByText(/Korzystniejszy/i).length).toBeGreaterThan(0);
+  });
 });

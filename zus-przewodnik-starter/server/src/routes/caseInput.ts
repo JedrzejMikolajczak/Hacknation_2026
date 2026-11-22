@@ -68,7 +68,7 @@ export const caseInputSchema = z
       mother_abandoned_child: z.boolean().optional(),
       unlawful_termination_confirmed_by_court: z.boolean().optional(),
       employer_bankruptcy_or_liquidation: z.boolean(),
-      adopted_or_foster_child_age_years: z.number().nonnegative().nullable(),
+      adopted_or_foster_child_age_years: z.number().nonnegative().max(17).nullable(),
       is_professional_foster_family: z.boolean(),
     }),
     living_children_count: count.optional(),

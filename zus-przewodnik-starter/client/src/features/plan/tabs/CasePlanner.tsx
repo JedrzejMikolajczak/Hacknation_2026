@@ -327,9 +327,15 @@ export function CasePlanner({
         <dl className="lp-answer__facts" aria-label="Podsumowanie planu urlopów">
           {!childLossNoParental && usage.poolWeeks > 0 && (
             <div className="lp-answer__fact">
-              <dt>Wspólna pula rodzicielskiego</dt>
+              <dt>
+                {input.co_parenting ? 'Wspólna pula rodzicielskiego' : 'Pula urlopu rodzicielskiego'}
+              </dt>
               <dd>
-                <strong>{usage.poolWeeks} tyg.</strong>
+                <strong>
+                  {input.co_parenting
+                    ? `${usage.poolWeeks} tyg.`
+                    : `do ${usage.individualLimitWeeks} tyg.`}
+                </strong>
                 {plan.outcome.parental_deadline && (
                   <span className="lp-answer__fact-hint">
                     {' '}
@@ -348,13 +354,15 @@ export function CasePlanner({
                   ? formatRate(params.rates.combined)
                   : `${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`}
               </strong>
-              {plan.outcome.applied_payment_variant === 'COMBINED_81_5' && !childLossNoParental && (
-                <span className="lp-answer__fact-hint">
-                  {' '}
-                  ({params.parentalLeave.nonTransferableWeeksPerParent} tyg. drugiego rodzica:{' '}
-                  {formatRate(params.rates.secondParentNonTransferableInCombined)})
-                </span>
-              )}
+              {plan.outcome.applied_payment_variant === 'COMBINED_81_5' &&
+                !childLossNoParental &&
+                input.co_parenting && (
+                  <span className="lp-answer__fact-hint">
+                    {' '}
+                    ({params.parentalLeave.nonTransferableWeeksPerParent} tyg. drugiego rodzica:{' '}
+                    {formatRate(params.rates.secondParentNonTransferableInCombined)})
+                  </span>
+                )}
             </dd>
           </div>
 
@@ -362,13 +370,21 @@ export function CasePlanner({
             <div className="lp-answer__fact">
               <dt>Pozostały rodzicielski</dt>
               <dd>
-                Mama: <strong>{usage.remainingByRole.MOTHER} tyg.</strong>
-                {availability.fatherAvailable && (
+                {(availability.motherAvailable || input.applicant_role === 'MOTHER') && (
                   <>
-                    {' '}
-                    · Tata: <strong>{usage.remainingByRole.FATHER} tyg.</strong>
+                    Mama: <strong>{usage.remainingByRole.MOTHER} tyg.</strong>
                   </>
                 )}
+                {(availability.motherAvailable || input.applicant_role === 'MOTHER') &&
+                  availability.fatherAvailable &&
+                  (input.co_parenting || input.applicant_role === 'FATHER') &&
+                  ' · '}
+                {availability.fatherAvailable &&
+                  (input.co_parenting || input.applicant_role === 'FATHER') && (
+                    <>
+                      Tata: <strong>{usage.remainingByRole.FATHER} tyg.</strong>
+                    </>
+                  )}
               </dd>
             </div>
           )}
