@@ -487,8 +487,11 @@ describe('Twój plan', () => {
     expect(
       await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Możliwa kontrola tytułu ubezpieczenia')).toBeInTheDocument();
-    expect(screen.getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
+    const notifBtn = screen.getByRole('button', { name: /Ważne uwagi do planu/i });
+    fireEvent.click(notifBtn);
+    const notifPanel = screen.getByRole('region', { name: 'Powiadomienia i uwagi do planu' });
+    expect(within(notifPanel).getByText('Możliwa kontrola tytułu ubezpieczenia')).toBeInTheDocument();
+    expect(within(notifPanel).getByText('Okres wyczekiwania na zasiłek chorobowy')).toBeInTheDocument();
 
     fireEvent.click(tabLink('Wsparcie'));
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
@@ -544,8 +547,10 @@ describe('Twój plan', () => {
     expect(
       await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 }),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Koniec umowy przed porodem')).not.toBeInTheDocument();
-    expect(screen.getByText(/przedłuża się z mocy prawa do dnia porodu/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Ważne uwagi do planu/i }));
+    const notifPanel = screen.getByRole('region', { name: 'Powiadomienia i uwagi do planu' });
+    expect(within(notifPanel).queryByText('Koniec umowy przed porodem')).not.toBeInTheDocument();
+    expect(within(notifPanel).getByText(/przedłuża się z mocy prawa do dnia porodu/)).toBeInTheDocument();
 
     fireEvent.click(tabLink('Wsparcie'));
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();

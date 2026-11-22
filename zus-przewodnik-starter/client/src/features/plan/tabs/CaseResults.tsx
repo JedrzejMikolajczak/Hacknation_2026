@@ -214,7 +214,7 @@ function buildParentRightSummary(
   };
 }
 
-function WarningList({
+export function WarningList({
   warnings,
   params,
   compact = false,
@@ -308,65 +308,60 @@ export function CaseRights({
         )}
       </section>
 
-      {plan.outcome.warnings.length > 0 && (
-        <section className="results-section" aria-labelledby="rights-warnings-heading">
-          <h3 id="rights-warnings-heading" className="results-section__title">
-            Na co zwrócić uwagę
-          </h3>
-          <WarningList warnings={plan.outcome.warnings} params={params} compact />
-        </section>
-      )}
-
-      <section className="results-section" aria-labelledby="rights-details-heading">
-        <h3 id="rights-details-heading" className="results-section__title">
-          Szczegóły świadczeń
-        </h3>
-        <div className="results-rights-grid">
-          {visibleEntitlements.map((item) => {
-            const statusClass =
-              item.is_qualified === true
-                ? 'results-right-item__status results-right-item__status--yes'
-                : item.is_qualified === false
-                  ? 'results-right-item__status results-right-item__status--no'
-                  : 'results-right-item__status results-right-item__status--unknown';
-            const statusLabel =
-              item.is_qualified === true
-                ? 'Przysługuje'
-                : item.is_qualified === false
-                  ? 'Nie przysługuje'
-                  : 'Do sprawdzenia';
-            return (
-              <article
-                key={`${item.parent_role}-${item.benefit_type}`}
-                className="results-right-item"
-              >
-                <div className="results-right-item__top">
-                  <h4 className="results-right-item__title">{benefitLabels[item.benefit_type]}</h4>
-                  <span className={statusClass}>{statusLabel}</span>
-                </div>
-                <p className="results-right-item__meta">
-                  {parentLabels[item.parent_role]}
-                  {item.is_qualified ? ` · Wypłaca: ${payerLabel(item.who_pays)}` : ''}
-                </p>
-                <details className="results-details results-details--inline">
-                  <summary className="results-details__summary">
-                    Uzasadnienie i podstawa prawna
-                  </summary>
-                  <div className="results-details__body">
-                    <p>{item.reason_pl}</p>
-                    {item.is_qualified && (
-                      <p className="results-legal">
-                        Płatnik świadczenia: {payerLabel(item.who_pays)}
-                      </p>
-                    )}
-                    <p className="results-legal">Podstawa prawna: {item.legal_basis}</p>
-                  </div>
-                </details>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+      <div className="results-details-stack">
+        <details className="results-details results-details--section" open>
+          <summary id="rights-details-heading" className="results-details__summary">
+            Szczegóły świadczeń ({visibleEntitlements.length})
+          </summary>
+          <div className="results-details__body">
+            <div className="results-rights-grid">
+              {visibleEntitlements.map((item) => {
+                const statusClass =
+                  item.is_qualified === true
+                    ? 'results-right-item__status results-right-item__status--yes'
+                    : item.is_qualified === false
+                      ? 'results-right-item__status results-right-item__status--no'
+                      : 'results-right-item__status results-right-item__status--unknown';
+                const statusLabel =
+                  item.is_qualified === true
+                    ? 'Przysługuje'
+                    : item.is_qualified === false
+                      ? 'Nie przysługuje'
+                      : 'Do sprawdzenia';
+                return (
+                  <article
+                    key={`${item.parent_role}-${item.benefit_type}`}
+                    className="results-right-item"
+                  >
+                    <div className="results-right-item__top">
+                      <h4 className="results-right-item__title">{benefitLabels[item.benefit_type]}</h4>
+                      <span className={statusClass}>{statusLabel}</span>
+                    </div>
+                    <p className="results-right-item__meta">
+                      {parentLabels[item.parent_role]}
+                      {item.is_qualified ? ` · Wypłaca: ${payerLabel(item.who_pays)}` : ''}
+                    </p>
+                    <details className="results-details results-details--inline">
+                      <summary className="results-details__summary">
+                        Uzasadnienie i podstawa prawna
+                      </summary>
+                      <div className="results-details__body">
+                        <p>{item.reason_pl}</p>
+                        {item.is_qualified && (
+                          <p className="results-legal">
+                            Płatnik świadczenia: {payerLabel(item.who_pays)}
+                          </p>
+                        )}
+                        <p className="results-legal">Podstawa prawna: {item.legal_basis}</p>
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </details>
+      </div>
 
       {authSession &&
         (input?.employment_type === 'B2B' ||
@@ -763,12 +758,6 @@ export function CaseCalculator({
           </section>
         );
       })}
-
-      {outcome.warnings.length > 0 && (
-        <section aria-label="Ostrzeżenia kalkulatora">
-          <WarningList warnings={outcome.warnings} params={params} />
-        </section>
-      )}
 
       {showVariantSwitch && (
         <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">

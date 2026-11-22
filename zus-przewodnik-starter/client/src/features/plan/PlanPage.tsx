@@ -13,6 +13,7 @@ import { apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { PlanHub } from './PlanHub';
+import { PlanNotifications } from './PlanNotifications';
 import { combinedRateUnavailable, isPlanTab, livingChildren, PLAN_TABS, todayIsoDate } from './planScenario';
 import { CaseCalculator, CaseRights } from './tabs/CaseResults';
 import { CasePlanner } from './tabs/CasePlanner';
@@ -81,6 +82,7 @@ interface PlanDataSummaryBarProps {
   input: CaseInputs;
   params: BenefitParams;
   caseRecord: CaseRecord | null;
+  warnings: CasePlan['outcome']['warnings'];
   hasUrlEdits: boolean;
   onUpdate: (patch: Partial<CaseInputs>) => void;
   onResetEdits: () => void;
@@ -90,6 +92,7 @@ function PlanDataSummaryBar({
   input,
   params,
   caseRecord,
+  warnings,
   hasUrlEdits,
   onUpdate,
   onResetEdits,
@@ -129,15 +132,18 @@ function PlanDataSummaryBar({
             <strong className="plan-controls__summary-label">Twoje dane:</strong> {summaryText}
           </p>
         )}
-        <button
-          type="button"
-          className="plan-controls__toggle"
-          onClick={() => setIsOpen((open) => !open)}
-          aria-expanded={isOpen}
-          aria-controls="plan-controls-panel"
-        >
-          {isOpen ? 'Zwiń' : 'Zmień dane'}
-        </button>
+        <div className="plan-controls__bar-actions">
+          <PlanNotifications warnings={warnings} params={params} />
+          <button
+            type="button"
+            className="plan-controls__toggle"
+            onClick={() => setIsOpen((open) => !open)}
+            aria-expanded={isOpen}
+            aria-controls="plan-controls-panel"
+          >
+            {isOpen ? 'Zwiń' : 'Zmień dane'}
+          </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -605,6 +611,7 @@ export function PlanPage() {
                   input={input}
                   params={effectiveParams}
                   caseRecord={currentFixture?.item ?? null}
+                  warnings={plan?.outcome.warnings ?? []}
                   hasUrlEdits={Boolean(serialized)}
                   onUpdate={update}
                   onResetEdits={() => updatePlanInputs(null)}
@@ -637,6 +644,7 @@ export function PlanPage() {
                   input={input}
                   params={effectiveParams}
                   caseRecord={currentFixture?.item ?? null}
+                  warnings={plan?.outcome.warnings ?? []}
                   hasUrlEdits={Boolean(serialized)}
                   onUpdate={update}
                   onResetEdits={() => updatePlanInputs(null)}
