@@ -312,3 +312,108 @@
 .support-tab {
   gap: var(--space-6);
 }
+
+/* ───────── Jednolite paski akcentu kafelków we wszystkich zakładkach ─────────
+ * Zasada: zwykła karta = zieleń marki; neutralna / informacyjna / „do uzupełnienia” = szaro-zielony;
+ * termin = pomarańcz ZUS; ostrzeżenie = czerwień (zostaje bez zmian, ma znaczenie).
+ * Wcześniej część kart brała tu `--color-navy`, który w planie jest ciemną zielenią (#1c3d2e),
+ * przez co obok siebie leżały kafelki w trzech różnych kolorach.
+ */
+.plan-page {
+  --accent-card: var(--color-primary);
+  --accent-neutral: #9fb3a8;
+  --accent-deadline: var(--color-cta);
+}
+
+/* zwykłe karty → zieleń marki */
+.plan-page .support-general-card,
+.plan-page .support-ai,
+.plan-page .support-ai__disclaimer,
+.plan-page .docs-plan-assumption,
+.plan-page .lp-details--card,
+.plan-page .lp-period-item--with-work,
+.plan-page .plan-hub__hint {
+  border-left-color: var(--accent-card);
+}
+
+/* neutralne / informacyjne → szaro-zielony */
+.plan-page .entitlements-answer--missing,
+.plan-page .entitlements-risk--info,
+.plan-page .support-answer--missing,
+.plan-page .support-risk-card--info,
+.plan-page .support-special-card--calm,
+.plan-page .support-account-box,
+.plan-page .lp-answer--missing,
+.plan-page .lp-sensitive-note,
+.plan-page .lp-planner-warnings,
+.plan-page .lp-limit-notice,
+.plan-page .application-preview__notice {
+  border-left-color: var(--accent-neutral);
+}
+
+/* terminy → pomarańcz ZUS (jak .lp-answer__deadline) */
+.plan-page .lp-deadline-callout,
+.plan-page .lp-milestone-chip--deadline {
+  border-color: var(--accent-deadline);
+  border-left-color: var(--accent-deadline);
+}
+
+/* ───────── Jeden wygląd przycisków „Dalej: …” w każdej zakładce ─────────
+ * Wcześniej: granatowy kontur (Uprawnienia, Kalkulator, Wnioski), zwykły link (Plan urlopów, góra)
+ * i pomarańczowa pigułka. Teraz wszystkie = główne CTA (pomarańcz z granatowym tekstem).
+ */
+.plan-page .results-next__link,
+.plan-page .apps-next-link,
+.plan-page .docs-next-link,
+.plan-page .lp-next-link,
+.plan-page .support-next-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-5);
+  border: var(--border-width-control) solid var(--color-cta);
+  border-radius: var(--radius-pill);
+  background: var(--color-cta);
+  color: var(--color-on-cta);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+  transition:
+    transform 0.25s var(--ease-spring),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.plan-page .results-next__link:hover,
+.plan-page .apps-next-link:hover,
+.plan-page .docs-next-link:hover,
+.plan-page .lp-next-link:hover,
+.plan-page .support-next-link:hover {
+  border-color: var(--color-navy);
+  background: var(--color-navy);
+  color: var(--color-cta);
+  transform: translate3d(0, -2px, 0);
+}
+@media (min-width: 640px) {
+  .plan-page .results-next__link,
+  .plan-page .apps-next-link,
+  .plan-page .docs-next-link,
+  .plan-page .lp-next-link,
+.plan-page .support-next-link {
+    width: auto;
+  }
+}
+
+/* ───────── Szczegóły „inline” w kafelkach: oddech wokół tekstu ─────────
+ * Wcześniej nagłówek miał padding 4px 0, więc napis dotykał krawędzi białej ramki. */
+.plan-page .results-details--inline {
+  margin-top: var(--space-3);
+  padding-top: 0;
+}
+.plan-page .results-details--inline > .results-details__summary {
+  padding: var(--space-3) var(--space-4);
+}
+.plan-page .results-details--inline > .results-details__body {
+  padding: 0 var(--space-4) var(--space-3);
+}
