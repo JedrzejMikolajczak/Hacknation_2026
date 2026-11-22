@@ -5,6 +5,7 @@ import type {
   CaseLeaveType,
   CasePayer,
   CasePeriod,
+  PaymentVariant,
 } from '../types';
 import { addDays, daysBetween, roundPln } from './core';
 import { applicantDenial, grossBasis, KP, livingChildrenCount, payer } from './caseRules';
@@ -44,6 +45,71 @@ export function calculatePeriod(
     denial_reason_pl: denial,
     legal_basis: legalBasis,
   };
+}
+
+const PARENTAL_KINDS = new Set<CaseLeaveType>([
+  'PARENTAL',
+  'PARENTAL_ZA_ZYCIEM_EXTENSION',
+  'PARENTAL_WORK_EXTENSION',
+]);
+
+/**
+ * Kwota okresów drugiego rodzica przeliczona na wskazany wariant stawek (do porównania wariantów).
+ * W wariancie 81,5% obniżoną stawką objęte są tylko nieprzenoszalne tygodnie rodzicielskiego,
+ * reszta jego rodzicielskiego jest liczona stawką łączoną; w wariancie 100% + 70% całość po 70%.
+ * Zwraca null, gdy brak okresów albo któryś nie ma ustalonej kwoty.
+ */
+export function secondParentTotalForVariant(
+  periods: CasePeriod[],
+  variant: PaymentVariant,
+  params: BenefitParams,
+): number | null {
+  const { rates, calendar, parentalLeave } = params;
+  const reducedDays = parentalLeave.nonTransferableWeeksPerParent * calendar.daysPerWeek;
+  const active = periods
+    .filter((period) => !period.denied)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (!active.length) return null;
+  const amount = (base: number, rate: number, work: number, days: number) =>
+    roundPln((base * rate * (1 - work) * days) / calendar.dailyBenefitDivisor);
+  let total = 0;
+  let reducedUsed = 0;
+  for (let index = 0; index < active.length; index++) {
+    const period = active[index];
+    if (period.total_amount_pln === null || period.benefit_base_pln === null) return null;
+    if (!PARENTAL_KINDS.has(period.leave_type)) {
+      total += period.total_amount_pln;
+      continue;
+    }
+    // Sąsiadujące kawałki tego samego okresu (silnik dzieli je na granicy nieprzenoszalnych
+    // tygodni) łączymy z powrotem, żeby zaokrąglać tak samo jak przy jednym okresie.
+    let days = period.days;
+    let end = period.end_date;
+    while (index + 1 < active.length) {
+      const next = active[index + 1];
+      if (
+        next.leave_type !== period.leave_type ||
+        next.work_fraction !== period.work_fraction ||
+        next.benefit_base_pln !== period.benefit_base_pln ||
+        next.start_date !== addDays(end, 1)
+      )
+        break;
+      days += next.days;
+      end = next.end_date;
+      index++;
+    }
+    const base = period.benefit_base_pln;
+    if (variant !== 'COMBINED_81_5') {
+      total += amount(base, rates.parental, period.work_fraction, days);
+      continue;
+    }
+    const reduced = Math.max(0, Math.min(days, reducedDays - reducedUsed));
+    reducedUsed += days;
+    total +=
+      amount(base, rates.secondParentNonTransferableInCombined, period.work_fraction, reduced) +
+      amount(base, rates.combined, period.work_fraction, days - reduced);
+  }
+  return roundPln(total);
 }
 
 export function maternityWeeks(

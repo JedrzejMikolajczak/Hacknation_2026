@@ -1,4 +1,5 @@
 import type { AssistantAnswer, BenefitParams } from '../types';
+import { formatPercentPl } from './core';
 
 export function buildDemoAssistantAnswer(
   rawQuestion: string,
@@ -8,7 +9,7 @@ export function buildDemoAssistantAnswer(
 
   if (q.includes('81,5') || q.includes('81.5') || q.includes('spóźni') || q.includes('wnios')) {
     return {
-      answer: `Wniosek o wypłatę zasiłku w wysokości ${Math.round(params.rates.combined * 1000) / 10}% za cały okres trzeba złożyć najpóźniej w ciągu ${params.combinedRateApplicationDeadlineDays} dni po porodzie. Jeśli spóźnisz się choćby o jeden dzień, otrzymasz ${Math.round(params.rates.maternity * 100)}% za urlop macierzyński oraz ${Math.round(params.rates.parental * 100)}% za urlop rodzicielski. Uwaga: 9 tygodni drugiego rodzica w obu wariantach jest płatne ${Math.round(params.rates.secondParentNonTransferableInCombined * 100)}%.`,
+      answer: `Wniosek o wypłatę zasiłku w wysokości ${formatPercentPl(params.rates.combined)} za cały okres trzeba złożyć najpóźniej w ciągu ${params.combinedRateApplicationDeadlineDays} dni po porodzie. Jeśli spóźnisz się choćby o jeden dzień, otrzymasz ${Math.round(params.rates.maternity * 100)}% za urlop macierzyński oraz ${Math.round(params.rates.parental * 100)}% za urlop rodzicielski. Uwaga: 9 tygodni drugiego rodzica w obu wariantach jest płatne ${Math.round(params.rates.secondParentNonTransferableInCombined * 100)}%.`,
       sources: ['Poradnik dla rodziców ZUS 2026', 'Ustawa zasiłkowa art. 30a'],
     };
   }
