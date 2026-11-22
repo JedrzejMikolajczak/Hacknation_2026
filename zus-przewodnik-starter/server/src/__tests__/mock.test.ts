@@ -24,8 +24,9 @@ describe('Symulacja logowania mObywatel i danych z ZUS (/api/v1/mock/*)', () => 
     const data = await zus.getZusData(profile.profileId);
     expect(data.profile).toMatchObject({ firstName: 'Anna', lastName: 'Testowa' });
     expect(data.contributionDebt).toBe(0);
-    expect(data.sickLeaveCertificates).toEqual([]);
-    expect(data.incomes).toEqual([]);
+    expect(data.profile.mother).toMatchObject({ insuranceTitle: 'employment', benefitBase: 6200 });
+    expect(data.sickLeaveCertificates).toHaveLength(1);
+    expect(data.incomes).toHaveLength(12);
   });
 
   it('udostępnia listę profili, loguje przez POST /mock/login i zwraca dane ZUS po Bearer tokenie', async () => {

@@ -1,8 +1,105 @@
 {
-  "profileId": "anna",
   "label": "Anna Testowa",
-  "firstName": "Anna",
-  "lastName": "Testowa",
-  "pesel": "92031400006",
-  "birthDate": "1992-03-14"
+  "profile": {
+    "profileId": "anna",
+    "firstName": "Anna",
+    "lastName": "Testowa",
+    "pesel": "92031400006",
+    "birthDate": "1992-03-14",
+    "mother": {
+      "role": "mother",
+      "insuranceTitle": "employment",
+      "sicknessInsurance": "mandatory",
+      "insuredSince": "2018-09-01",
+      "insuranceEndDate": null,
+      "benefitBase": 6200,
+      "employerInsuredCount": 34,
+      "age": 34,
+      "contributionDebt": 0,
+      "wantsLeave": true
+    }
+  },
+  "incomes": [
+    {
+      "month": "2025-11",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2025-12",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-01",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-02",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-03",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-04",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-05",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-06",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-07",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-08",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-09",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    },
+    {
+      "month": "2026-10",
+      "grossAmount": 6200,
+      "workedDays": null,
+      "requiredWorkingDays": null
+    }
+  ],
+  "sickLeaveCertificates": [
+    {
+      "id": "ZLA-DEMO-0001",
+      "startDate": "2026-09-01",
+      "endDate": "2026-12-31",
+      "pregnancyCode": true
+    }
+  ],
+  "contributionDebt": 0
 }
