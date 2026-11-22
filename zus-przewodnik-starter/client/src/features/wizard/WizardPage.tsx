@@ -375,7 +375,7 @@ export function WizardPage() {
 
   if (!situation || !form) {
     return (
-      <main className="wizard__empty">
+      <main id="main" tabIndex={-1} className="wizard__empty">
         <h1>Najpierw wybierz swoją sytuację</h1>
         <Link to="/">Wróć do strony startowej</Link>
       </main>
@@ -428,7 +428,7 @@ export function WizardPage() {
           </div>
         </div>
       </header>
-      <main className="wizard__shell wizard__main">
+      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
         <div className="wizard__progress-heading">
           <span>
             {showComplete ? 'Gotowe' : `Etap ${stage + 1} z ${STAGES.length}: ${STAGES[stage]}`}
@@ -528,7 +528,7 @@ export function WizardPage() {
                 <h3>{label}</h3>
                 <dl className="wizard__summary">
                   {questions
-                    .filter((item) => item.stage === index)
+                    .filter((item) => item.stage === index && (!item.optional || answers[item.id]))
                     .map((item) => {
                       const conflict = pendingConflicts[item.id];
                       return (

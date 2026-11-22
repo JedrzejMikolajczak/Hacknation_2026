@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { CaseInputs, CasePlan } from '@shared/types';
 import { apiPost } from '../../api/client';
 import { extractCaseFields, toPdfCaseInputs, type ExtractedFields } from './pdfCaseFields';
@@ -19,11 +20,19 @@ function YesNoField({ name, children }: { name: string; children: ReactNode }) {
   );
 }
 
-function Calculation({ result }: { result: CasePlan }) {
+function Calculation({ result, input }: { result: CasePlan; input: CaseInputs }) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [result]);
+
+  const query = new URLSearchParams({ inputs: JSON.stringify(input) });
   const amount = result.outcome.calculated_amount_pln;
   return (
     <section className="cases-upload__result" aria-labelledby="pdf-calculation-heading">
-      <h3 id="pdf-calculation-heading">Wynik kalkulatora</h3>
+      <h3 id="pdf-calculation-heading" ref={headingRef} tabIndex={-1}>
+        Wynik kalkulatora
+      </h3>
       <p role="status">{result.outcome.decision_summary_pl}</p>
       {amount !== null && (
         <p>
@@ -45,6 +54,7 @@ function Calculation({ result }: { result: CasePlan }) {
           ))}
         </ul>
       )}
+      <Link to={`/plan/calculator?${query}`}>Otwórz plan</Link>
     </section>
   );
 }
@@ -55,11 +65,11 @@ function PdfConfirmationForm({ fields }: { fields: ExtractedFields }) {
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
-  const [result, setResult] = useState<CasePlan>();
+  const [calculation, setCalculation] = useState<{ input: CaseInputs; result: CasePlan }>();
 
   function invalidate() {
     setConfirmed(false);
-    setResult(undefined);
+    setCalculation(undefined);
     setError(undefined);
   }
 
@@ -67,11 +77,12 @@ function PdfConfirmationForm({ fields }: { fields: ExtractedFields }) {
     event.preventDefault();
     if (!confirmed || pending) return;
     setError(undefined);
-    setResult(undefined);
+    setCalculation(undefined);
     setPending(true);
     try {
       const input = toPdfCaseInputs(new FormData(event.currentTarget));
-      setResult(await apiPost<CasePlan>('/plan', input));
+      const result = await apiPost<CasePlan>('/plan', input);
+      setCalculation({ input, result });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Nie udało się przeliczyć tej sprawy.');
     } finally {
@@ -263,7 +274,7 @@ function PdfConfirmationForm({ fields }: { fields: ExtractedFields }) {
         </fieldset>
         {error && <p role="alert">{error}</p>}
       </form>
-      {result && <Calculation result={result} />}
+      {calculation && <Calculation {...calculation} />}
     </>
   );
 }
@@ -330,6 +341,7 @@ export function CasePdfUpload() {
       <h2 id="pdf-upload-heading">Wczytaj własny wniosek PDF</h2>
       <p>
         PDF zostaje w przeglądarce. Kalkulator otrzyma tylko pola, które sprawdzisz i potwierdzisz.
+        Dane z oficjalnych formularzy ZUS, takich jak ZAM i ZAS-53, wpisz ręcznie.
       </p>
       <label className="cases-upload__file">
         Plik PDF do 12 MB i 20 stron

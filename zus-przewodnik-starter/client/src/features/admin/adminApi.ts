@@ -15,22 +15,20 @@ export function cloneBenefitParams(params: BenefitParams): BenefitParams {
   return JSON.parse(JSON.stringify(params)) as BenefitParams;
 }
 
-function isFallbackableError(error: unknown): boolean {
-  if (error instanceof ApiError) {
-    return error.code === 'NOT_FOUND' || error.code === 'INTERNAL_ERROR';
-  }
-  return true;
+function isNetworkError(error: unknown): boolean {
+  // The API client attaches the original fetch failure only when the request cannot connect.
+  return error instanceof ApiError && error.code === 'INTERNAL_ERROR' && error.details instanceof Error;
 }
 
 export async function fetchAdminParams(): Promise<ApiResultWithFallback<BenefitParams>> {
   try {
     const data = await apiGet<BenefitParams>('/params');
     return {
-      data: cloneBenefitParams(sessionStoredParams ?? data),
-      isDemoFallback: sessionStoredParams !== null,
+      data: cloneBenefitParams(data),
+      isDemoFallback: false,
     };
   } catch (error) {
-    if (isFallbackableError(error)) {
+    if (isNetworkError(error)) {
       return {
         data: cloneBenefitParams(sessionStoredParams ?? DEFAULT_BENEFIT_PARAMS),
         isDemoFallback: true,
@@ -51,7 +49,7 @@ export async function saveAdminParams(
     sessionStoredParams = null;
     return { data: cloneBenefitParams(data), isDemoFallback: false };
   } catch (error) {
-    if (isFallbackableError(error)) {
+    if (isNetworkError(error)) {
       sessionStoredParams = cloneBenefitParams(params);
       return { data: cloneBenefitParams(params), isDemoFallback: true };
     }

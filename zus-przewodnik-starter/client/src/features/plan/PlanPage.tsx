@@ -639,7 +639,7 @@ export function PlanPage() {
         </div>
       </header>
 
-      <main className="plan-page__main">
+      <main id="main" tabIndex={-1} className="plan-page__main">
         <div className="plan-page__container">
           {!tab ? (
             <>

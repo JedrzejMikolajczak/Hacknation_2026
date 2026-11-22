@@ -245,6 +245,14 @@
   font-weight: var(--font-weight-regular);
 }
 
+.admin-field input[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.admin-field__error {
+  color: var(--color-error);
+}
+
 .admin-field--compact {
   min-width: 9rem;
 }

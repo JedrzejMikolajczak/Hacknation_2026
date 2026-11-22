@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
 import { apiPost } from '../../../api/client';
 
@@ -23,7 +24,8 @@ it('wymaga potwierdzenia i wysyła tylko poprawione pola do kalkulatora', async 
     validation_errors: [],
   });
   const user = userEvent.setup();
-  render(<CasePdfUpload />);
+  render(<MemoryRouter><CasePdfUpload /></MemoryRouter>);
+  expect(screen.getByText(/Dane z oficjalnych formularzy ZUS/)).toBeInTheDocument();
   await user.upload(
     screen.getByLabelText(/Plik PDF/),
     new File(['%PDF-'], 'wniosek.pdf', { type: 'application/pdf' }),
@@ -44,6 +46,11 @@ it('wymaga potwierdzenia i wysyła tylko poprawione pola do kalkulatora', async 
   await user.click(screen.getByRole('checkbox', { name: /Potwierdzam/ }));
   await user.click(submit);
   expect(await screen.findByText('Przyznano świadczenie.')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Wynik kalkulatora' })).toHaveFocus();
+  const href = screen.getByRole('link', { name: 'Otwórz plan' }).getAttribute('href')!;
+  const plan = new URL(href, 'http://localhost');
+  expect(plan.pathname).toBe('/plan/calculator');
+  expect(JSON.parse(plan.searchParams.get('inputs')!)).toEqual(vi.mocked(apiPost).mock.calls[0][1]);
   expect(apiPost).toHaveBeenCalledOnce();
   expect(apiPost).toHaveBeenCalledWith(
     '/plan',

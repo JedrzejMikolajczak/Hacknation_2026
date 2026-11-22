@@ -156,7 +156,7 @@ export function LandingPage() {
         </div>
       </header>
 
-      <main className="landing__main">
+      <main id="main" tabIndex={-1} className="landing__main">
         <div className="landing__container">
           <section
             className="landing__section landing__card"

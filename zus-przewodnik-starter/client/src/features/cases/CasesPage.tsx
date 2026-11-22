@@ -38,7 +38,7 @@ export function CasesPage() {
   }, [caseId]);
   const current = detail?.item.case_id === caseId ? detail : null;
   return (
-    <main className="plan-page__container cases-page">
+    <main id="main" tabIndex={-1} className="plan-page__container cases-page">
       <nav>
         <Link to="/">Strona startowa</Link>
         {caseId && (

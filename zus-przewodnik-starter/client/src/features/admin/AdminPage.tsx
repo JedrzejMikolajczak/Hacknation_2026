@@ -18,6 +18,9 @@ import {
 import './AdminPage.css';
 
 type AdminTabId = 'amounts' | 'leaves' | 'deadlines' | 'premature';
+type RateField = keyof BenefitParams['rates']
+  | 'socialContributionDeduction'
+  | 'selfEmployedDebtThresholdShareOfMinimumWage';
 
 const ADMIN_TABS: { id: AdminTabId; label: string }[] = [
   { id: 'amounts', label: '1. Kwoty, składki i stawki %' },
@@ -35,6 +38,7 @@ export function AdminPage() {
   );
   const [activeTab, setActiveTab] = useState<AdminTabId>('amounts');
   const [adminToken, setAdminToken] = useState<string>('');
+  const [invalidRates, setInvalidRates] = useState<Partial<Record<RateField, string>>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [isDemoFallback, setIsDemoFallback] = useState<boolean>(false);
@@ -52,6 +56,8 @@ export function AdminPage() {
         setBaseline(cloneBenefitParams(res.data));
         setDraft(cloneBenefitParams(res.data));
         setIsDemoFallback(res.isDemoFallback);
+      } catch {
+        if (!cancelled) setErrorMessage('Nie udało się pobrać parametrów z serwera.');
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -68,9 +74,64 @@ export function AdminPage() {
   const changes = useMemo(() => diffBenefitParams(baseline, draft), [baseline, draft]);
   const derived = useMemo(() => computeDerivedMetrics(draft), [draft]);
 
+  function updateRate(field: RateField, text: string) {
+    const percent = Number(text);
+    const invalid = text === '' || !Number.isFinite(percent) || percent < 0 || percent > 100;
+    setInvalidRates((current) => {
+      const next = { ...current };
+      if (invalid) next[field] = text;
+      else delete next[field];
+      return next;
+    });
+    if (invalid) return;
+
+    const value = percentToRate(percent);
+    setDraft((current) => {
+      if (field === 'socialContributionDeduction') {
+        return {
+          ...current,
+          benefitBase: { ...current.benefitBase, socialContributionDeduction: value },
+        };
+      }
+      if (field === 'selfEmployedDebtThresholdShareOfMinimumWage') {
+        return { ...current, selfEmployedDebtThresholdShareOfMinimumWage: value };
+      }
+      return { ...current, rates: { ...current.rates, [field]: value } };
+    });
+  }
+
+  function rateField(field: RateField, label: string, rate: number, step = '0.1') {
+    const inputId = `admin-rate-${field}`;
+    const invalidValue = invalidRates[field];
+    const invalid = invalidValue !== undefined;
+    return (
+      <div className="admin-field">
+        <label htmlFor={inputId}>{label}</label>
+        <input
+          id={inputId}
+          type="number"
+          min={0}
+          max={100}
+          step={step}
+          required
+          value={invalidValue ?? rateToPercent(rate)}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? `${inputId}-error` : undefined}
+          onChange={(event) => updateRate(field, event.currentTarget.value)}
+        />
+        {invalid && (
+          <span id={`${inputId}-error`} className="admin-field__error" aria-live="polite">
+            Wpisz wartość od 0 do 100%.
+          </span>
+        )}
+      </div>
+    );
+  }
+
   function handleRestoreDefaults() {
     resetSessionAdminParams();
     const fresh = cloneBenefitParams(DEFAULT_BENEFIT_PARAMS);
+    setInvalidRates({});
     setDraft(fresh);
     setStatusMessage('Przywrócono w formularzu oficjalne parametry ustawowe na 2026 rok.');
     setErrorMessage(null);
@@ -81,10 +142,14 @@ export function AdminPage() {
     setStatusMessage(null);
     setErrorMessage(null);
 
+    if (Object.keys(invalidRates).length > 0) {
+      setActiveTab('amounts');
+      setErrorMessage('Popraw oznaczone stawki przed zapisaniem parametrów.');
+      return;
+    }
+
     if (!adminToken.trim()) {
-      setErrorMessage(
-        'Podaj klucz dostępu administratora (lub kliknij przycisk „Wypełnij hasłem demonstracyjnym”).',
-      );
+      setErrorMessage('Podaj klucz dostępu administratora (ADMIN_TOKEN).');
       return;
     }
 
@@ -96,7 +161,7 @@ export function AdminPage() {
       setIsDemoFallback(res.isDemoFallback);
       setStatusMessage(
         res.isDemoFallback
-          ? 'Zapisano nowe parametry w sesji demonstracyjnej (po wdrożeniu PUT /api/v1/admin/params zapis trafi bezpośrednio na serwer).'
+          ? 'Zapisano parametry tylko lokalnie w bieżącej sesji. Serwer nie zapisał zmian.'
           : 'Zapisano nowe parametry ustawowe na serwerze ZUS.',
       );
     } catch (error) {
@@ -105,7 +170,7 @@ export function AdminPage() {
       } else if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
         setErrorMessage(`Błąd walidacji parametrów: ${error.message}`);
       } else {
-        setErrorMessage('Nie udało się zapisać parametrów. Sprawdź poprawność wpisanych liczb.');
+        setErrorMessage('Nie udało się zapisać parametrów na serwerze. Spróbuj ponownie.');
       }
     } finally {
       setSaving(false);
@@ -131,12 +196,11 @@ export function AdminPage() {
         </div>
       </header>
 
-      <main className="admin-main">
+      <main id="main" tabIndex={-1} className="admin-main">
         <div className="admin-container">
           {isDemoFallback && (
             <div className="admin-demo-notice" role="status">
-              Tryb demonstracyjny – zmiany parametrów są pamiętane w bieżącej sesji przeglądarki do
-              czasu uruchomienia zapisu PUT /api/v1/admin/params na serwerze.
+              Brak połączenia z serwerem. Parametry w tym panelu są dostępne w bieżącej sesji.
             </div>
           )}
 
@@ -149,8 +213,8 @@ export function AdminPage() {
                     Autoryzacja pracownika ZUS i wersja przepisów
                   </h2>
                   <p className="admin-card__lead">
-                    Do zapisania zmian wymagany jest klucz dostępu administratora. Na potrzeby
-                    pokazu kliknij przycisk poniżej, aby uzupełnić klucz automatycznie.
+                    Do zapisania zmian wymagany jest klucz dostępu administratora (ADMIN_TOKEN).
+                    Przycisk przywraca domyślne wartości w formularzu.
                   </p>
                 </div>
                 <button
@@ -213,7 +277,7 @@ export function AdminPage() {
                       : `Liczba zmienionych parametrów do zapisania: ${changes.length}`}
                   </strong>
                 </div>
-                <button type="submit" className="button button--primary" disabled={saving}>
+                <button type="submit" className="button button--primary" disabled={saving || loading}>
                   {saving ? 'Zapisywanie…' : 'Zapisz parametry w systemie'}
                 </button>
               </div>
@@ -302,147 +366,19 @@ export function AdminPage() {
                         />
                       </label>
 
-                      <label className="admin-field">
-                        <span>Odliczenie składek społecznych (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.01"
-                          value={rateToPercent(draft.benefitBase.socialContributionDeduction)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              benefitBase: {
-                                ...draft.benefitBase,
-                                socialContributionDeduction: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('socialContributionDeduction', 'Odliczenie składek społecznych (%)', draft.benefitBase.socialContributionDeduction, '0.01')}
 
-                      <label className="admin-field">
-                        <span>Stawka łączona – wniosek do 21 dni (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.combined)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                combined: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('combined', 'Stawka łączona – wniosek do 21 dni (%)', draft.rates.combined)}
 
-                      <label className="admin-field">
-                        <span>Stawka urlopu macierzyńskiego (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.maternity)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                maternity: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('maternity', 'Stawka urlopu macierzyńskiego (%)', draft.rates.maternity)}
 
-                      <label className="admin-field">
-                        <span>Stawka urlopu rodzicielskiego (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.parental)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                parental: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('parental', 'Stawka urlopu rodzicielskiego (%)', draft.rates.parental)}
 
-                      <label className="admin-field">
-                        <span>Stawka 9 tyg. drugiego rodzica w wariancie 81,5% (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.secondParentNonTransferableInCombined)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                secondParentNonTransferableInCombined: percentToRate(
-                                  Number(e.target.value),
-                                ),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('secondParentNonTransferableInCombined', 'Stawka 9 tyg. drugiego rodzica w wariancie 81,5% (%)', draft.rates.secondParentNonTransferableInCombined)}
 
-                      <label className="admin-field">
-                        <span>Stawka urlopu ojcowskiego (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.paternity)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                paternity: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('paternity', 'Stawka urlopu ojcowskiego (%)', draft.rates.paternity)}
 
-                      <label className="admin-field">
-                        <span>Stawka chorobowego w ciąży – kod „B” (%)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.rates.sicknessPregnancy)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              rates: {
-                                ...draft.rates,
-                                sicknessPregnancy: percentToRate(Number(e.target.value)),
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('sicknessPregnancy', 'Stawka chorobowego w ciąży – kod „B” (%)', draft.rates.sicknessPregnancy)}
 
                       <label className="admin-field">
                         <span>Maks. podstawa dobrowolnego chorobowego (zł)</span>
@@ -482,24 +418,7 @@ export function AdminPage() {
                         />
                       </label>
 
-                      <label className="admin-field">
-                        <span>Próg zadłużenia JDG (% płacy minimalnej)</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.1"
-                          value={rateToPercent(draft.selfEmployedDebtThresholdShareOfMinimumWage)}
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              selfEmployedDebtThresholdShareOfMinimumWage: percentToRate(
-                                Number(e.target.value),
-                              ),
-                            })
-                          }
-                        />
-                      </label>
+                      {rateField('selfEmployedDebtThresholdShareOfMinimumWage', 'Próg zadłużenia JDG (% płacy minimalnej)', draft.selfEmployedDebtThresholdShareOfMinimumWage)}
 
                       <label className="admin-field">
                         <span>Próg liczby ubezpieczonych u płatnika (pracodawca vs ZUS)</span>

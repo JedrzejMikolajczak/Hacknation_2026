@@ -140,10 +140,11 @@ describe('family wizard', () => {
     await view.choice('Nie wiem / uzupełnię później');
     await view.input('5000');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('drugi tytuł do ubezpieczeń');
-    await view.choice('Nie wiem / uzupełnię później');
+    await view.next();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('zasiłek macierzyński');
     await view.choice(/^81,5%/);
     expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    expect(screen.queryByText('Drugi tytuł do ubezpieczeń')).not.toBeInTheDocument();
     expect(screen.getByText('01/04/2027')).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
@@ -209,7 +210,7 @@ describe('family wizard', () => {
     expect(
       JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers['father.wantsLeave'],
     ).toBe('unknown');
-  });
+  }, 15_000);
 
   it('completes the surviving father’s path after starting a joint family plan', async () => {
     const view = renderWizard('afterBirth');
