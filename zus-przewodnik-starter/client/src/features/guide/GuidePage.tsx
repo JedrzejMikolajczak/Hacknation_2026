@@ -7,7 +7,7 @@ export function GuidePage() {
   const article = articles.find((item) => item.slug === slug);
 
   return (
-    <main className="guide-page">
+    <main id="main" tabIndex={-1} className="guide-page">
       <nav className="guide-page__nav" aria-label="Nawigacja przewodnika">
         <Link to="/">Strona główna</Link>
         {slug && <Link to="/guide">Wszystkie tematy</Link>}

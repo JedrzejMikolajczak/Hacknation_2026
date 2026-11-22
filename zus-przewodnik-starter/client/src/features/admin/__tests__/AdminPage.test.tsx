@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resetSessionAdminParams } from '../adminApi';
+import { DEFAULT_BENEFIT_PARAMS, resetSessionAdminParams } from '../adminApi';
 import { AdminPage } from '../AdminPage';
 
 const TEST_ADMIN_TOKEN = 'test-admin-token-0123456789abcdef0123';
@@ -76,9 +76,52 @@ describe('AdminPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Zapisano nowe parametry w sesji demonstracyjnej/i),
+        screen.getByText(/Zapisano parametry tylko lokalnie.*Serwer nie zapisał zmian/i),
       ).toBeInTheDocument();
     });
+  });
+
+  it.each([404, 500] as const)('reports an HTTP %s without claiming a save', async (status) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) =>
+      init?.method === 'PUT'
+        ? Response.json({
+            data: null,
+            error: { code: status === 404 ? 'NOT_FOUND' : 'INTERNAL_ERROR', message: 'Błąd serwera' },
+          }, { status })
+        : Response.json({ data: DEFAULT_BENEFIT_PARAMS, error: null }),
+    );
+    const { user } = renderAdmin();
+    await screen.findByLabelText('Płaca minimalna (zł brutto)');
+    await user.type(screen.getByLabelText('Klucz dostępu administratora (token)'), TEST_ADMIN_TOKEN);
+    await user.click(screen.getByRole('button', { name: 'Zapisz parametry w systemie' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się zapisać parametrów na serwerze');
+    expect(screen.queryByText(/Zapisano parametry tylko lokalnie/)).not.toBeInTheDocument();
+  });
+
+  it('keeps invalid rate entries visible and blocks saving even from another tab', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({ data: DEFAULT_BENEFIT_PARAMS, error: null }),
+    );
+    const { user } = renderAdmin();
+    const label = 'Stawka łączona – wniosek do 21 dni (%)';
+    const rate = await screen.findByRole('spinbutton', { name: label });
+    for (const value of ['-5', '250', '']) {
+      fireEvent.change(rate, { target: { value } });
+      expect(rate).toHaveAttribute('aria-invalid', 'true');
+      expect(rate).toHaveAccessibleDescription('Wpisz wartość od 0 do 100%.');
+    }
+
+    await user.type(screen.getByLabelText('Klucz dostępu administratora (token)'), TEST_ADMIN_TOKEN);
+    await user.click(screen.getByRole('tab', { name: /2\. Długości urlopów/ }));
+    await user.click(screen.getByRole('button', { name: 'Zapisz parametry w systemie' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Popraw oznaczone stawki');
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+
+    const invalidRate = screen.getByRole('spinbutton', { name: label });
+    expect(invalidRate).toHaveValue(null);
+    fireEvent.change(invalidRate, { target: { value: '80.5' } });
+    expect(invalidRate).not.toHaveAttribute('aria-invalid');
   });
 
   it('switches between parameter categories and restores 2026 statutory defaults', async () => {

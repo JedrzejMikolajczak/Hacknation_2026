@@ -130,7 +130,7 @@ export function LoginPage() {
 
   if (isApplicationIdentityFlow) {
     return (
-      <main className="wizard__shell wizard__main">
+      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
         <form className="wizard__card" onSubmit={connectApplicantIdentity}>
           <h1>Logowanie przez mObywatela (symulacja)</h1>
           <p>
@@ -215,7 +215,7 @@ export function LoginPage() {
         </div>
       </header>
 
-      <main className="wizard__shell wizard__main">
+      <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
         <div className="login-page__stack">
           <section className="wizard__card" aria-labelledby="mock-login-heading">
             <h2 id="mock-login-heading">Wybierz profil mObywatela (symulacja)</h2>
