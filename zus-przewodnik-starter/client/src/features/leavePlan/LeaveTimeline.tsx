@@ -131,7 +131,7 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                 <div
                   className="lp-timeline-track__lane"
                   aria-label={laneAriaLabel}
-                  style={{ minHeight: `${rowCount * 3.5}rem` }}
+                  style={{ minHeight: `${rowCount * 4.5}rem` }}
                 >
                   {positioned.length === 0 ? (
                     <span className="lp-timeline-track__empty">Brak zaplanowanych okresów</span>
