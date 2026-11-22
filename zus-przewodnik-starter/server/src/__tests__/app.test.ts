@@ -21,6 +21,18 @@ describe('API v1', () => {
       '2025-03-19',
     );
   });
+  it('nie ujawnia nagłówka X-Powered-By', async () => {
+    const health = await request(app).get(`${api}/health`).expect(200);
+    expect(health.headers['x-powered-by']).toBeUndefined();
+  });
+  it('zbyt duże ciało żądania zwraca 413 w kopercie zamiast 500', async () => {
+    const { body } = await request(app)
+      .post(`${api}/plan`)
+      .send({ padding: 'a'.repeat(2 * 1024 * 1024) })
+      .expect(413);
+    expect(body.data).toBeNull();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
   it('zwraca jeden wynik planu i zgodne projekcje', async () => {
     const { body } = await request(app).post(`${api}/plan`).send(input).expect(200);
     const plan: CasePlan = body.data;

@@ -17,6 +17,15 @@ function isJsonParseError(err: unknown): boolean {
   );
 }
 
+function isPayloadTooLargeError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'type' in err &&
+    (err as { type: unknown }).type === 'entity.too.large'
+  );
+}
+
 /** Błędy zod, CalculationError i niepoprawny JSON → 422 VALIDATION_ERROR, pozostałe → 500 INTERNAL_ERROR. */
 export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof CalculationError) {
@@ -34,6 +43,11 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next
   }
   if (isJsonParseError(err)) {
     res.status(422).json(fail('VALIDATION_ERROR', 'Request body is not valid JSON'));
+    return;
+  }
+  if (isPayloadTooLargeError(err)) {
+    // Kontrakt nie ma osobnego kodu dla zbyt dużego ciała żądania – używamy VALIDATION_ERROR.
+    res.status(413).json(fail('VALIDATION_ERROR', 'Request body is too large'));
     return;
   }
   console.error(err);
