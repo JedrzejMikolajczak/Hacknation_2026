@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculateCasePlan } from '@shared/engine/casePlan';
 import params from '@shared/params.json';
 import type { CaseInputs } from '@shared/types';
@@ -55,18 +55,27 @@ function renderSupport(input: CaseInputs) {
   );
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('CaseSupport', () => {
-  it('pokazuje ryzyka planu (JDG dług), linki urzędowe, PUE/USC i uczciwe „Najczęstsze pytania” bez AI', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ data: null, error: { code: 'NOT_FOUND', message: 'not found' } }),
-            { status: 404 },
-          ),
+  it('pokazuje ryzyka planu (JDG dług), asystenta AI z oznaczeniem AiBadge, przekazuje zanonimizowany kontekst i obsługuje linki oraz PUE', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            answer: 'Spłać zaległość 500 zł w ciągu 6 miesięcy, aby odblokować wypłatę zasiłku.',
+            sources: ['Ustawa zasiłkowa art. 2a'],
+            is_demo_fallback: false,
+            model: 'gemini-flash-latest',
+          },
+          error: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     );
+    vi.stubGlobal('fetch', fetchMock);
 
     const input = buildInput({
       employment_type: 'B2B',
@@ -80,17 +89,61 @@ describe('CaseSupport', () => {
     expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
     expect(screen.getByText('Zadłużenie składkowe (JDG)')).toBeInTheDocument();
 
-    // Uczciwość AI (pkt 4)
-    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asystent AI/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Najczęstsze pytania')).toBeInTheDocument();
-    expect(screen.getByText(/bez użycia modelu AI/)).toBeInTheDocument();
+    // Oznaczenie AI (README §9), wyraźne ostrzeżenie o błędach AI i sekcja Asystenta AI
+    expect(screen.getByText('Wspierane przez AI')).toBeInTheDocument();
+    expect(screen.getByText(/Asystent AI – zapytaj o swoją sytuację/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/to jest asystent AI \(sztuczna inteligencja\) i może popełniać błędy/i),
+    ).toBeInTheDocument();
 
-    // Kliknięcie gotowego pytania działa z lokalną bazą wiedzy
+    // Blokada wklejania i przeciągania zdjęć/plików do pola tekstowego asystenta
+    const inputEl = screen.getByLabelText(/Zadaj pytanie tekstowe asystentowi AI/i);
+    const fakeImage = new File(['png'], 'skan.png', { type: 'image/png' });
+    fireEvent.paste(inputEl, {
+      clipboardData: {
+        files: [fakeImage],
+        items: [{ kind: 'file', type: 'image/png' }],
+        getData: () => '',
+      },
+    });
+    expect(
+      screen.getByText(/nie można wklejać ani przeciągać zdjęć i plików/i),
+    ).toBeInTheDocument();
+
+    fireEvent.drop(inputEl, {
+      dataTransfer: {
+        files: [fakeImage],
+        items: [{ kind: 'file', type: 'image/png' }],
+        getData: () => '',
+      },
+    });
+    expect(
+      screen.getByText(/nie można wklejać ani przeciągać zdjęć i plików/i),
+    ).toBeInTheDocument();
+
+    // Kliknięcie podpowiedzi wysyła pytanie i zanonimizowany kontekst planu do /api/v1/assistant/ask
     fireEvent.click(
-      screen.getByRole('button', { name: /Co jeśli spóźnię się z wnioskiem o 81,5%\?/ }),
+      screen.getByRole('button', { name: /Mam działalność gospodarczą – czy mały dług blokuje zasiłek\?/ }),
     );
-    expect(await screen.findByText(/21 dni po porodzie/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Spłać zaległość 500 zł w ciągu 6 miesięcy/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Gemini AI')).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/assistant/ask',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const sent = JSON.parse(String(init.body));
+    expect(sent.context).toMatchObject({
+      employment_type: 'B2B',
+      has_b2b_arrears: true,
+      debt_amount_pln: 500,
+    });
+    expect(sent.context.warning_codes).toContain('SELF_EMPLOYED_DEBT');
 
     // Linki urzędowe i organizacje charytatywne
     expect(screen.getByRole('link', { name: /www\.zus\.pl/ })).toHaveAttribute(
@@ -115,6 +168,27 @@ describe('CaseSupport', () => {
       'href',
       '/plan?situation=afterBirth',
     );
+  });
+
+  it('uczciwie oznacza odpowiedź awaryjną z lokalnej bazy ZUS, gdy API AI jest niedostępne', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: null, error: { code: 'INTERNAL_ERROR', message: 'offline' } }),
+            { status: 500 },
+          ),
+      ),
+    );
+
+    renderSupport(buildInput());
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Co jeśli spóźnię się z wnioskiem o 81,5%\?/ }),
+    );
+    expect(await screen.findByText(/21 dni po porodzie/)).toBeInTheDocument();
+    expect(screen.getByText('Tryb awaryjny (baza lokalna ZUS 2026)')).toBeInTheDocument();
   });
 
   it('w trudnej sytuacji (martwe urodzenie) stosuje spokojny ton bez wykrzykników i otwiera organizacje charytatywne', () => {

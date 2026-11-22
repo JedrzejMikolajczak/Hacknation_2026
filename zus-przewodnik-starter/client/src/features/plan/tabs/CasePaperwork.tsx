@@ -14,13 +14,7 @@ import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
 import { SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { parentLabels, roles } from '../caseLabels';
-import {
-  addDaysIso,
-  diffDaysIso,
-  formatPolishDate,
-  livingChildren,
-  todayIsoDate,
-} from '../planScenario';
+import { addDaysIso, diffDaysIso, formatPolishDate, livingChildren, todayIsoDate } from '../planScenario';
 import { ApplicationPreview } from './ApplicationPreview';
 import type { ApplicationPdfData, ZamLeave, ZamPeriod } from './pdf/types';
 import { leaveApplication } from './leaveApplication';
@@ -52,44 +46,6 @@ function isMandateEntitledRole(
     (doc) =>
       doc.parent_role === role && doc.submit_to === 'EMPLOYER' && /zleceniodawc/i.test(doc.name_pl),
   );
-}
-
-function formatSubmitBadge(doc: CaseDocument, mandateEntitled: boolean): string {
-  if (doc.id === 'e-ZLA') return 'Automatycznie (e-ZLA)';
-  if (doc.submit_to === 'EMPLOYER') return mandateEntitled ? 'Zleceniodawca' : 'Pracodawca';
-  if (doc.submit_to === 'ZUS') return 'ZUS (PUE/eZUS)';
-  if (doc.submit_to === 'USC') return 'USC (gov.pl)';
-  return 'Do ustalenia';
-}
-
-function submitBadgeClass(doc: CaseDocument): string {
-  if (doc.id === 'e-ZLA') return 'plan-badge plan-badge--yes';
-  if (doc.submit_to === 'EMPLOYER') return 'plan-badge plan-badge--navy';
-  return 'plan-badge plan-badge--code';
-}
-
-function formatSubmitMethod(doc: CaseDocument, mandateEntitled: boolean): string {
-  if (doc.id === 'e-ZLA') {
-    return 'Lekarz przekazuje elektronicznie do ZUS i na profil płatnika (PUE/eZUS).';
-  }
-  if (doc.id === 'Z-3' || doc.id === 'ZAS-12') {
-    return 'Przekazuje do ZUS pracodawca przez PUE/eZUS.';
-  }
-  if (doc.id === 'Z-3a') {
-    return 'Przekazuje do ZUS zleceniodawca przez PUE/eZUS.';
-  }
-  if (doc.submit_to === 'EMPLOYER') {
-    return mandateEntitled
-      ? 'Papierowo lub elektronicznie u płatnika składek (zleceniodawcy).'
-      : 'Papierowo lub elektronicznie w kadrach u pracodawcy.';
-  }
-  if (doc.submit_to === 'ZUS') {
-    return 'Elektronicznie przez PUE/eZUS (symulacja) lub papierowo w placówce ZUS.';
-  }
-  if (doc.submit_to === 'USC') {
-    return 'Przez gov.pl (Rejestr Stanu Cywilnego) lub w urzędzie stanu cywilnego.';
-  }
-  return 'Zależnie od formy zatrudnienia i wielkości płatnika (uzupełnij dane rodzica).';
 }
 
 function formatTargetPhrase(doc: CaseDocument, mandateEntitled: boolean): string {
@@ -245,71 +201,6 @@ function resolveParentsFiling(
       method: `Jeśli płatnik zgłasza powyżej ${threshold} ubezpieczonych, zasiłek wypłaca pracodawca lub zleceniodawca; w pozostałych przypadkach – ZUS.`,
     };
   });
-}
-
-interface DocumentGroup {
-  id: string;
-  title: string;
-  description: string | null;
-  documents: CaseDocument[];
-}
-
-function groupCaseDocuments(documents: CaseDocument[], params: BenefitParams): DocumentGroup[] {
-  const threshold = params.payerThresholdInsuredCount;
-  const pregnancySickness: CaseDocument[] = [];
-  const mother: CaseDocument[] = [];
-  const father: CaseDocument[] = [];
-  const attachments: CaseDocument[] = [];
-  const hasMaternityDocs = documents.some((doc) => doc.id === 'ZAM');
-  const hasLossDocs = documents.some(
-    (doc) => doc.id === 'STILLBIRTH_CERTIFICATE' || doc.id === 'DEATH_CERTIFICATE',
-  );
-
-  for (const doc of documents) {
-    if (
-      PREGNANCY_SICKNESS_IDS.has(doc.id) ||
-      (!hasMaternityDocs && PAYER_CERTIFICATE_IDS.has(doc.id))
-    ) {
-      pregnancySickness.push(doc);
-    } else if (ATTACHMENT_IDS.has(doc.id)) {
-      attachments.push(doc);
-    } else if (doc.parent_role === 'MOTHER') {
-      mother.push(doc);
-    } else {
-      father.push(doc);
-    }
-  }
-
-  const groups: DocumentGroup[] = [
-    {
-      id: 'pregnancy-sickness',
-      title: 'Zwolnienie lekarskie w ciąży (e-ZLA, kod „B”)',
-      description: `Lekarz przesyła e-ZLA z kodem „B” automatycznie do ZUS i na profil płatnika (PUE/eZUS). Gdy płatnik nie wypłaca zasiłków (do ${threshold} ubezpieczonych), pracodawca przekazuje Z-3 (a ZAS-12 tylko na dalszy okres zasiłku chorobowego), zleceniodawca Z-3a, a osoba na JDG składa ZAS-53.`,
-      documents: pregnancySickness,
-    },
-    {
-      id: 'mother',
-      title: father.length > 0 ? 'Dokumenty matki' : 'Wnioski i dokumenty płatnika',
-      description: null,
-      documents: mother,
-    },
-    {
-      id: 'father',
-      title: 'Dokumenty ojca',
-      description: null,
-      documents: father,
-    },
-    {
-      id: 'attachments',
-      title: 'Załączniki i dokumenty stanu cywilnego',
-      description: hasLossDocs
-        ? 'Dokumenty stanu cywilnego i zaświadczenia potwierdzające prawo do zasiłku.'
-        : 'Dokumenty potwierdzające prawo do świadczenia lub wpływające na jego wymiar (odpis aktu urodzenia, zaświadczenie ze szpitala, „Za życiem”).',
-      documents: attachments,
-    },
-  ];
-
-  return groups.filter((group) => group.documents.length > 0);
 }
 
 interface NextStepSummary {
@@ -1408,13 +1299,6 @@ function attachmentsForApplication(item: ApplicationItem, allDocuments: CaseDocu
   return items.join('; ') + '.';
 }
 
-interface SentReceipt {
-  referenceNumber: string;
-  sentAt: string;
-  recipient: string;
-  applicantName: string;
-}
-
 interface PreviewModalState {
   title: string;
   recipient: string;
@@ -1470,8 +1354,6 @@ export function CaseApplications({
     Partial<Record<ApplicantRole, Partial<Record<PersonalFieldKey, string>>>>
   >({});
   const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
-  const [receipts, setReceipts] = useState<Record<string, SentReceipt>>({});
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<PreviewModalState | null>(null);
@@ -1554,8 +1436,6 @@ export function CaseApplications({
     );
   }
 
-  const todayIso = todayIsoDate();
-  const refYear = todayIso.slice(0, 4);
   const daysPerWeek = params.calendar.daysPerWeek;
 
   function personalValue(role: ApplicantRole, field: PersonalFieldKey) {
@@ -1715,7 +1595,6 @@ export function CaseApplications({
   }
 
   function showError(id: string, message: string) {
-    setStatusMessage(null);
     setInvalidField(id);
     setValidationError(message);
     const element = document.getElementById(id);
@@ -1787,7 +1666,7 @@ export function CaseApplications({
         birthDate: personalValue(role, 'birthDate'),
         bank: personalValue(role, 'bank').trim(),
       },
-      todayIso,
+      todayIso: todayIsoDate(),
       sections: fields.filter(
         (field) =>
           !LETTER_SKIPPED_LABELS.has(field.label) &&
@@ -1851,47 +1730,12 @@ export function CaseApplications({
     });
   }
 
-  function send(requested: ApplicationItem[]) {
-    const pending = requested.filter(({ doc, key }) => doc.submit_to && !receipts[key]);
-    if (!pending.length) return;
-
-    for (const item of pending) {
-      if (!validateItem(item)) return;
-    }
-
-    const nextReceipts = { ...receipts };
-    const references: string[] = [];
-    let seq = Object.keys(receipts).length + 1;
-    for (const item of pending) {
-      const { doc, key } = item;
-      const code = applicationCode(item, params)
-        .replace(/[^A-Z0-9]/gi, '')
-        .toUpperCase();
-      const referenceNumber = `UPO-${refYear}-${code}-${String(seq).padStart(3, '0')}`;
-      references.push(referenceNumber);
-      nextReceipts[key] = {
-        referenceNumber,
-        sentAt: formatPolishDate(todayIso),
-        recipient: recipientFull(item, params),
-        applicantName: personalValue(doc.parent_role, 'name').trim(),
-      };
-      seq += 1;
-    }
+  function prepareDownload(item: ApplicationItem, idPrefix = '') {
+    if (!validateItem(item, idPrefix)) return;
     clearError();
-    setReceipts(nextReceipts);
-    const skipped = requested.filter(({ doc }) => doc.submit_to === null).length;
-    const range =
-      references.length === 1 ? references[0] : `${references[0]} … ${references.at(-1)}`;
-    setStatusMessage(
-      skipped
-        ? `Zakończono symulację wysyłki ${pending.length} wniosków (${range}). Pozostałe (${skipped}) wymagają ustalenia płatnika.`
-        : `Zakończono symulację wysyłki ${requested.length === 1 ? 'wniosku' : `pakietu ${pending.length} wniosków`} (${range}).`,
-    );
+    openPreview(item);
   }
 
-  const sendableForms = forms.filter((item) => item.doc.submit_to !== null);
-  const remainingSendable = sendableForms.filter((item) => !receipts[item.key]);
-  const allSent = sendableForms.length > 0 && remainingSendable.length === 0;
   const anyNonEmployee = forms.some((item) => item.parentCtx.isNonEmployee);
   const anyEmployee = forms.some((item) => item.parentCtx.isEmployee);
   const hasTwoParents =
@@ -1972,38 +1816,16 @@ export function CaseApplications({
       <h2 className="case-paperwork__heading">Wnioski</h2>
 
       <section className="apps-intro" aria-labelledby="apps-intro-heading">
-        <div className="apps-intro__top">
-          <div className="apps-intro__copy">
-            <h3 id="apps-intro-heading" className="plan-section__title">
-              Przygotuj wnioski
-            </h3>
-            <p className="apps-intro__lead">{introSummaryParts.join(' ')}</p>
-            {hasOverdue && (
-              <p className="docs-compact-item__overdue">
-                Co najmniej jeden termin złożenia wniosku już minął – sprawdź daty poniżej.
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="plan-btn plan-btn--primary apps-intro__cta"
-            disabled={allSent || sendableForms.length === 0}
-            onClick={() => send(forms)}
-          >
-            {allSent
-              ? 'Wszystkie wnioski wysłane'
-              : remainingSendable.length === sendableForms.length
-                ? `Wyślij wszystkie (${sendableForms.length}) ›`
-                : `Wyślij pozostałe (${remainingSendable.length}) ›`}
-          </button>
-        </div>
+        <h3 id="apps-intro-heading" className="plan-section__title">
+          Przygotuj wnioski
+        </h3>
+        <p className="apps-intro__lead">{introSummaryParts.join(' ')}</p>
+        {hasOverdue && (
+          <p className="docs-compact-item__overdue">
+            Co najmniej jeden termin złożenia wniosku już minął – sprawdź daty poniżej.
+          </p>
+        )}
       </section>
-
-      {statusMessage && (
-        <div className="plan-callout plan-callout--success" role="status">
-          <strong>Potwierdzenie wysyłki (symulacja):</strong> {statusMessage}
-        </div>
-      )}
 
       {openItem && (
         <section
@@ -2115,12 +1937,7 @@ export function CaseApplications({
             <button
               type="button"
               className="plan-btn plan-btn--primary"
-              onClick={() => {
-                if (validateItem(openItem, 'open-')) {
-                  clearError();
-                  openPreview(openItem);
-                }
-              }}
+              onClick={() => prepareDownload(openItem, 'open-')}
             >
               Podgląd i pobierz PDF ›
             </button>
@@ -2144,7 +1961,6 @@ export function CaseApplications({
             const { doc } = item;
             const code = applicationCode(item, params);
             const title = applicationTitle(item, params);
-            const receipt = receipts[item.key];
             const fields = buildFields(item);
             const key = item.key;
             const details = applicationDetails(item);
@@ -2157,26 +1973,15 @@ export function CaseApplications({
             const duration = formatDurationRange(item.startDate, item.endDate, daysPerWeek);
 
             return (
-              <article
-                key={item.key}
-                className={receipt ? 'apps-card apps-card--sent' : 'apps-card'}
-              >
+              <article key={item.key} className="apps-card">
                 <div className="apps-card__header">
                   <div className="apps-card__info">
                     <div className="apps-card__badges">
                       <span className="plan-badge plan-badge--code">{code}</span>
                       <span className="plan-badge plan-badge--navy">{parentBadge}</span>
-                      <span
-                        className={
-                          receipt
-                            ? 'plan-badge plan-badge--yes'
-                            : doc.submit_to
-                              ? 'plan-badge plan-badge--navy'
-                              : 'plan-badge plan-badge--no'
-                        }
-                      >
-                        {receipt ? 'Wysłano' : doc.submit_to ? 'Do wysłania' : 'Uzupełnij płatnika'}
-                      </span>
+                      {!doc.submit_to && (
+                        <span className="plan-badge plan-badge--no">Uzupełnij płatnika</span>
+                      )}
                     </div>
                     <h4 className="apps-card__title">{title}</h4>
                     <p className="apps-card__recipient">
@@ -2209,33 +2014,17 @@ export function CaseApplications({
                     </p>
                   </div>
 
-                  {!receipt && doc.submit_to && (
+                  {doc.submit_to && (
                     <button
                       type="button"
                       className="plan-btn plan-btn--secondary apps-card__action"
-                      aria-label={`Wyślij ${title} (${parentBadge})`}
-                      onClick={() => send([item])}
+                      aria-label={`Pobierz PDF: ${title} (${parentBadge})`}
+                      onClick={() => prepareDownload(item)}
                     >
-                      Wyślij ›
+                      Pobierz PDF ›
                     </button>
                   )}
                 </div>
-
-                {receipt && (
-                  <div
-                    className="apps-card__receipt"
-                    role="region"
-                    aria-label={`Potwierdzenie wysłania ${code}`}
-                  >
-                    <strong className="apps-card__receipt-title">
-                      UPO – Potwierdzenie złożenia ({receipt.referenceNumber})
-                    </strong>
-                    <p>
-                      Odbiorca: <strong>{receipt.recipient}</strong> · Nadawca:{' '}
-                      <strong>{receipt.applicantName}</strong> · Data: {receipt.sentAt}
-                    </p>
-                  </div>
-                )}
 
                 <details className="apps-preview">
                   <summary className="apps-preview__summary">Podgląd wniosku</summary>

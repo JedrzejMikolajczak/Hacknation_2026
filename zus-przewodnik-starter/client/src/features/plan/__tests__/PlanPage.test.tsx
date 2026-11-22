@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { calculateCasePlan } from '@shared/engine/casePlan';
@@ -7,6 +7,13 @@ import type { CaseInputs, CaseRecord } from '@shared/types';
 import data from '../../../../../data/cases/case-04.json';
 import { ScenarioProvider, type ScenarioDraft } from '../../../app/ScenarioContext';
 import { PlanPage } from '../PlanPage';
+import { downloadPdf, generateApplicationPdf } from '../tabs/pdf/generate';
+
+vi.mock('../tabs/pdf/generate', () => ({
+  generateApplicationPdf: vi.fn(async () => new Uint8Array([37, 80, 68, 70])),
+  downloadPdf: vi.fn(),
+  pdfFileName: () => 'wniosek.pdf',
+}));
 
 const fixture = data as CaseRecord;
 const api = vi.fn(async (url: string, request?: RequestInit) => {
@@ -67,6 +74,34 @@ describe('Twój plan', () => {
       stage: 'POST_BIRTH',
       pregnancy_week_at_birth: '28+5',
     });
+  });
+
+  it('pokazuje w Uprawnieniach sposób poprawy zakresu zwolnienia i przelicza plan', async () => {
+    api.mockImplementationOnce(async () => Response.json({
+      data: null,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Koniec zwolnienia lekarskiego. Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później.',
+        details: [{
+          path: ['sickness_leave_end_date'],
+          message: 'Koniec zwolnienia lekarskiego. Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później.',
+        }],
+      },
+    }, { status: 422 }));
+    openPlan('entitlements', {
+      ...fixture.inputs,
+      sickness_leave_start_date: '2026-11-05',
+      sickness_leave_end_date: '2026-11-04',
+    });
+    const error = await screen.findByRole('alert');
+    expect(error).toHaveTextContent(/Ustaw koniec zwolnienia.*lub później/);
+    expect(error).not.toHaveTextContent('sickness_leave_end_date');
+    fireEvent.change(screen.getByLabelText('Koniec zwolnienia lekarskiego'), {
+      target: { value: '2026-11-09' },
+    });
+    expect(await screen.findByRole('heading', { name: 'Uprawnienia', level: 2 })).toBeInTheDocument();
+    expect(api.mock.calls.some(([url, request]) => url.endsWith('/plan') &&
+      JSON.parse(String(request?.body)).sickness_leave_end_date === '2026-11-09')).toBe(true);
   });
 
   it('wyświetla odrębną podstawę i płatnika drugiego tytułu w kalkulatorze', async () => {
@@ -134,7 +169,7 @@ describe('Twój plan', () => {
     expect(screen.getByRole('link', { name: 'Dalej: Dokumenty i terminy ›' })).toBeInTheDocument();
   });
 
-  it('edytuje dane osobowe w pamięci zakładki i symuluje wysyłkę bez żądania API', async () => {
+  it('edytuje dane osobowe w pamięci zakładki i zapisuje PDF bez żądania API', async () => {
     openPlan('applications');
     const mother = within(await screen.findByRole('group', { name: 'Matka' }));
     const nameInput = mother.getByLabelText('Imię i nazwisko');
@@ -149,8 +184,12 @@ describe('Twój plan', () => {
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: /^Wyślij Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
-    expect(screen.getByRole('status')).toHaveTextContent('Zakończono symulację');
+    fireEvent.click(screen.getByRole('button', { name: /^Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski.*Matka/ }));
+    const preview = within(screen.getByRole('dialog'));
+    fireEvent.click(preview.getByRole('button', { name: 'Pobierz wniosek do uzupełnienia (PDF)' }));
+    await waitFor(() => expect(downloadPdf).toHaveBeenCalledWith(expect.any(Uint8Array), 'wniosek.pdf'));
+    expect(generateApplicationPdf).toHaveBeenCalledWith(expect.objectContaining({ kind: 'letter' }));
+    fireEvent.click(preview.getByRole('button', { name: 'Zamknij podgląd' }));
     expect(api.mock.calls).toHaveLength(count);
     expect(window.location.search).not.toContain('11111111111');
 
@@ -228,7 +267,7 @@ describe('Twój plan', () => {
     );
   });
 
-  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i uczciwe FAQ', async () => {
+  it('pokazuje w zakładce Wsparcie sytuacje szczególne planu, organizacje charytatywne i asystenta AI', async () => {
     openPlan('support');
     expect(await screen.findByRole('heading', { name: 'Wsparcie', level: 2 })).toBeInTheDocument();
     expect(screen.getByText('Najważniejsze dla Ciebie')).toBeInTheDocument();
@@ -236,9 +275,8 @@ describe('Twój plan', () => {
       screen.getByText('Wcześniak lub hospitalizacja dziecka po porodzie'),
     ).toBeInTheDocument();
     expect(screen.getByText('Fundacja Wcześniak Rodzice-Rodzicom')).toBeInTheDocument();
-    expect(screen.getByText('Najczęstsze pytania')).toBeInTheDocument();
-    expect(screen.queryByText(/Wspierane przez AI/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/asystent AI/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Wspierane przez AI')).toBeInTheDocument();
+    expect(screen.getByText(/Asystent AI – zapytaj o swoją sytuację/)).toBeInTheDocument();
   });
 
   it('wyświetla hub planu z kolejnością kroków, bez zduplikowanych linków w nagłówku', () => {

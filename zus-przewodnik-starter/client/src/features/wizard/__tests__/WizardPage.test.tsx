@@ -1,4 +1,4 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import {
   SCENARIO_STORAGE_KEY,
 } from '../../../app/ScenarioContext';
 import { App } from '../../../app/App';
+import { todayLocal } from '../wizardModel';
 
 const memory = new Map<string, string>();
 
@@ -47,31 +48,62 @@ function renderWizard(situation = 'pregnant') {
     await next();
   };
   const input = async (value: string) => {
-    const field = screen.queryByRole('spinbutton') ?? screen.getByPlaceholderText('DD/MM/YYYY');
-    await user.type(
-      field,
-      /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value,
-    );
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-');
+      fireEvent.change(screen.getByLabelText('Rok'), { target: { value: year } });
+      fireEvent.change(screen.getByLabelText('Miesiąc'), { target: { value: month } });
+      fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: day } });
+    } else {
+      const field = screen.queryByRole('spinbutton');
+      if (field) await user.type(field, value);
+      else await user.click(screen.getByRole('radio', { name: value }));
+    }
     await next();
   };
   return { ...view, user, next, choice, skip, input };
 }
 
 describe('family wizard', () => {
+  it('otwiera pola daty na dzisiejszej dacie i zapisuje ją po kliknięciu Dalej', async () => {
+    const view = renderWizard();
+    await view.choice(/^Samodzielnie — mama/);
+    const today = todayLocal();
+    const [year, month, day] = today.split('-');
+    expect(screen.getByLabelText('Rok')).toHaveValue(year);
+    expect(screen.getByLabelText('Miesiąc')).toHaveValue(month);
+    expect(screen.getByLabelText('Dzień')).toHaveValue(day);
+    expect(JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers).not.toHaveProperty('expectedBirthDate');
+    await view.next();
+    expect(JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers.expectedBirthDate).toBe(today);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Ilu dzieci');
+  });
+
   it('saves separate parents, preserves unknowns and resumes the current question', async () => {
     let view = renderWizard();
     await view.choice(/^Dwoje rodziców/);
-    const date = screen.getByPlaceholderText('DD/MM/YYYY');
-    await view.user.type(date, '01042');
-    expect(date).toHaveValue('01/04/2');
-    await view.user.type(date, '{Backspace}2027');
-    expect(date).toHaveValue('01/04/2027');
+    fireEvent.change(screen.getByLabelText('Rok'), { target: { value: '2028' } });
+    fireEvent.change(screen.getByLabelText('Miesiąc'), { target: { value: '01' } });
+    fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: '31' } });
+    fireEvent.change(screen.getByLabelText('Miesiąc'), { target: { value: '02' } });
+    expect(screen.getByLabelText('Dzień')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: '29' } });
+    fireEvent.change(screen.getByLabelText('Rok'), { target: { value: '2027' } });
+    expect(screen.getByLabelText('Dzień')).toHaveValue('');
+    await view.next();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Miesiąc'), { target: { value: '04' } });
+    fireEvent.change(screen.getByLabelText('Dzień'), { target: { value: '01' } });
     await view.next();
     await view.user.click(screen.getByRole('button', { name: 'Wstecz' }));
-    expect(screen.getByPlaceholderText('DD/MM/YYYY')).toHaveValue('01/04/2027');
+    expect(screen.getByLabelText('Dzień')).toHaveValue('01');
+    expect(screen.getByLabelText('Miesiąc')).toHaveValue('04');
+    expect(screen.getByLabelText('Rok')).toHaveValue('2027');
     await view.next();
     await view.input('2');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Za życiem');
+    expect(screen.getByRole('link', { name: /Czym jest zaświadczenie/ })).toHaveAttribute(
+      'href', expect.stringContaining('www.nfz.gov.pl'),
+    );
     await view.choice('Nie');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
     await view.choice('Nie dotyczy');
@@ -258,8 +290,16 @@ describe('family wizard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Odpowiedz na pytanie');
     await view.choice(/^Samodzielnie — mama/);
     await view.skip();
-    await view.input('0');
-    expect(screen.getByRole('alert')).toHaveTextContent('nie mniejszą niż 1');
+    await view.user.click(screen.getByRole('radio', { name: '4 lub więcej' }));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } });
+    await view.next();
+    expect(screen.getByRole('alert')).toHaveTextContent('wpisz liczbę całkowitą od 4');
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
+    await view.next();
+    expect(JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}').childrenCount).toBe(5);
+    await view.user.click(screen.getByRole('button', { name: 'Wstecz' }));
+    expect(screen.getByRole('radio', { name: '4 lub więcej' })).toBeChecked();
+    expect(screen.getByRole('spinbutton')).toHaveValue(5);
     await view.user.click(screen.getByRole('button', { name: 'Wstecz' }));
     expect(screen.getByRole('checkbox')).toBeChecked();
   });

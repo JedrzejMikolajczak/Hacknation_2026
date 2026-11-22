@@ -8,8 +8,6 @@ import { parseSituation } from '../../app/situation';
 import { ContributionDebtCertificate, SickLeavePreview } from '../login/ZusSimulationPanels';
 import {
   buildScenario,
-  dateInputToIso,
-  displayDate,
   formatAnswer,
   getQuestions,
   selectedMotherSituations,
@@ -24,12 +22,8 @@ import {
   resolveRightArisesDate,
   selectZusIncomesForBuild,
 } from './zusMerge';
+import { WizardDateFields } from './WizardDateFields';
 import './WizardPage.css';
-
-function formatDateInput(value: string): string {
-  const digits = displayDate(value).replace(/\D/g, '');
-  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
-}
 
 function SourceBadge({ source }: { source: FieldSource | undefined }) {
   if (!source) return null;
@@ -54,6 +48,7 @@ function QuestionField({
   error: string | null;
   onChange: (value: string) => void;
 }) {
+  const [otherCount, setOtherCount] = useState<string | null>(null);
   const describedBy =
     [question.hint ? 'question-hint' : '', error ? 'question-error' : '']
       .filter(Boolean)
@@ -101,46 +96,89 @@ function QuestionField({
       </fieldset>
     );
   }
+  const isOtherCount = otherCount !== null || Number(value) >= 4;
   return (
     <div className="wizard__input-group">
-      <label className="wizard__field">
-        {question.label}
-        <input
-          type={question.type === 'date' ? 'text' : question.type}
-          value={value === 'unknown' ? '' : question.type === 'date' ? displayDate(value) : value}
-          placeholder={question.type === 'date' ? 'DD/MM/YYYY' : undefined}
-          maxLength={question.type === 'date' ? 10 : undefined}
-          disabled={value === 'unknown'}
-          min={question.type === 'number' ? question.min : undefined}
-          max={question.type === 'number' ? question.max : undefined}
-          step={question.step}
-          inputMode={question.type === 'date' || question.step === '1' ? 'numeric' : 'decimal'}
-          aria-invalid={Boolean(error)}
-          aria-describedby={describedBy}
-          onChange={(event) => {
-            const input = event.currentTarget;
-            if (question.type !== 'date') {
-              onChange(input.value);
-              return;
-            }
-
-            const formatted = formatDateInput(input.value);
-            if (formatted !== input.value) {
-              const prefix = input.value.slice(0, input.selectionStart ?? input.value.length);
-              const position = formatDateInput(prefix).length;
-              input.value = formatted;
-              input.setSelectionRange(position, position);
-            }
-            onChange(dateInputToIso(formatted));
-          }}
+      {question.type === 'date' ? (
+        <WizardDateFields
+          key={value === 'unknown' ? 'unknown' : 'known'}
+          value={value}
+          describedBy={describedBy}
+          invalid={Boolean(error)}
+          onChange={onChange}
         />
-      </label>
+      ) : question.id === 'childrenCount' ? (
+        <fieldset
+          className="wizard__choices"
+          aria-labelledby="question-title"
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error)}
+          disabled={value === 'unknown'}
+        >
+          {['1', '2', '3', 'more'].map((option) => {
+            const more = option === 'more';
+            const selected = more ? isOtherCount : !isOtherCount && value === option;
+            return (
+              <label key={option} className={`wizard__choice${selected ? ' wizard__choice--selected' : ''}`}>
+                <input
+                  type="radio"
+                  name={question.id}
+                  value={option}
+                  checked={selected}
+                  onChange={() => {
+                    setOtherCount(more ? '' : null);
+                    onChange(more ? '' : option);
+                  }}
+                />
+                {more ? '4 lub więcej' : option}
+              </label>
+            );
+          })}
+          {isOtherCount && (
+            <label className="wizard__field">
+              Liczba dzieci (co najmniej 4)
+              <input
+                type="number"
+                min={4}
+                step={1}
+                inputMode="numeric"
+                value={Number(value) >= 4 ? value : otherCount ?? ''}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  const count = Number(raw);
+                  setOtherCount(raw);
+                  onChange(Number.isSafeInteger(count) && count >= 4 ? String(count) : '');
+                }}
+              />
+            </label>
+          )}
+        </fieldset>
+      ) : (
+        <label className="wizard__field">
+          {question.label}
+          <input
+            type="number"
+            value={value === 'unknown' ? '' : value}
+            disabled={value === 'unknown'}
+            min={question.min}
+            max={question.max}
+            step={question.step}
+            inputMode={question.step === '1' ? 'numeric' : 'decimal'}
+            aria-invalid={Boolean(error)}
+            aria-describedby={describedBy}
+            onChange={(event) => onChange(event.currentTarget.value)}
+          />
+        </label>
+      )}
       {question.unknownLabel && (
         <label className="wizard__check">
           <input
             type="checkbox"
             checked={value === 'unknown'}
-            onChange={(event) => onChange(event.target.checked ? 'unknown' : '')}
+            onChange={(event) => {
+              setOtherCount(null);
+              onChange(event.target.checked ? 'unknown' : '');
+            }}
           />
           {question.unknownLabel}
         </label>
@@ -288,15 +326,29 @@ export function WizardPage() {
   function next(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !question) return;
-    const validation = validateAnswer(question, answers[question.id]);
+    let value = answers[question.id];
+    if (question.type === 'date' && value !== 'unknown') {
+      const fields = new FormData(event.currentTarget);
+      const parts = ['date-year', 'date-month', 'date-day'].map((name) => fields.get(name));
+      value = parts.every(Boolean) ? parts.join('-') : '';
+    }
+    const validation = validateAnswer(question, value);
     if (validation) {
       setError(validation);
       return;
     }
+    const currentForm = { ...form, answers };
+    const updated =
+      value !== answers[question.id] && value !== undefined
+        ? recordUserEdit(currentForm, question.id, value)
+        : currentForm;
+    const nextQuestions = updated === currentForm
+      ? questions
+      : getQuestions(form.situation, updated.answers);
     const nextQuestion = editing
-      ? firstMissing
-      : questions[questions.findIndex((item) => item.id === question.id) + 1];
-    persist(answers, nextQuestion?.id ?? 'summary');
+      ? nextQuestions.find((item) => validateAnswer(item, updated.answers[item.id]) !== null)
+      : nextQuestions[nextQuestions.findIndex((item) => item.id === question.id) + 1];
+    persistForm({ ...updated, currentQuestionId: nextQuestion?.id ?? 'summary', completed: false });
     setError(null);
     if (!nextQuestion) setEditing(false);
   }
@@ -551,6 +603,18 @@ export function WizardPage() {
               {question.hint && (
                 <p id="question-hint" className="wizard__help">
                   {question.hint}
+                  {question.id === 'zaZyciemCertificate' && (
+                    <>
+                      {' '}
+                      <a
+                        href="https://www.nfz.gov.pl/dla-pacjenta/programy-profilaktyczne/informator-za-zyciem/jak-prawidlowo-wystawic-zaswiadczenie-lekarskie-osobom-uprawnionym-zgodnie-z-ustawa-za-zyciem/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Czym jest zaświadczenie „Za życiem”? (NFZ, nowa karta)
+                      </a>
+                    </>
+                  )}
                 </p>
               )}
 

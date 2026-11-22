@@ -9,7 +9,7 @@ import type {
   EmploymentType,
   PaymentVariant,
 } from '@shared/types';
-import { apiGet, apiPost } from '../../api/client';
+import { ApiError, apiGet, apiPost } from '../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../app/benefitParams';
 import { useScenario } from '../../app/ScenarioContext';
 import { PlanHub } from './PlanHub';
@@ -31,6 +31,35 @@ import './PlanPage.css';
 import './CasePlan.css';
 import './PlanMotion.css';
 import './PlanClean.css';
+
+const editableDateRanges = [
+  [
+    { field: 'sickness_leave_start_date', label: 'Początek zwolnienia lekarskiego' },
+    { field: 'sickness_leave_end_date', label: 'Koniec zwolnienia lekarskiego' },
+  ],
+  [
+    { field: 'newborn_hospitalization_start', label: 'Początek pobytu dziecka w szpitalu' },
+    { field: 'newborn_hospitalization_end', label: 'Koniec pobytu dziecka w szpitalu' },
+  ],
+] as const;
+
+function planRequestError(error: unknown) {
+  if (!(error instanceof ApiError) || error.code !== 'VALIDATION_ERROR') {
+    return {
+      messages: [error instanceof ApiError ? error.message : 'Spróbuj ponownie za chwilę.'],
+      fields: [],
+      validation: false,
+    };
+  }
+  const details = Array.isArray(error.details) ? error.details : [];
+  return {
+    messages: details.length
+      ? [...new Set<string>(details.flatMap((item) => typeof item?.message === 'string' ? [item.message] : []))]
+      : [error.message],
+    fields: details.flatMap((item) => typeof item?.path?.[0] === 'string' ? [item.path[0]] : []),
+    validation: true,
+  };
+}
 
 function shortStageLabel(stage: CaseStage): string {
   switch (stage) {
@@ -449,11 +478,12 @@ export function PlanPage() {
   usePointerParallax(rootRef);
 
   const [fixture, setFixture] = useState<{ key: string; item: CaseRecord | null } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [computed, setComputed] = useState<{
     key: string;
     plan: CasePlan | null;
     params: BenefitParams | null;
-    error?: string;
+    error?: ReturnType<typeof planRequestError>;
   } | null>(null);
 
   const serialized = query.get('inputs');
@@ -504,13 +534,13 @@ export function PlanPage() {
             key,
             plan: null,
             params: null,
-            error: error instanceof Error ? error.message : 'Błąd API',
+            error: planRequestError(error),
           });
       });
     return () => {
       active = false;
     };
-  }, [key, tab]);
+  }, [key, tab, attempt]);
 
   useEffect(() => {
     if (typeof activeTabRef.current?.scrollIntoView === 'function') {
@@ -536,12 +566,15 @@ export function PlanPage() {
     input.special_circumstances.stillbirth_or_child_death !== 'NONE',
   );
   const effectiveParams = params ?? DEFAULT_PARAMS;
+  const planError = current?.error;
+  const repairDates = editableDateRanges
+    .flatMap((range) => range.some(({ field }) => planError?.fields.includes(field)) ? [...range] : []);
 
   return (
     <div className="plan-page" ref={rootRef}>
       <div className="plan-page__demo-strip">
         <p className="plan-page__container plan-page__demo-note">
-          Wersja demonstracyjna · dane i wysyłka są symulowane
+          Wersja demonstracyjna · integracje z ZUS są symulowane
         </p>
       </div>
 
@@ -679,21 +712,45 @@ export function PlanPage() {
                     </p>
                   </div>
                 )}
-                {current?.error && (
-                  <p className="plan-callout plan-callout--warning" role="alert">
-                    Nie udało się wyliczyć planu. {current.error}{' '}
+                {planError && (
+                  <div className="plan-callout plan-callout--warning">
+                    <div role="alert">
+                      <strong>Nie udało się wyliczyć planu.</strong>
+                      <ul>{planError.messages.map((message) => <li key={message}>{message}</li>)}</ul>
+                    </div>
+                    {input && repairDates.length > 0 && (
+                      <div className="plan-controls__grid">
+                        {repairDates.map(({ field, label }) => (
+                          <label className="plan-field" key={field}>
+                            <span className="plan-field__label">{label}</span>
+                            <input
+                              className="plan-field__input"
+                              type="date"
+                              value={input[field] ?? ''}
+                              onChange={(event) => update({ [field]: event.target.value || undefined })}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {planError.validation ? (
+                      <p>
+                        Popraw wskazane dane w planie lub <Link to={wizardUrl}>wróć do kreatora</Link>.
+                      </p>
+                    ) : (
+                      <button type="button" className="plan-btn plan-btn--secondary" onClick={() => {
+                        setComputed(null);
+                        setAttempt((value) => value + 1);
+                      }}>
+                        Spróbuj ponownie
+                      </button>
+                    )}
                     {serialized && (
-                      <button
-                        type="button"
-                        className="plan-btn plan-btn--secondary"
-                        onClick={() => {
-                          updatePlanInputs(null);
-                        }}
-                      >
+                      <button type="button" className="plan-btn plan-btn--secondary" onClick={() => updatePlanInputs(null)}>
                         Cofnij zmiany
                       </button>
                     )}
-                  </p>
+                  </div>
                 )}
                 {input && plan && params && (
                   <>
