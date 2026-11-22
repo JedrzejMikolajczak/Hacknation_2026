@@ -2006,7 +2006,7 @@ export function CaseApplications({
                           <strong>
                             <time dateTime={doc.deadline}>{formatPolishDate(doc.deadline)}</time>
                           </strong>
-                          {doc.is_overdue && !receipt && (
+                          {doc.is_overdue && (
                             <strong className="docs-compact-item__overdue"> · Termin minął</strong>
                           )}
                         </>
