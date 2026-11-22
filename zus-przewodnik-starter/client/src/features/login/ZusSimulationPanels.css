@@ -1,21 +1,25 @@
+/*
+ * Symulowane dokumenty ZUS (zaświadczenie o zadłużeniu, podgląd e-ZLA) – miękkie karty
+ * w tym samym języku co reszta aplikacji: tło i ikona niosą znaczenie, nie gruby pas z boku.
+ */
+
 .zus-panel {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border: var(--border-width) solid var(--color-border);
-  border-left: 4px solid var(--color-navy);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid #c9dbe9;
   border-radius: var(--radius-md);
+  background: var(--color-info-soft);
 }
 
 .zus-panel--warning {
-  border-left-color: var(--color-error);
+  border-color: #f3c4c4;
   background: var(--color-error-soft);
 }
 
 .zus-panel--ok {
-  border-left-color: var(--color-primary);
-  background: var(--color-accent-soft);
+  border-color: #bfdcc9;
+  background: var(--color-success-soft);
 }
 
 .zus-panel__header {
@@ -28,19 +32,19 @@
 
 .zus-panel__title {
   margin: 0;
-  font-size: var(--font-size-md);
   color: var(--color-text);
+  font-size: var(--font-size-md);
 }
 
 .zus-panel__badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--space-2);
+  padding: 2px var(--space-3);
   border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-navy);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
-  background: var(--color-info-soft);
-  color: var(--color-navy);
 }
 
 .zus-panel__badge--code-b {
@@ -51,13 +55,11 @@
 .zus-panel__badge--warn {
   background: var(--color-surface);
   color: var(--color-error);
-  border: 1px solid var(--color-error);
 }
 
 .zus-panel__badge--ok {
   background: var(--color-surface);
   color: var(--color-primary-hover);
-  border: 1px solid var(--color-primary);
 }
 
 .zus-panel__meta {
@@ -71,8 +73,8 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-2);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid rgb(17 38 27 / 0.1);
 }
 
 .zus-panel__meta dt {
@@ -92,8 +94,8 @@
 
 .zus-panel__note {
   margin: 0;
-  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .zus-ezla-list {
@@ -110,14 +112,16 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
+/* Zwolnienie z kodem „B” (ciąża) – zielone obramowanie zamiast pasa z boku */
 .zus-ezla-item--pregnancy {
-  border-left: 4px solid var(--color-primary);
+  border-color: #bfdcc9;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f9f4 100%);
 }
 
 .zus-ezla-item__info {
@@ -133,8 +137,8 @@
 }
 
 .zus-ezla-item__id {
-  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .zus-ezla-item__dates {
@@ -143,15 +147,21 @@
 
 .zus-panel__action {
   min-height: var(--tap-target-min);
-  padding: var(--space-2) var(--space-3);
-  border: var(--border-width) solid var(--color-primary);
-  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width-control) solid var(--color-primary);
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-hover);
+  font: inherit;
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-spring);
 }
 
 .zus-panel__action:hover {
   background: var(--color-accent-soft);
+  transform: translateY(-1px);
 }

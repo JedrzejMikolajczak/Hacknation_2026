@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+// jsdom nie implementuje przewijania – aplikacja wraca na górę po zmianie ścieżki.
+// (Testy w środowisku „node”, np. generowanie PDF, nie mają obiektu window.)
+if (typeof window !== 'undefined') {
+  window.scrollTo = vi.fn();
+}
 
 afterEach(() => {
   cleanup();

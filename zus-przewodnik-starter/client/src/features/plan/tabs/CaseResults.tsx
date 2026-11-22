@@ -85,6 +85,19 @@ function splitFirstSentence(text: string): { lead: string; rest: string } {
   return { lead: match[1], rest: match[2].trim() };
 }
 
+/**
+ * Ostrzeżenia silnika mają postać „<co się dzieje>. <kontekst>. Co zrobić: <działanie>”.
+ * Rodzic najpierw widzi pierwsze zdanie i wyróżnione „Co zrobić”; kontekst chowamy w szczegółach.
+ */
+function splitWarningMessage(text: string): { lead: string; context: string; action: string } {
+  const marker = 'Co zrobić:';
+  const index = text.indexOf(marker);
+  const before = (index >= 0 ? text.slice(0, index) : text).trim();
+  const action = index >= 0 ? text.slice(index + marker.length).trim() : '';
+  const { lead, rest } = splitFirstSentence(before);
+  return { lead, context: rest, action };
+}
+
 function buildParentRightSummary(
   role: ApplicantRole,
   items: CaseEntitlement[],
@@ -224,10 +237,10 @@ function buildParentRightSummary(
 export function WarningList({
   warnings,
   params,
-  compact = false,
 }: {
   warnings: CaseWarning[];
   params: BenefitParams;
+  /** Zachowane dla centrum powiadomień; w tym układzie nie zmienia wyglądu listy. */
   compact?: boolean;
 }) {
   if (warnings.length === 0) return null;
@@ -235,8 +248,8 @@ export function WarningList({
     <ul className="results-risks__list">
       {warnings.map((warning, index) => {
         const info = isInfoWarning(warning);
-        const { lead, rest } = splitFirstSentence(warning.message_pl);
-        const hasDetails = Boolean(rest || warning.legal_basis);
+        const { lead, context, action } = splitWarningMessage(warning.message_pl);
+        const hasDetails = Boolean(context || warning.legal_basis);
         return (
           <li
             key={`${warning.code}-${index}`}
@@ -244,12 +257,17 @@ export function WarningList({
             role={info ? undefined : 'alert'}
           >
             <strong className="results-risk__title">{warningTitle(warning.code, params)}</strong>
-            <p className="results-risk__text">{compact ? lead : warning.message_pl}</p>
+            <p className="results-risk__text">{lead}</p>
+            {action && (
+              <p className="results-risk__action">
+                <span className="results-risk__action-label">Co zrobić:</span> {action}
+              </p>
+            )}
             {hasDetails && (
               <details className="results-details results-details--inline">
                 <summary className="results-details__summary">Szczegóły i podstawa prawna</summary>
                 <div className="results-details__body">
-                  {compact && rest && <p>{warning.message_pl}</p>}
+                  {context && <p>{context}</p>}
                   {warning.legal_basis && (
                     <p className="results-legal">Podstawa prawna: {warning.legal_basis}</p>
                   )}
@@ -261,6 +279,18 @@ export function WarningList({
       })}
     </ul>
   );
+}
+
+/** „4 przysługują · 4 do sprawdzenia” – skrót stanu świadczeń na zwiniętym bloku szczegółów. */
+function summarizeBenefitCounts(items: CasePlan['entitlements']): string {
+  const yes = items.filter((item) => item.is_qualified === true).length;
+  const unknown = items.filter((item) => item.is_qualified === null).length;
+  const no = items.filter((item) => item.is_qualified === false).length;
+  const parts: string[] = [];
+  if (yes > 0) parts.push(`${yes} ${yes === 1 ? 'przysługuje' : 'przysługują'}`);
+  if (unknown > 0) parts.push(`${unknown} do sprawdzenia`);
+  if (no > 0) parts.push(`${no} ${no === 1 ? 'nie przysługuje' : 'nie przysługują'}`);
+  return parts.join(' · ');
 }
 
 export function CaseRights({
@@ -290,6 +320,7 @@ export function CaseRights({
   const visibleEntitlements = plan.entitlements.filter((item) =>
     activeRoles.includes(item.parent_role),
   );
+  const benefitCountSummary = summarizeBenefitCounts(visibleEntitlements);
 
   return (
     <div className="results-tab">
@@ -315,60 +346,57 @@ export function CaseRights({
         )}
       </section>
 
-      <div className="results-details-stack">
-        <details className="results-details results-details--section" open>
-          <summary id="rights-details-heading" className="results-details__summary">
-            Szczegóły świadczeń ({visibleEntitlements.length})
-          </summary>
-          <div className="results-details__body">
-            <div className="results-rights-grid">
-              {visibleEntitlements.map((item) => {
-                const statusClass =
-                  item.is_qualified === true
-                    ? 'results-right-item__status results-right-item__status--yes'
-                    : item.is_qualified === false
-                      ? 'results-right-item__status results-right-item__status--no'
-                      : 'results-right-item__status results-right-item__status--unknown';
-                const statusLabel =
-                  item.is_qualified === true
-                    ? 'Przysługuje'
-                    : item.is_qualified === false
-                      ? 'Nie przysługuje'
-                      : 'Do sprawdzenia';
-                return (
-                  <article
-                    key={`${item.parent_role}-${item.benefit_type}`}
-                    className="results-right-item"
-                  >
-                    <div className="results-right-item__top">
-                      <h4 className="results-right-item__title">{benefitLabels[item.benefit_type]}</h4>
-                      <span className={statusClass}>{statusLabel}</span>
-                    </div>
-                    <p className="results-right-item__meta">
-                      {parentLabels[item.parent_role]}
-                      {item.is_qualified ? ` · Wypłaca: ${payerLabel(item.who_pays)}` : ''}
-                    </p>
-                    <details className="results-details results-details--inline">
-                      <summary className="results-details__summary">
-                        Uzasadnienie i podstawa prawna
-                      </summary>
-                      <div className="results-details__body">
-                        <p>{item.reason_pl}</p>
-                        {item.is_qualified && (
-                          <p className="results-legal">
-                            Płatnik świadczenia: {payerLabel(item.who_pays)}
-                          </p>
-                        )}
-                        <p className="results-legal">Podstawa prawna: {item.legal_basis}</p>
-                      </div>
-                    </details>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </details>
-      </div>
+      <details className="results-benefits" open={!anyQualified || undefined}>
+        <summary className="results-benefits__summary">
+          <span className="results-benefits__title">Szczegóły świadczeń</span>
+          <span className="results-benefits__count">{benefitCountSummary}</span>
+        </summary>
+        <div className="results-rights-grid">
+          {visibleEntitlements.map((item) => {
+            const statusClass =
+              item.is_qualified === true
+                ? 'results-right-item__status results-right-item__status--yes'
+                : item.is_qualified === false
+                  ? 'results-right-item__status results-right-item__status--no'
+                  : 'results-right-item__status results-right-item__status--unknown';
+            const statusLabel =
+              item.is_qualified === true
+                ? 'Przysługuje'
+                : item.is_qualified === false
+                  ? 'Nie przysługuje'
+                  : 'Do sprawdzenia';
+            return (
+              <article
+                key={`${item.parent_role}-${item.benefit_type}`}
+                className="results-right-item"
+              >
+                <div className="results-right-item__top">
+                  <h4 className="results-right-item__title">{benefitLabels[item.benefit_type]}</h4>
+                  <span className={statusClass}>{statusLabel}</span>
+                </div>
+                <p className="results-right-item__meta">
+                  {parentLabels[item.parent_role]}
+                  {item.is_qualified ? ` · Wypłaca: ${payerLabel(item.who_pays)}` : ''}
+                </p>
+                <details className="results-details results-details--inline">
+                  <summary className="results-details__summary">
+                    Uzasadnienie i podstawa prawna
+                  </summary>
+                  <div className="results-details__body">
+                    <p>{item.reason_pl}</p>
+                    {item.is_qualified && (
+                      <p className="results-legal">
+                        Płatnik świadczenia: {payerLabel(item.who_pays)}
+                      </p>
+                    )}
+                    <p className="results-legal">Podstawa prawna: {item.legal_basis}</p>
+                  </div>
+                </details>
+              </article>
+            );
+          })}
+        </div>
+      </details>
 
       {authSession &&
         (input?.employment_type === 'B2B' ||
@@ -733,6 +761,39 @@ export function CaseCalculator({
         )}
       </section>
 
+      {showVariantSwitch && (
+        <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">
+          <span className="plan-field__label">Wariant wypłaty</span>
+          <div className="results-variant-bar__segmented" role="group" aria-label="Wariant wypłaty">
+            <button
+              type="button"
+              className={
+                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
+                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
+                  : 'results-variant-bar__btn'
+              }
+              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
+              disabled={combinedUnavailable}
+              onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
+            >
+              {formatRate(params.rates.combined)} za cały okres
+            </button>
+            <button
+              type="button"
+              className={
+                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
+                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
+                  : 'results-variant-bar__btn'
+              }
+              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
+              onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
+            >
+              {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
+            </button>
+          </div>
+        </section>
+      )}
+
       {additionalTitles?.map(({ employment_type: title, outcome: result, documents }, index) => {
         const titleLabel = { UOP: 'Umowa o pracę', ZLECENIE: 'Umowa zlecenie', B2B: 'JDG' }[title];
         const periods = [...result.periods, ...result.employer_sick_pay];
@@ -771,39 +832,6 @@ export function CaseCalculator({
           </section>
         );
       })}
-
-      {showVariantSwitch && (
-        <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">
-          <span className="plan-field__label">Wariant wypłaty</span>
-          <div className="results-variant-bar__segmented" role="group" aria-label="Wariant wypłaty">
-            <button
-              type="button"
-              className={
-                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
-              disabled={combinedUnavailable}
-              onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
-            >
-              {formatRate(params.rates.combined)} za cały okres
-            </button>
-            <button
-              type="button"
-              className={
-                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
-              onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
-            >
-              {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
-            </button>
-          </div>
-        </section>
-      )}
 
       <div className="results-details-stack">
         <details className="results-details">

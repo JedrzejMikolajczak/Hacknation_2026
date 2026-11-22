@@ -1,93 +1,303 @@
+/*
+ * Przykładowe sprawy: lista kart (numer, opis, dwa jasne działania), porównanie wyniku silnika
+ * z decyzją ZUS oraz wczytywanie własnego wniosku PDF.
+ */
+
 .cases-page {
-  max-width: var(--content-max-width);
-  margin-inline: auto;
-  padding: var(--space-6) var(--page-gutter);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.cases-page__main {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: var(--space-5);
+  padding-block: var(--space-4) var(--space-7);
+}
+
+.cases-page__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-page__nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-primary-hover);
+  text-decoration: none;
+}
+
+.cases-page__nav a:hover {
+  text-decoration: underline;
+}
+
+.cases-hero {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 48rem;
+}
+
+.cases-hero h1 {
+  font-size: clamp(1.9rem, 1.3rem + 2.6vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.cases-hero__lead {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+  text-wrap: pretty;
+}
+
+.cases-section {
   display: grid;
   gap: var(--space-4);
 }
 
-.cases-page h1 {
-  font-size: var(--font-size-3xl);
+.cases-section h2 {
+  font-size: var(--font-size-xl);
 }
 
-.cases-list {
-  display: grid;
-  gap: var(--space-3);
-  list-style: none;
-  margin-top: var(--space-3);
-}
-
-.cases-panel {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: var(--border-width) solid var(--color-border);
-  border-inline-start: var(--accent-bar-width) solid var(--color-primary);
+.cases-alert {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid #f3c4c4;
   border-radius: var(--radius-md);
-}
-
-.cases-panel button {
-  justify-self: start;
-  min-height: var(--tap-target-min);
-  padding: var(--space-2) var(--space-4);
-  border: var(--border-width) solid var(--color-on-cta);
-  border-radius: var(--radius-sm);
-  background: var(--color-cta);
-  color: var(--color-on-cta);
+  background: var(--color-error-soft);
+  color: #9a0000;
   font-weight: var(--font-weight-bold);
 }
 
-.cases-panel table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-  overflow-wrap: anywhere;
+.cases-loading {
+  display: grid;
+  gap: var(--space-3);
 }
 
-.cases-panel th,
-.cases-panel td {
-  padding: var(--space-2);
-  text-align: left;
-  border-bottom: var(--border-width) solid var(--color-border);
+.cases-loading p {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
 }
 
-.cases-panel thead {
-  background: var(--color-surface-muted);
+.cases-loading__bar {
+  display: block;
+  height: 5rem;
+}
+
+/* ───────── Lista spraw ───────── */
+.cases-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cases-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-4);
+  row-gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.cases-card:hover {
+  border-color: #bfdcc9;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.cases-card h3 {
+  font-size: var(--font-size-base);
+  line-height: 1.45;
+}
+
+.cases-card__num {
+  display: grid;
+  grid-row: 1 / span 2;
+  align-self: start;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-primary-hover);
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  grid-column: 2;
+}
+
+/* ───────── Szczegóły sprawy ───────── */
+.cases-detail__cta {
+  display: flex;
+}
+
+.cases-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-4);
+}
+
+.cases-compare__card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.cases-compare__card--engine {
+  border-color: #bfdcc9;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(25 164 90 / 0.14), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f1f9f4 100%);
+}
+
+.cases-compare__card h2 {
+  color: var(--color-primary-hover);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cases-match {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-self: start;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-match__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.cases-diff {
+  padding: var(--space-3) var(--space-5);
+  border: var(--border-width) solid #f0d7a4;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.cases-diff summary {
+  min-height: var(--tap-target-min);
+  display: flex;
+  align-items: center;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.cases-diff ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding-inline-start: var(--space-5);
+}
+
+/* ───────── Wczytywanie własnego wniosku PDF ───────── */
+.cases-panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.cases-panel h2 {
+  font-size: var(--font-size-xl);
 }
 
 .cases-upload__fieldset {
   display: grid;
   gap: var(--space-4);
   min-width: 0;
+  margin: 0;
+  padding: 0;
   border: 0;
 }
 
 .cases-upload__fieldset legend {
   margin-bottom: var(--space-3);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
 }
 
 .cases-upload__fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .cases-upload__fields label,
 .cases-upload__file {
-  min-width: 0;
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
+  font-weight: var(--font-weight-bold);
 }
 
 .cases-upload input:not([type='checkbox']),
 .cases-upload select {
   width: 100%;
-  min-height: var(--tap-target-min);
-  padding: var(--space-2);
-  border: var(--border-width) solid var(--color-border-control);
-  border-radius: var(--radius-sm);
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width-control) solid var(--color-border-control);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.cases-upload input[type='file'] {
+  padding: var(--space-3);
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+  cursor: pointer;
+}
+
+.cases-upload input[type='file']::file-selector-button {
+  margin-inline-end: var(--space-3);
+  padding: 0.4rem 1rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: inherit;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
 }
 
 .cases-upload .cases-upload__checkbox {
@@ -95,15 +305,25 @@
   align-items: center;
   gap: var(--space-2);
   min-height: var(--tap-target-min);
+  font-weight: 400;
 }
 
-.cases-upload button:disabled {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+.cases-upload input[type='checkbox'] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-primary);
 }
 
 .cases-upload [role='alert'] {
-  color: var(--color-error);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-error-soft);
+  color: #9a0000;
+  font-weight: var(--font-weight-bold);
+}
+
+.cases-upload .ui-btn {
+  justify-self: start;
 }
 
 .cases-upload__filename {
@@ -111,8 +331,17 @@
 }
 
 .cases-upload__result {
-  padding: var(--space-4);
-  background: var(--color-info-soft);
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-width) solid #bfdcc9;
+  border-radius: var(--radius-md);
+  background: var(--color-success-soft);
+}
+
+.cases-upload__result .ui-btn {
+  justify-self: start;
 }
 
 .cases-upload__result ul {

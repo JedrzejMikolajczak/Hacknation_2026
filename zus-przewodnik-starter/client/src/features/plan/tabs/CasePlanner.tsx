@@ -256,10 +256,9 @@ export function CasePlanner({
 
   return (
     <div className="lp-view">
-      <h2 className="lp-section-heading">Plan urlopów</h2>
-
       {/* Kluczowa odpowiedź na górze (Answer first) */}
       <section className="lp-answer" aria-labelledby="leave-answer-heading">
+        <h2 className="lp-section-heading">Plan urlopów</h2>
         <h3 id="leave-answer-heading" className="lp-answer__title">
           Plan urlopów w skrócie
         </h3>

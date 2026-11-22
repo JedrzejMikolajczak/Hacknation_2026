@@ -212,6 +212,9 @@ function StepDetail({
  * „Mapa składania dokumentów”: oś kroków (co → gdzie → kiedy) i panel ze szczegółami wybranego
  * kroku. Na laptopie oś jest po lewej, panel po prawej; na telefonie panel rozwija się pod krokiem.
  */
+/** Ile kroków widać na start – reszta jest pod przyciskiem „Pokaż pozostałe kroki”. */
+const COLLAPSED_STEPS = 6;
+
 export function FilingMap({ steps, storageKey }: FilingMapProps) {
   const ordered = orderFilingSteps(steps);
   const idPrefix = useId();
@@ -232,6 +235,13 @@ export function FilingMap({ steps, storageKey }: FilingMapProps) {
   const firstOpen = ordered.find((step) => step.kind !== 'auto' && !done[documentKey(step.doc)]);
   const fallback = firstOpen ?? ordered[0];
   const activeKey = selected ?? (fallback ? documentKey(fallback.doc) : null);
+  const [showAll, setShowAll] = useState(false);
+  const listId = `${idPrefix}-list`;
+  // Wybrany krok zawsze zostaje widoczny, nawet gdy leży poza pierwszą szóstką
+  const hiddenCount = showAll
+    ? 0
+    : ordered.filter((step, index) => index >= COLLAPSED_STEPS && documentKey(step.doc) !== activeKey)
+        .length;
 
   return (
     <div className="fmap">
@@ -241,16 +251,29 @@ export function FilingMap({ steps, storageKey }: FilingMapProps) {
         </p>
         <p className="fmap__hint">Wybierz krok, aby zobaczyć, co zrobić, gdzie i do kiedy.</p>
       </div>
+      <div className="fmap__bar" aria-hidden="true">
+        <span
+          className="fmap__bar-fill"
+          style={{ '--p': actionable.length > 0 ? doneCount / actionable.length : 0 } as CSSProperties}
+        />
+      </div>
 
-      <ol className="fmap__list" role="list" style={{ '--n': ordered.length } as CSSProperties}>
+      <ol
+        id={listId}
+        className="fmap__list"
+        role="list"
+        style={{ '--n': ordered.length } as CSSProperties}
+      >
         {ordered.map((step, index) => {
           const key = documentKey(step.doc);
           const isActive = key === activeKey;
           const isDone = Boolean(done[key]);
           const overdue = step.doc.is_overdue && !isDone;
           const panelId = `${idPrefix}-${index}`;
+          const isExtra = !showAll && index >= COLLAPSED_STEPS && !isActive;
           const stateClass = [
             'fmap__step',
+            isExtra ? 'fmap__step--extra' : '',
             isActive ? 'fmap__step--active' : '',
             isDone ? 'fmap__step--done' : '',
             overdue ? 'fmap__step--overdue' : '',
@@ -310,6 +333,18 @@ export function FilingMap({ steps, storageKey }: FilingMapProps) {
           );
         })}
       </ol>
+
+      {(showAll || hiddenCount > 0) && (
+        <button
+          type="button"
+          className="ui-btn ui-btn--ghost ui-btn--sm fmap__more"
+          aria-expanded={showAll}
+          aria-controls={listId}
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? 'Pokaż mniej kroków' : `Pokaż pozostałe kroki (${hiddenCount})`}
+        </button>
+      )}
     </div>
   );
 }

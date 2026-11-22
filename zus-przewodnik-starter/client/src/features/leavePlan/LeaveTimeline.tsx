@@ -101,6 +101,15 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
     }
   }
 
+  // Legenda: jeden wpis na rodzaj urlopu obecny na osi (kolor/obrys paska → nazwa)
+  const legend: { kind: string; label: string }[] = [];
+  for (const period of periods) {
+    const kind = getPeriodKindClass(period);
+    if (!legend.some((item) => item.kind === kind)) {
+      legend.push({ kind, label: getPeriodShortTitle(period) });
+    }
+  }
+
   return (
     <section className="lp-card" aria-labelledby="timeline-heading">
       <div className="lp-timeline-header">
@@ -143,7 +152,7 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                         ((toEpochDays(period.end_date) - toEpochDays(period.start_date) + 1) /
                           totalSpan) *
                         100;
-                      const widthPct = Math.min(100 - startOffset, Math.max(4, rawWidth));
+                      const widthPct = Math.min(100 - startOffset, Math.max(6, rawWidth));
                       const shortTitle = getPeriodShortTitle(period);
                       const fullName = benefitLabels[period.leave_type];
                       const label = `${fullName} (${parentLabels[role]}), ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${formatDaysPl(period.days)}), stawka ${formatRatePercent(period.rate_percent)}`;
@@ -168,7 +177,11 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                         >
                           <span className="lp-timeline-bar__title">{shortTitle}</span>
                           <span className="lp-timeline-bar__meta">
-                            {formatWeeksPl(period.weeks)} · {formatRatePercent(period.rate_percent)}
+                            <span className="lp-timeline-bar__weeks">{formatWeeksPl(period.weeks)}</span>
+                            <span className="lp-timeline-bar__rate">
+                              {' · '}
+                              {formatRatePercent(period.rate_percent)}
+                            </span>
                           </span>
                         </button>
                       );
@@ -180,6 +193,15 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
           })}
         </div>
       </div>
+
+      <ul className="lp-timeline-legend" aria-hidden="true">
+        {legend.map((item) => (
+          <li key={item.kind} className="lp-timeline-legend__item">
+            <span className={`lp-timeline-legend__swatch ${item.kind}`} />
+            {item.label}
+          </li>
+        ))}
+      </ul>
 
       <details
         className="lp-details"

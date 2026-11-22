@@ -1,70 +1,26 @@
-.login-page {
-  min-height: 100vh;
-  background: var(--color-surface-muted);
-}
-
-.login-page__demo-strip {
-  padding: var(--space-2) 0;
-  background: var(--color-navy);
-  color: var(--color-on-primary);
-  font-size: var(--font-size-sm);
-}
-
-.login-page__header {
-  padding: var(--space-5) 0;
-  background: var(--color-surface);
-  border-bottom: var(--divider-bar-width) solid var(--color-border);
-}
-
-.login-page__header h1 {
-  margin: var(--space-3) 0 var(--space-2);
-  font-size: var(--font-size-2xl);
-}
-
-.login-page__header p {
-  color: var(--color-text-muted);
-}
+/*
+ * Logowanie przez mObywatela (symulacja). Karty, kafelki wyboru i przyciski pochodzą z kreatora
+ * (wizard/WizardPage.css) – tu tylko układ, który jest specyficzny dla logowania.
+ */
 
 .login-page__stack {
   display: grid;
   gap: var(--space-5);
 }
 
-.login-page__profile-list {
+.login-page__loading {
   display: grid;
   gap: var(--space-3);
-  border: 0;
-  padding: 0;
-  margin: 0;
 }
 
-.login-page__profile-option {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-height: var(--tap-target-min);
-  padding: var(--space-4);
-  border: var(--border-width-control) solid var(--color-border-control);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  cursor: pointer;
+.login-page__loading p {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
 }
 
-.login-page__profile-option:hover {
-  border-color: var(--color-primary);
-}
-
-.login-page__profile-option--selected {
-  background: var(--color-accent-soft);
-  border-color: var(--color-primary);
-}
-
-.login-page__profile-option input {
-  flex: 0 0 auto;
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-top: 2px;
-  accent-color: var(--color-primary);
+.login-page__skeleton {
+  display: block;
+  height: 3.5rem;
 }
 
 .login-page__session-header {
@@ -75,30 +31,29 @@
   gap: var(--space-3);
 }
 
+/* Dane z ZUS jako kafelki, tak jak odpowiedzi w podsumowaniu kreatora */
 .login-page__session-summary {
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--space-3);
   margin: 0;
 }
 
-.login-page__session-summary div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+.login-page__session-summary > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
 }
 
 .login-page__session-summary dt {
   color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .login-page__session-summary dd {
   margin: 0;
   font-weight: var(--font-weight-bold);
-}
-
-.login-page__divider-card {
-  border-top-color: var(--color-navy);
 }

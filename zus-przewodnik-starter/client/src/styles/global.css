@@ -12,6 +12,16 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* kotwice i fokus nie chowają się pod przyklejonym paskiem */
+  scroll-padding-top: calc(var(--appbar-height) + 4.5rem);
+  /* pozwala animować rozwijanie <details> do wysokości „auto” (Chrome/Edge) */
+  interpolate-size: allow-keywords;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -22,6 +32,7 @@ body {
   font-size: var(--font-size-base);
   line-height: var(--line-height-base);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 img,
@@ -49,18 +60,30 @@ h2,
 h3 {
   line-height: var(--line-height-tight);
   font-weight: var(--font-weight-bold);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 a {
   color: var(--color-link);
-  text-underline-offset: 0.15em;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 0.08em;
 }
 
 a:hover {
   color: var(--color-primary-hover);
 }
 
-/* Widoczny fokus z klawiatury: pomarańcz ZUS + granatowa obwódka */
+::selection {
+  background: #bfe6cd;
+  color: var(--color-text);
+}
+
+/* Widoczny fokus z klawiatury: pomarańcz + granatowa obwódka (kontrast ≥ 3:1 na każdym tle) */
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--color-focus);
   outline-offset: 0;
@@ -72,9 +95,11 @@ a:hover {
   inset-block-start: var(--space-3);
   inset-inline-start: var(--page-gutter);
   z-index: 100;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  font-weight: var(--font-weight-bold);
   transform: translateY(calc(-100% - var(--space-6)));
 }
 
@@ -93,4 +118,38 @@ a:hover {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * Płynne rozwijanie wszystkich bloków <details> („Szczegóły”, „Podstawa prawna” itd.).
+ * Działa w przeglądarkach z ::details-content (Chrome/Edge 131+); w pozostałych blok po prostu
+ * otwiera się natychmiast – nic nie znika ani nie psuje układu.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  details::details-content {
+    block-size: 0;
+    overflow-y: clip;
+    overflow-clip-margin: 0.5rem;
+    transition:
+      block-size var(--dur-base) var(--ease-out),
+      content-visibility var(--dur-base) allow-discrete;
+  }
+
+  details[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* Użytkownik prosi o ograniczenie ruchu – wyłączamy wszystkie animacje i przejścia. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }

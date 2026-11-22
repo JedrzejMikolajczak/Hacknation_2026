@@ -1,14 +1,11 @@
-import { Link } from 'react-router-dom';
-import './PlaceholderPage.css';
+import { StatusPage } from './StatusPage';
 
 export function NotFoundPage() {
   return (
-    <main id="main" tabIndex={-1} className="placeholder-page">
-      <h1 className="placeholder-page__title">Nie znaleziono strony</h1>
-      <p className="placeholder-page__text">Sprawdź adres lub wróć na stronę startową.</p>
-      <Link className="placeholder-page__link" to="/">
-        Wróć na stronę startową
-      </Link>
-    </main>
+    <StatusPage
+      code="404"
+      title="Nie znaleziono strony"
+      text="Sprawdź adres albo wróć na stronę startową – stamtąd w kilka kliknięć dojdziesz do swojego planu."
+    />
   );
 }
