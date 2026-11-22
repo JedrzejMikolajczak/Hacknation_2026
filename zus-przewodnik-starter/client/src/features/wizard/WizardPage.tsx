@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { SickLeaveCertificate } from '@shared/types';
 import { DEFAULT_PARAMS } from '../../app/benefitParams';
@@ -23,7 +23,11 @@ import {
   selectZusIncomesForBuild,
 } from './zusMerge';
 import { WizardDateFields } from './WizardDateFields';
+import '../landing/LandingMotion.css';
 import './WizardPage.css';
+
+/** Tytuł w nagłówku dzielony na frazy – każda wjeżdża osobno (jak na stronie startowej i planie). */
+const TITLE_PARTS = ['Plan dla', 'Twojej rodziny'];
 
 function SourceBadge({ source }: { source: FieldSource | undefined }) {
   if (!source) return null;
@@ -399,14 +403,36 @@ export function WizardPage() {
 
   return (
     <div className="wizard">
+      <div className="wizard__demo-strip">
+        <p className="wizard__shell wizard__demo-note">
+          Wersja demonstracyjna · integracje z ZUS są symulowane
+        </p>
+      </div>
       <header className="wizard__header">
+        <div className="landing__aurora" aria-hidden="true">
+          <span className="landing__blob landing__blob--1" />
+          <span className="landing__blob landing__blob--2" />
+          <span className="landing__blob landing__blob--3" />
+        </div>
         <div className="wizard__shell">
-          <Link to="/" className="wizard__back-link">
-            ← Strona startowa
-          </Link>
-          <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
-          <h1>Plan dla Twojej rodziny</h1>
-          <p>Pytania dopasujemy do Waszej sytuacji. Odpowiedzi można uzupełnić później.</p>
+          <div className="wizard__nav-row">
+            <Link to="/" className="wizard__back-link">
+              ← Strona startowa
+            </Link>
+            <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
+          </div>
+          <h1 className="wizard__title">
+            {TITLE_PARTS.map((part, index) => (
+              <Fragment key={part}>
+                <span className="landing__word" style={{ ['--i' as string]: index }}>
+                  <span className="landing__word-inner">{part}</span>
+                </span>{' '}
+              </Fragment>
+            ))}
+          </h1>
+          <p className="wizard__subtitle">
+            Pytania dopasujemy do Waszej sytuacji. Odpowiedzi można uzupełnić później.
+          </p>
           <div className="wizard__zus-bar">
             {authSession ? (
               <p className="wizard__zus-status" role="status">
@@ -429,34 +455,36 @@ export function WizardPage() {
         </div>
       </header>
       <main id="main" tabIndex={-1} className="wizard__shell wizard__main">
-        <div className="wizard__progress-heading">
-          <span>
-            {showComplete ? 'Gotowe' : `Etap ${stage + 1} z ${STAGES.length}: ${STAGES[stage]}`}
-          </span>
-          <span>{progress}%</span>
+        <div className="wizard__progress-card">
+          <div className="wizard__progress-heading">
+            <span>
+              {showComplete ? 'Gotowe' : `Etap ${stage + 1} z ${STAGES.length}: ${STAGES[stage]}`}
+            </span>
+            <span>{progress}%</span>
+          </div>
+          <div
+            className="wizard__progress"
+            role="progressbar"
+            aria-label="Postęp formularza"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="wizard__progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+          <ol className="wizard__stages" aria-label="Etapy formularza">
+            {STAGES.map((label, index) => (
+              <li
+                key={label}
+                className={index <= stage ? 'wizard__stage--active' : ''}
+                aria-current={index === stage ? 'step' : undefined}
+              >
+                <span aria-hidden="true">{index < stage ? '✓' : index + 1}</span>
+                {label}
+              </li>
+            ))}
+          </ol>
         </div>
-        <div
-          className="wizard__progress"
-          role="progressbar"
-          aria-label="Postęp formularza"
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div className="wizard__progress-fill" style={{ width: `${progress}%` }} />
-        </div>
-        <ol className="wizard__stages" aria-label="Etapy formularza">
-          {STAGES.map((label, index) => (
-            <li
-              key={label}
-              className={index <= stage ? 'wizard__stage--active' : ''}
-              aria-current={index === stage ? 'step' : undefined}
-            >
-              <span aria-hidden="true">{index < stage ? '✓' : index + 1}</span>
-              {label}
-            </li>
-          ))}
-        </ol>
 
         {!showComplete && !showSummary && conflictList.length > 0 && !activeConflict && (
           <section className="wizard__conflict-banner" aria-label="Rozbieżności z danymi ZUS">
@@ -732,6 +760,19 @@ export function WizardPage() {
           </button>
         )}
       </main>
+
+      <footer className="wizard__footer">
+        <nav aria-label="Dodatkowa nawigacja" className="wizard__shell">
+          <ul className="wizard__footer-links">
+            <li>
+              <Link to="/guide">Przewodnik</Link>
+            </li>
+            <li>
+              <Link to="/cases">Przykładowe sprawy</Link>
+            </li>
+          </ul>
+        </nav>
+      </footer>
     </div>
   );
 }

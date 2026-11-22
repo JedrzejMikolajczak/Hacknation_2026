@@ -57,6 +57,13 @@ const INSURANCE_OPTIONS: QuestionOption[] = [
   { value: 'unknown', label: 'Nie wiem / uzupełnię później' },
 ];
 
+/** Drugi tytuł: „brak” oznacza, że osoba składająca wniosek ma tylko jeden tytuł do ubezpieczenia. */
+const ADDITIONAL_INSURANCE_OPTIONS: QuestionOption[] = INSURANCE_OPTIONS.map((option) =>
+  option.value === 'none'
+    ? { ...option, label: 'Nie, mam tylko jeden tytuł do ubezpieczenia' }
+    : option,
+);
+
 export function todayLocal(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -720,13 +727,16 @@ export function getQuestions(
   const applicantTitle = roles[0] && answers[`${roles[0]}.insuranceTitle`];
   if (['employment', 'mandateContract', 'selfEmployed'].includes(applicantTitle)) {
     const title = answers['additionalInsurance.insuranceTitle'];
+    const applicant = roles[0] === 'mother' ? 'mama ma' : 'tata ma';
+    const applicantSubject = roles[0] === 'mother' ? 'mama podlega' : 'tata podlega';
     questions.push({
       id: 'additionalInsurance.insuranceTitle',
       stage: 3,
       type: 'choice',
-      title: 'Czy wnioskodawca ma równocześnie drugi tytuł do ubezpieczeń?',
+      title: `Czy ${applicant} równocześnie drugi tytuł do ubezpieczeń?`,
       label: 'Drugi tytuł do ubezpieczeń',
-      options: INSURANCE_OPTIONS,
+      hint: 'Dotyczy sytuacji, gdy oprócz głównej umowy jest druga praca, zlecenie lub własna firma.',
+      options: ADDITIONAL_INSURANCE_OPTIONS,
       optional: true,
     });
     if (['employment', 'mandateContract', 'selfEmployed'].includes(title)) {
@@ -734,7 +744,7 @@ export function getQuestions(
         id: 'additionalInsurance.sicknessInsured',
         stage: 3,
         type: 'choice',
-        title: 'Czy wnioskodawca podlega ubezpieczeniu chorobowemu także z drugiego tytułu?',
+        title: `Czy ${applicantSubject} ubezpieczeniu chorobowemu także z drugiego tytułu?`,
         label: 'Ubezpieczenie chorobowe z drugiego tytułu',
         options: YES_NO,
       });
