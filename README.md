@@ -1,6 +1,6 @@
 <div align="center">
 
-# Zasiłkowy Przewodnik Przyszłego Rodzica
+# Przewodnik Przyszłego Rodzica
 
 **Prosty plan urlopów, świadczeń i formalności ZUS — od ciąży i porodu po adopcję i trudne sytuacje życiowe.**
 
@@ -200,12 +200,9 @@ Zgodnie z wymaganiami zadania konkursowego (§ 4 i § 9 treści wyzwania) poniż
 | Dokumenty, terminy, płatnik vs ZUS, zagrożenia i ryzyka | Zakładka **Dokumenty i terminy**, centrum powiadomień **Uwagi**, mapa składania i ostrzeżenia o ryzykach (m.in. dług JDG art. 2a, pozorność, podwyższenie podstawy) |
 | Symulacje: mObywatel, dane ZUS, zadłużenie JDG, e-ZLA, PUE/eZUS, wnioski + akt urodzenia USC | `/login` (symulacja mObywatela i paneli ZUS), `/plan/applications` (wnioski ZAM, ZAS-53, wniosek USC, symulacja wysyłki), `/plan/support` (symulacja PUE/eZUS) |
 | Organizacje charytatywne i oficjalne linki (ZUS, MRPiPS, PIP, USC) | Zakładka **Wsparcie** (`/plan/support`) i **Przewodnik** (`/guide`) |
-| Testowanie przykładowych spraw i upload własnego PDF | Katalog spraw i lokalny import PDF w `/cases` |
+| Wygenerowanie przykładowych spraw i upload własnego PDF | Katalog spraw i lokalny import PDF w `/cases` |
 | Panel administracyjny parametrów (zmiany legislacyjne) | `/admin` + centralny plik [`shared/params.json`](zus-przewodnik-starter/shared/params.json) |
 | Preferowany stack techniczny (React, JavaScript/TypeScript, REST API, RWD) | React + Vite + TypeScript + Express REST API (`/api/v1/*`), RWD od 360 px (WCAG 2.1 AA) |
-
-> [!IMPORTANT]
-> **Ochrona materiałów konkursowych:** zgodnie z zastrzeżeniem ZUS żadne oryginalne dokumenty źródłowe ani załączniki udostępnione uczestnikom HackNation 2026 nie zostały skopiowane ani umieszczone w tym repozytorium (katalogi robocze `docs/zus/` i `data/cases-raw/` są wykluczone w `.gitignore`).
 
 ---
 
@@ -237,7 +234,7 @@ Szczegółową konfigurację środowiska (zmienne `.env`, własne porty, opis en
 
 ## Zespół, prawa autorskie i rozwiązania zewnętrzne
 
-Projekt przygotowany zespołowo podczas **HackNation 2026** (wyzwanie ZUS) przez: `@bchochoool`, `@JedrzejMikolajczak`, `@GluglaK`, `@szymczakkk`, `@gluglam` oraz zespół QA/merytoryczny.
+Projekt przygotowany zespołowo podczas **HackNation 2026** (wyzwanie ZUS) przez: `@bchochoool`, `@JedrzejMikolajczak`, `@GluglaK`, `@szymczakkk`, `@gluglam`, `@maskedmediator17` oraz zespół QA/merytoryczny.
 
 Autorskie prawa majątkowe do kodu i dokumentacji wytworzonej w ramach zadania przysługują członkom zespołu na zasadach określonych w **§ 4 Regulaminu Zadania Konkursowego HackNation 2026** (bez odrębnej otwartej licencji, z zachowaniem gotowości do przeniesienia praw na Zakład Ubezpieczeń Społecznych zgodnie z regulaminem).
 
