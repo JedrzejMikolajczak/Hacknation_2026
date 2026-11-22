@@ -1,5 +1,6 @@
 import type { BenefitParams, CaseWarning } from '@shared/types';
 import { getCaseWarningGuide, getGeneralRisks } from './caseSupportData';
+import { SuperText } from '../../components/SuperText';
 
 interface UserRiskAlertsProps {
   warnings: CaseWarning[];
@@ -31,7 +32,7 @@ export function UserRiskAlerts({ warnings, params }: UserRiskAlertsProps) {
               <div className="support-inline-details__body">
                 <p>{warning.message_pl}</p>
                 {warning.legal_basis && (
-                  <p className="support-legal">Podstawa prawna: {warning.legal_basis}</p>
+                  <p className="support-legal">Podstawa prawna: <SuperText text={warning.legal_basis} /></p>
                 )}
               </div>
             </details>
@@ -67,7 +68,7 @@ export function GeneralRisksDetails({ params }: GeneralRisksDetailsProps) {
               <p className="support-general-card__tip">
                 <strong>Jak uniknąć:</strong> {risk.howToAvoid}
               </p>
-              <p className="support-legal">Podstawa prawna: {risk.legalBasis}</p>
+              <p className="support-legal">Podstawa prawna: <SuperText text={risk.legalBasis} /></p>
             </li>
           ))}
         </ul>

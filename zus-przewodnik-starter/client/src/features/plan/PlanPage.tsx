@@ -35,6 +35,7 @@ import './CasePlan.css';
 import './PlanClean.css';
 import './PlanShell.css';
 import './PlanUI.css';
+import { SuperText } from '../../components/SuperText';
 
 const editableDateRanges = [
   [
@@ -766,7 +767,7 @@ export function PlanPage() {
                         <ul>
                           {plan.validation_errors.map((item, index) => (
                             <li key={`${item.code}-${index}`}>
-                              {item.message_pl} <small>{item.legal_basis}</small>
+                              {item.message_pl} <small>{item.legal_basis && <SuperText text={item.legal_basis} />}</small>
                             </li>
                           ))}
                         </ul>

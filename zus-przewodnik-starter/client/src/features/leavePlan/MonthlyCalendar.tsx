@@ -7,6 +7,7 @@ import {
   formatWorkFraction,
 } from './leavePlanHelpers';
 import type { CalendarMilestone } from './leavePlanValidation';
+import { SuperText } from '../../components/SuperText';
 
 export interface CalendarQuickJump {
   label: string;
@@ -333,7 +334,7 @@ export function MonthlyCalendar({
                   )}
                   <p className="lp-deadline-callout__desc">
                     {m.description}
-                    {m.legalBasis && <span className="lp-legal"> ({m.legalBasis})</span>}
+                    {m.legalBasis && <span className="lp-legal"> (<SuperText text={m.legalBasis} />)</span>}
                   </p>
                 </div>
               ))}

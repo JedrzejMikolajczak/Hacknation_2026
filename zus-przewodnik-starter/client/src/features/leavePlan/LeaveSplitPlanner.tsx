@@ -25,6 +25,7 @@ import {
   type LeavePlanPresetId,
 } from './leavePlanHelpers';
 import { getPaternityDeadline, type LeaveValidationIssue } from './leavePlanValidation';
+import { SuperText } from '../../components/SuperText';
 
 interface LeaveSplitPlannerProps {
   input: CaseInputs;
@@ -200,7 +201,7 @@ export function LeaveSplitPlanner({
             {errors.map((err, idx) => (
               <li key={`${err.code}-${idx}`}>
                 {err.message}
-                {err.legalBasis && <span className="lp-legal"> ({err.legalBasis})</span>}
+                {err.legalBasis && <span className="lp-legal"> (<SuperText text={err.legalBasis} />)</span>}
               </li>
             ))}
           </ul>
@@ -213,7 +214,7 @@ export function LeaveSplitPlanner({
             {warnings.map((warn, idx) => (
               <li key={`${warn.code}-${idx}`}>
                 {warn.message}
-                {warn.legalBasis && <span className="lp-legal"> ({warn.legalBasis})</span>}
+                {warn.legalBasis && <span className="lp-legal"> (<SuperText text={warn.legalBasis} />)</span>}
               </li>
             ))}
           </ul>

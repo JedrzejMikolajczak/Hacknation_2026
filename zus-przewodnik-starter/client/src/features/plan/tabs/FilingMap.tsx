@@ -5,6 +5,7 @@ import { attachmentSource, buildMailto, type DeliveryGuide, type FilingKind } fr
 import { documentKey } from './documentKey';
 import type { CaseDocument } from '@shared/types';
 import './FilingMap.css';
+import { SuperText } from '../../../components/SuperText';
 
 export interface FilingStep {
   doc: CaseDocument;
@@ -193,7 +194,7 @@ function StepDetail({
         <div className="docs-details__body">
           <p>{step.details}</p>
           <p className="docs-details__sub">
-            <strong>Podstawa prawna:</strong> {doc.legal_basis}
+            <strong>Podstawa prawna:</strong> <SuperText text={doc.legal_basis} />
           </p>
         </div>
       </details>
