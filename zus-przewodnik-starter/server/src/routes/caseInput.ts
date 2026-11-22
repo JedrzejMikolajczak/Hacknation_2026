@@ -1,9 +1,15 @@
 import { z } from 'zod';
 import type { CaseInputs } from '@shared/types';
+import { addDays } from '@shared/engine/core';
+import defaultParams from '@shared/params.json';
 
 const day = z.iso.date();
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
-const money = z.number().nonnegative();
+const MAX_CASE_AMOUNT_PLN = 1_000_000_000;
+const money = z
+  .number()
+  .nonnegative()
+  .max(MAX_CASE_AMOUNT_PLN, 'Podaj kwotę nie większą niż 1 000 000 000 zł.');
 const count = z.number().int().nonnegative();
 const yesNo = z.boolean().nullable();
 const parent = z.enum(['MOTHER', 'FATHER']);
@@ -13,11 +19,13 @@ const contractType = z.enum(['INDEFINITE', 'FIXED_TERM', 'PROBATION', 'REPLACEME
 const fraction = z.number().min(0).max(1);
 const weight = z.number().int().positive();
 
-const monthlyBases = z.array(z.strictObject({
-  month,
-  amount_pln: money,
-  excluded_bonus_pln: money.optional(),
-}));
+const monthlyBases = z.array(
+  z.strictObject({
+    month,
+    amount_pln: money,
+    excluded_bonus_pln: money.optional(),
+  }),
+);
 const insuranceTitle = z.strictObject({
   employment_type: title,
   payer_insured_count_nov_30: pay,
@@ -87,6 +95,7 @@ export const caseInputSchema = z
     sickness_leave_end_date: day.optional(),
     sickness_benefit_start_date: day.optional(),
     sickness_waiting_period_confirmed: z.boolean().optional(),
+    sickness_prior_credited_days: count.optional(),
     monthly_bases: monthlyBases.optional(),
     parental_leave_parts: z
       .array(
@@ -102,12 +111,16 @@ export const caseInputSchema = z
     employer_is_family_member: z.boolean().optional(),
     newly_created_position: z.boolean().optional(),
     adopted_or_foster_child_acceptance_date: day.optional(),
+    adopted_or_foster_child_birth_date: day.optional(),
+    adoption_order_final_date: day.optional(),
     adoption_type: z.enum(['ADOPTION', 'FOSTER_FAMILY']).optional(),
     school_obligation_deferred: z.boolean().optional(),
     child_death_date: day.optional(),
     parental_only: z.boolean().optional(),
     paternity_leave_start_date: day.optional(),
     father_takeover_date: day.optional(),
+    mother_death_date: day.optional(),
+    mother_was_insured_at_death: z.boolean().optional(),
     mother_abandonment_date: day.optional(),
     mother_maternity_days_used: count.optional(),
     mother_was_insured_at_abandonment: z.boolean().optional(),
@@ -134,6 +147,37 @@ export const caseInputSchema = z
       'living_children_count',
       'Liczba żywych dzieci nie może przekraczać liczby dzieci z porodu.',
     );
+    const hasLoss = input.special_circumstances.stillbirth_or_child_death !== 'NONE';
+    check(
+      input.living_children_count === undefined ||
+        (hasLoss
+          ? input.living_children_count < input.children_count
+          : input.living_children_count === input.children_count),
+      'living_children_count',
+      'Liczba żywych dzieci musi odpowiadać wskazanej informacji o utracie dziecka.',
+    );
+    if (input.child_death_date) {
+      check(
+        hasLoss &&
+          input.stage === 'POST_BIRTH' &&
+          (!input.due_or_birth_date || input.child_death_date >= input.due_or_birth_date),
+        'child_death_date',
+        'Data śmierci dziecka wymaga oznaczenia utraty i nie może poprzedzać daty porodu.',
+      );
+      if (hasLoss && input.due_or_birth_date && input.child_death_date >= input.due_or_birth_date) {
+        const eightWeeks = addDays(
+          input.due_or_birth_date,
+          defaultParams.childDeath.thresholdWeeksOfLife * defaultParams.calendar.daysPerWeek,
+        );
+        const afterThreshold = input.child_death_date >= eightWeeks;
+        check(
+          afterThreshold ===
+            (input.special_circumstances.stillbirth_or_child_death === 'AFTER_8_WEEKS'),
+          'stillbirth_or_child_death',
+          'Zaznacz przebieg utraty zgodny z podaną datą śmierci dziecka.',
+        );
+      }
+    }
     if (input.deceased_children_count !== undefined) {
       check(
         input.deceased_children_count <= input.children_count &&
@@ -143,12 +187,36 @@ export const caseInputSchema = z
         'Liczba żywych i zmarłych dzieci musi odpowiadać liczbie dzieci z porodu.',
       );
       check(
-        (input.deceased_children_count > 0) ===
-          (input.special_circumstances.stillbirth_or_child_death !== 'NONE'),
+        hasLoss ? input.deceased_children_count > 0 : input.deceased_children_count === 0,
         'deceased_children_count',
         'Liczba zmarłych dzieci musi odpowiadać podanemu przebiegowi zdarzenia.',
       );
     }
+    const childBirth = input.adopted_or_foster_child_birth_date;
+    const acceptance = input.adopted_or_foster_child_acceptance_date;
+    if (childBirth)
+      check(
+        input.stage === 'ADOPTION' && (!acceptance || childBirth <= acceptance),
+        'adopted_or_foster_child_birth_date',
+        'Data urodzenia musi przypadać najpóźniej w dniu przyjęcia dziecka.',
+      );
+    if (input.adoption_order_final_date)
+      check(
+        input.stage === 'ADOPTION' &&
+          input.adoption_type !== 'FOSTER_FAMILY' &&
+          (!childBirth || input.adoption_order_final_date >= childBirth),
+        'adoption_order_final_date',
+        'Podaj datę prawomocnego przysposobienia przypadającą od dnia urodzenia dziecka.',
+      );
+    if (input.mother_death_date)
+      check(
+        input.stage === 'POST_BIRTH' &&
+          Boolean(input.special_circumstances.mother_deceased) &&
+          (!input.due_or_birth_date || input.mother_death_date >= input.due_or_birth_date) &&
+          (!input.father_takeover_date || input.father_takeover_date >= input.mother_death_date),
+        'mother_death_date',
+        'Podaj datę śmierci matki między dniem porodu a dniem przejęcia.',
+      );
     if (input.mother_abandonment_date) {
       check(
         input.stage === 'POST_BIRTH' &&
@@ -158,16 +226,18 @@ export const caseInputSchema = z
       );
     }
     for (const [start, end, message] of [
-      ['sickness_leave_start_date', 'sickness_leave_end_date',
-        'Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zwolnieniu lekarskim.'],
-      ['newborn_hospitalization_start', 'newborn_hospitalization_end',
-        'Ustaw koniec pobytu w szpitalu w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zaświadczeniu ze szpitala.'],
+      [
+        'sickness_leave_start_date',
+        'sickness_leave_end_date',
+        'Ustaw koniec zwolnienia w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zwolnieniu lekarskim.',
+      ],
+      [
+        'newborn_hospitalization_start',
+        'newborn_hospitalization_end',
+        'Ustaw koniec pobytu w szpitalu w dniu jego rozpoczęcia lub później. Sprawdź obie daty na zaświadczeniu ze szpitala.',
+      ],
     ] as const) {
-      check(
-        !input[start] || !input[end] || input[start] <= input[end],
-        end,
-        message,
-      );
+      check(!input[start] || !input[end] || input[start] <= input[end], end, message);
     }
     function checkMonths(months: NonNullable<CaseInputs['monthly_bases']>, field: string) {
       check(
@@ -185,7 +255,8 @@ export const caseInputSchema = z
     checkMonths(input.other_parent?.monthly_bases ?? [], 'other_parent');
     for (const title of input.additional_insurance_titles ?? []) {
       check(
-        !title.title_start_date || !title.contract_end_date ||
+        !title.title_start_date ||
+          !title.contract_end_date ||
           title.title_start_date <= title.contract_end_date,
         'additional_insurance_titles',
         'Data zakończenia dodatkowego tytułu nie może poprzedzać jego rozpoczęcia.',

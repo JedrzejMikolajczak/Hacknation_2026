@@ -13,6 +13,7 @@ afterEach(() => {
   // Kreator zapisuje odpowiedzi w localStorage – bez czyszczenia przeciekają między testami.
   try {
     if (typeof window.localStorage?.clear === 'function') window.localStorage.clear();
+    if (typeof window.sessionStorage?.clear === 'function') window.sessionStorage.clear();
   } catch {
     // niektóre testy podmieniają localStorage na atrapę bez clear()
   }

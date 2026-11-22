@@ -1,12 +1,14 @@
 import type { ApplicantRole, BenefitParams, CaseDocument, CaseInputs, CasePeriod } from '../types';
 import { addDays } from './core';
-import { hasChildLoss, insured, KP, livingChildrenCount, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
+import { hasChildLoss, hasMaternityRightAfterInsurance, insured, KP, livingChildrenCount, payer, qualifiesAfterUnlawfulTermination } from './caseRules';
 
 export function documentsForPlan(
   input: CaseInputs,
   periods: CasePeriod[],
   event: string | null,
   params: BenefitParams,
+  parentalRequests: CasePeriod[],
+  combinedDeadline: string | null,
 ): CaseDocument[] {
   const docs: CaseDocument[] = [];
   function add(
@@ -60,12 +62,14 @@ export function documentsForPlan(
     const courtMaternity =
       role === input.applicant_role && event !== null &&
       qualifiesAfterUnlawfulTermination(input, event, params);
-    const personPayer = courtMaternity ? 'ZUS' : person ? payer(person) : null;
+    const afterInsurance = role === input.applicant_role && event !== null &&
+      hasMaternityRightAfterInsurance(input, event, params);
+    const personPayer = afterInsurance ? 'ZUS' : person ? payer(person) : null;
     // Pracownik (UoP) składa wnioski u pracodawcy (który wypłaca przy > 20 albo przekazuje Z-3 do ZUS).
     // Zleceniobiorca składa ZAM u uprawnionego płatnika (> 20) albo w ZUS (≤ 20 + Z-3a od zleceniodawcy).
     // JDG zawsze składa dokumenty bezpośrednio do ZUS. Gdy brak danych o wielkości płatnika → null.
     const destination: CaseDocument['submit_to'] =
-      employee && !courtMaternity && personPayer !== null ? 'EMPLOYER' : personPayer;
+      employee && !afterInsurance && personPayer !== null ? 'EMPLOYER' : personPayer;
     const mandateEntitledPayer = mandate && personPayer === 'EMPLOYER';
 
     const maternity = rolePeriods.find(
@@ -73,10 +77,7 @@ export function documentsForPlan(
     );
     const roleSickness = rolePeriods.filter((period) => period.leave_type === 'SICKNESS');
     const sickness = roleSickness[0];
-    const parental = rolePeriods.filter(
-      (period) =>
-        period.leave_type === 'PARENTAL' || period.leave_type === 'PARENTAL_ZA_ZYCIEM_EXTENSION',
-    );
+    const parental = parentalRequests.filter((period) => period.parent_role === role);
     const supplementary = rolePeriods.find(
       (period) => period.leave_type === 'SUPPLEMENTARY_MATERNITY',
     );
@@ -224,8 +225,7 @@ export function documentsForPlan(
       maternity &&
       living > 0 &&
       role === input.applicant_role &&
-      event &&
-      !input.special_circumstances.mother_deceased &&
+      combinedDeadline &&
       input.requested_payment_variant === 'COMBINED_81_5'
     ) {
       add(
@@ -235,7 +235,7 @@ export function documentsForPlan(
         destination,
         KP.combined,
         maternity,
-        addDays(event, params.combinedRateApplicationDeadlineDays),
+        combinedDeadline,
         input.application_to_payer_date ?? input.application_date,
       );
     }
@@ -313,9 +313,9 @@ export function documentsForPlan(
         destination,
         KP.parental,
         part,
-        employee || !person ? addDays(part.start_date, -notice.parentalLeave) : part.start_date,
+        (employee && !afterInsurance) || !person ? addDays(part.start_date, -notice.parentalLeave) : part.start_date,
       );
-      if (employee && part.work_fraction > 0)
+      if (employee && !afterInsurance && part.work_fraction > 0)
         add(
           'PARENTAL_WORK_REQUEST',
           'Wniosek o łączenie urlopu rodzicielskiego z pracą',

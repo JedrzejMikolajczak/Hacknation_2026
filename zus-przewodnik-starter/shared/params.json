@@ -76,6 +76,7 @@
     "employerPaidDaysUnder50": 33,
     "employerPaidDaysFrom50": 14,
     "maxBenefitPeriodDays": 270,
+    "maxStandardBenefitPeriodDays": 182,
     "gapDaysForSameBenefitPeriod": 60
   },
   "benefitBase": {

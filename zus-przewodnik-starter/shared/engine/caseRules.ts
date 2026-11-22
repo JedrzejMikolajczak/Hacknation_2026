@@ -9,7 +9,8 @@ import { addDays, addMonths, daysBetween, formatPercentPl, requireValue, roundPl
 
 export const KP = {
   maternity: 'Kodeks pracy, art. 180 i 180¹',
-  abandonment: 'Kodeks pracy, art. 180 § 13 i 15 oraz art. 182. Ustawa zasiłkowa, art. 29 ust. 7 i 9 oraz art. 29a ust. 2',
+  abandonment:
+    'Kodeks pracy, art. 180 § 13 i 15 oraz art. 182. Ustawa zasiłkowa, art. 29 ust. 7 i 9 oraz art. 29a ust. 2',
   unlawfulTermination: 'Ustawa zasiłkowa, art. 30 ust. 1 pkt 2 i art. 61 ust. 1 pkt 2',
   supplementary: 'Kodeks pracy, art. 180²',
   transitional: 'Ustawa z 6 grudnia 2024 r. o zmianie ustawy – Kodeks pracy, art. 17',
@@ -30,7 +31,8 @@ export const KP = {
   debt: 'Ustawa zasiłkowa, art. 2a',
   shamContract: 'Ustawa o systemie ubezpieczeń społecznych, art. 68 i 83; Kodeks cywilny, art. 83',
   baseIncrease: 'Ustawa o systemie ubezpieczeń społecznych, art. 41 ust. 12–13 i art. 83',
-  multipleTitles: 'Ustawa o systemie ubezpieczeń społecznych, art. 9; ustawa zasiłkowa, art. 29 i 36',
+  multipleTitles:
+    'Ustawa o systemie ubezpieczeń społecznych, art. 9; ustawa zasiłkowa, art. 29 i 36',
   maternityEquivalent: 'Ustawa zasiłkowa, art. 30 ust. 1 i 3',
 } as const;
 
@@ -43,19 +45,38 @@ function formatPlnPl(value: number): string {
   return `${roundPln(value).toFixed(2).replace('.', ',')} zł`;
 }
 
-export function debtThresholdPln(params: BenefitParams): number {
-  return roundPln(
-    params.benefitBase.minimumWage * params.selfEmployedDebtThresholdShareOfMinimumWage,
-  );
+// Dz.U. 2024 poz. 1362, § 1 oraz Dz.U. 2025 poz. 1242, § 1.
+// Aktywna konfiguracja ma pierwszeństwo od effectiveFrom.
+const minimumWageByYear: Readonly<Record<string, number>> = { '2025': 4666, '2026': 4806 };
+
+export function debtThresholdPln(params: BenefitParams): number;
+export function debtThresholdPln(params: BenefitParams, on: string | null): number | null;
+export function debtThresholdPln(params: BenefitParams, on?: string | null): number | null {
+  const wage =
+    !on || on >= params.effectiveFrom
+      ? params.benefitBase.minimumWage
+      : minimumWageByYear[on.slice(0, 4)];
+  return wage === undefined
+    ? null
+    : roundPln(
+        wage *
+          (on && on < params.effectiveFrom
+            ? 0.01
+            : params.selfEmployedDebtThresholdShareOfMinimumWage),
+      );
 }
 
 export function hasSelfEmployedDebt(
   parent: Pick<CaseParentInsurance, 'employment_type' | 'debt_amount_pln' | 'has_b2b_arrears'>,
   params: BenefitParams,
+  on?: string | null,
 ): boolean {
   if (parent.employment_type !== 'B2B') return false;
   if (parent.debt_amount_pln !== undefined && parent.debt_amount_pln !== null) {
-    return parent.debt_amount_pln > debtThresholdPln(params);
+    const threshold = debtThresholdPln(params, on ?? null);
+    return threshold === null
+      ? Boolean(parent.has_b2b_arrears)
+      : parent.debt_amount_pln > threshold;
   }
   return Boolean(parent.has_b2b_arrears);
 }
@@ -93,7 +114,37 @@ export function eventDate(input: CaseInputs): string | null {
     : input.due_or_birth_date;
 }
 
+export function casePaternityDeadline(input: CaseInputs, params: BenefitParams): string | null {
+  const rules = params.paternityLeave;
+  if (input.stage !== 'ADOPTION') {
+    const birth = input.due_or_birth_date;
+    return birth ? addDays(addMonths(birth, rules.deadlineChildAgeMonths), -1) : null;
+  }
+  const birth = input.adopted_or_foster_child_birth_date;
+  const final = input.adoption_order_final_date;
+  if (input.adoption_type === 'FOSTER_FAMILY' || !birth || !final) return null;
+  const limit = addMonths(birth, rules.adoptionMaxChildAgeYears * 12);
+  const adoptionLimit = addMonths(final, rules.adoptionDeadlineMonthsFromAdoption);
+  return addDays(limit < adoptionLimit ? limit : adoptionLimit, -1);
+}
+
+export function fatherCombinedRateEvent(input: CaseInputs): string | null {
+  if (input.applicant_role !== 'FATHER' || input.stage !== 'POST_BIRTH') return null;
+  if (input.special_circumstances.mother_deceased) {
+    const insuredAtDeath =
+      input.mother_was_insured_at_death ??
+      (input.other_parent ? insured(input.other_parent) : input.other_parent_insured);
+    // Older saved plans use the takeover date when the death date was not captured.
+    if (insuredAtDeath === false)
+      return input.mother_death_date ?? input.father_takeover_date ?? null;
+  }
+  if (input.mother_was_insured_at_abandonment === false)
+    return input.mother_abandonment_date ?? null;
+  return null;
+}
+
 export function livingChildrenCount(input: CaseInputs): number {
+  if (input.special_circumstances.stillbirth_or_child_death === 'NONE') return input.children_count;
   if (input.deceased_children_count !== undefined) {
     const deceased = input.deceased_children_count;
     requireValue(
@@ -109,19 +160,11 @@ export function livingChildrenCount(input: CaseInputs): number {
     );
     return living;
   }
-  return (
-    input.living_children_count ??
-    (input.special_circumstances.stillbirth_or_child_death === 'NONE'
-      ? input.children_count
-      : Math.max(0, input.children_count - 1))
-  );
+  return input.living_children_count ?? Math.max(0, input.children_count - 1);
 }
 
 export function hasChildLoss(input: CaseInputs): boolean {
-  return (
-    input.special_circumstances.stillbirth_or_child_death !== 'NONE' ||
-    livingChildrenCount(input) < input.children_count
-  );
+  return input.special_circumstances.stillbirth_or_child_death !== 'NONE';
 }
 
 export function qualifiesAfterUnlawfulTermination(
@@ -133,14 +176,14 @@ export function qualifiesAfterUnlawfulTermination(
   const end = input.contract_end_date;
   return Boolean(
     input.special_circumstances.unlawful_termination_confirmed_by_court &&
-      input.applicant_role === 'MOTHER' &&
-      input.employment_type === 'UOP' &&
-      (input.stage === 'POST_BIRTH' || input.stage === 'PREGNANCY') &&
-      birth &&
-      end &&
-      end >= addDays(birth, -params.insuranceRisk.estimatedPregnancyDays) &&
-      end < birth &&
-      on >= birth,
+    input.applicant_role === 'MOTHER' &&
+    input.employment_type === 'UOP' &&
+    (input.stage === 'POST_BIRTH' || input.stage === 'PREGNANCY') &&
+    birth &&
+    end &&
+    end >= addDays(birth, -params.insuranceRisk.estimatedPregnancyDays) &&
+    end < birth &&
+    on >= birth,
   );
 }
 
@@ -156,7 +199,8 @@ export function abandonmentTakeover(input: CaseInputs, birth: string, params: Be
   if (father.employment_type !== 'UOP' && !input.father_stops_gainful_activity) {
     return {
       start: null,
-      reason: 'Potwierdź, że ojciec przerwie działalność zarobkową, aby osobiście opiekować się dzieckiem.',
+      reason:
+        'Potwierdź, że ojciec przerwie działalność zarobkową, aby osobiście opiekować się dzieckiem.',
     };
   }
   const motherInsured = input.mother_was_insured_at_abandonment;
@@ -164,7 +208,8 @@ export function abandonmentTakeover(input: CaseInputs, birth: string, params: Be
     return { start: null, reason: 'Ustal, czy matka była objęta ubezpieczeniem chorobowym.' };
   }
   const minimum =
-    params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate * params.calendar.daysPerWeek;
+    params.maternityLeave.motherMandatoryWeeksWithIncapacityCertificate *
+    params.calendar.daysPerWeek;
   const usedDays = input.mother_maternity_days_used ?? 0;
   if (motherInsured && usedDays < minimum) {
     return {
@@ -198,29 +243,56 @@ export function payer(parent: CaseParentInsurance) {
   return parent.payer_insured_count_nov_30 === '> 20' ? 'EMPLOYER' : 'ZUS';
 }
 
+export function hasMaternityRightAfterInsurance(
+  input: CaseInputs,
+  event: string,
+  params: BenefitParams,
+): boolean {
+  if (qualifiesAfterUnlawfulTermination(input, event, params)) return true;
+  return Boolean(
+    input.employment_type === 'UOP' &&
+    input.applicant_role === 'MOTHER' &&
+    (input.stage === 'POST_BIRTH' || input.stage === 'PREGNANCY') &&
+    input.contract_end_date &&
+    input.contract_end_date >= addDays(event, -params.insuranceRisk.estimatedPregnancyDays) &&
+    input.contract_end_date < event &&
+    input.special_circumstances.employer_bankruptcy_or_liquidation,
+  );
+}
+
+function debtDenial(person: CaseParentInsurance, on: string, params: BenefitParams): string | null {
+  if (person.employment_type !== 'B2B') return null;
+  if (
+    person.debt_amount_pln != null &&
+    person.debt_amount_pln > 0 &&
+    debtThresholdPln(params, on) === null
+  )
+    return 'Brak historycznego progu zadłużenia na dzień powstania prawa. Sprawdź próg w ZUS.';
+  return hasSelfEmployedDebt(person, params, on)
+    ? 'Zadłużenie składkowe przekracza ustawowy próg. Do wypłaty potrzebna jest spłata.'
+    : null;
+}
+
 export function applicantDenial(
   input: CaseInputs,
   on: string,
   params: BenefitParams,
+  allowMaternityAfterEnd = true,
 ): string | null {
   if (insured(input) === false) return 'Brak ubezpieczenia chorobowego.';
-  if (hasSelfEmployedDebt(input, params)) {
-    return 'Zadłużenie składkowe przekracza ustawowy próg. Do wypłaty potrzebna jest spłata.';
-  }
+  const debt = debtDenial(input, on, params);
+  if (debt) return debt;
   if (input.title_start_date && on < input.title_start_date)
     return 'Tytuł ubezpieczenia powstał po zdarzeniu.';
   if (input.contract_end_date && input.contract_end_date < on) {
-    if (qualifiesAfterUnlawfulTermination(input, on, params)) return null;
     if (isFixedTermExtendedToBirth(input, on, params)) return null;
     if (
-      input.employment_type === 'UOP' &&
-      input.applicant_role === 'MOTHER' &&
+      allowMaternityAfterEnd &&
       input.due_or_birth_date &&
-      (input.special_circumstances.employer_bankruptcy_or_liquidation ||
-        input.special_circumstances.unlawful_termination_confirmed_by_court)
-    ) {
+      on >= input.due_or_birth_date &&
+      hasMaternityRightAfterInsurance(input, input.due_or_birth_date, params)
+    )
       return null;
-    }
     return 'Umowa zakończyła się przed powstaniem prawa do tego świadczenia.';
   }
   return insured(input) === null ? 'Brakuje informacji o ubezpieczeniu chorobowym.' : null;
@@ -232,9 +304,8 @@ export function parentDenial(
   params: BenefitParams,
 ): string | null {
   if (insured(parent) === false) return 'Brak ubezpieczenia chorobowego.';
-  if (hasSelfEmployedDebt(parent, params)) {
-    return 'Zadłużenie składkowe przekracza ustawowy próg. Do wypłaty potrzebna jest spłata.';
-  }
+  const debt = debtDenial(parent, on, params);
+  if (debt) return debt;
   if (parent.title_start_date && on < parent.title_start_date)
     return 'Tytuł ubezpieczenia powstał po zdarzeniu.';
   if (parent.contract_end_date && parent.contract_end_date < on)
@@ -243,14 +314,19 @@ export function parentDenial(
 }
 
 export function grossBasisForParent(
-  parent: Pick<CaseParentInsurance, 'employment_type' | 'monthly_bases'>,
+  parent: Pick<CaseParentInsurance, 'employment_type' | 'monthly_bases' | 'title_start_date'>,
   from: string,
   params: BenefitParams,
 ): number | null {
+  const titleStart = parent.title_start_date;
+  const firstFullMonth = titleStart
+    ? (titleStart.endsWith('-01') ? titleStart : addMonths(titleStart, 1)).slice(0, 7)
+    : null;
   const months = (parent.monthly_bases ?? [])
     .filter(
       (item) =>
         item.month < from.slice(0, 7) &&
+        (!firstFullMonth || item.month >= firstFullMonth) &&
         item.month >= addMonths(from, -params.benefitBase.lookbackMonths).slice(0, 7),
     )
     .sort((a, b) => a.month.localeCompare(b.month));
@@ -391,14 +467,12 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
         legal_basis: KP.contractProtection,
         message_pl: `Umowa o pracę na czas określony kończąca się po 3. miesiącu ciąży (${formatDatePl(input.contract_end_date)}) przedłuża się z mocy prawa do dnia porodu — prawo do zasiłku macierzyńskiego zostaje zachowane (nie dotyczy umowy na zastępstwo ani okresu próbnego do 1 miesiąca). Co zrobić: przekaż pracodawcy zaświadczenie lekarskie o ciąży; po dniu porodu zasiłek macierzyński wypłaci ZUS.`,
       });
-    } else if (
-      !(
-        input.employment_type === 'UOP' &&
-        input.applicant_role === 'MOTHER' &&
-        input.due_or_birth_date &&
-        input.special_circumstances.employer_bankruptcy_or_liquidation
-      )
-    ) {
+    } else if (!(
+      input.employment_type === 'UOP' &&
+      input.applicant_role === 'MOTHER' &&
+      input.due_or_birth_date &&
+      input.special_circumstances.employer_bankruptcy_or_liquidation
+    )) {
       if (input.employment_type === 'UOP') {
         if (
           input.applicant_role === 'MOTHER' &&
@@ -446,23 +520,28 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
   }
 
   // 3. Zadłużenie składkowe w JDG > 1% płacy minimalnej (ustawa zasiłkowa art. 2a)
-  const threshold = debtThresholdPln(params);
-  const debtShare = formatPercentPl(params.selfEmployedDebtThresholdShareOfMinimumWage);
-  if (hasSelfEmployedDebt(input, params)) {
+  const threshold = debtThresholdPln(params, rightOn);
+  const thresholdText = threshold === null ? '' : ` (${formatPlnPl(threshold)})`;
+  const debtShare = formatPercentPl(
+    rightOn && rightOn < params.effectiveFrom
+      ? 0.01
+      : params.selfEmployedDebtThresholdShareOfMinimumWage,
+  );
+  if (hasSelfEmployedDebt(input, params, rightOn)) {
     warnings.push({
       code: 'SELF_EMPLOYED_DEBT',
       legal_basis: KP.debt,
-      message_pl: `Zadłużenie składkowe w JDG przekracza próg ${debtShare} minimalnego wynagrodzenia (${formatPlnPl(threshold)}) na dzień powstania prawa — ZUS nie wypłaci zasiłku do czasu spłaty zaległości. Co zrobić: sprawdź saldo rozliczeń na PUE/eZUS i spłać całość zadłużenia, aby odblokować wypłatę świadczenia.`,
+      message_pl: `Zadłużenie składkowe w JDG przekracza próg ${debtShare} minimalnego wynagrodzenia${thresholdText} na dzień powstania prawa — ZUS nie wypłaci zasiłku do czasu spłaty zaległości. Co zrobić: sprawdź saldo rozliczeń na PUE/eZUS i spłać całość zadłużenia, aby odblokować wypłatę świadczenia.`,
     });
   } else if (
     input.co_parenting &&
     input.other_parent &&
-    hasSelfEmployedDebt(input.other_parent, params)
+    hasSelfEmployedDebt(input.other_parent, params, rightOn)
   ) {
     warnings.push({
       code: 'SELF_EMPLOYED_DEBT',
       legal_basis: KP.debt,
-      message_pl: `Zadłużenie składkowe drugiego rodzica w JDG przekracza próg ${debtShare} minimalnego wynagrodzenia (${formatPlnPl(threshold)}) — ZUS nie wypłaci mu zasiłku do czasu spłaty zaległości. Co zrobić: sprawdź saldo rozliczeń na PUE/eZUS drugiego rodzica i spłać zadłużenie przed skorzystaniem z urlopu.`,
+      message_pl: `Zadłużenie składkowe drugiego rodzica w JDG przekracza próg ${debtShare} minimalnego wynagrodzenia${thresholdText} — ZUS nie wypłaci mu zasiłku do czasu spłaty zaległości. Co zrobić: sprawdź saldo rozliczeń na PUE/eZUS drugiego rodzica i spłać zadłużenie przed skorzystaniem z urlopu.`,
     });
   }
 
@@ -485,7 +564,8 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
         ? params.sickness.waitingPeriodDaysMandatory
         : params.sickness.waitingPeriodDaysVoluntary;
     const duration = input.title_start_date
-      ? daysBetween(input.title_start_date, waitingCheckDate)
+      ? daysBetween(input.title_start_date, waitingCheckDate) +
+        (input.sickness_prior_credited_days ?? 0)
       : input.insurance_duration_days;
     if (duration !== null && duration >= 0 && duration < waitDays) {
       const insuranceKind = input.employment_type === 'UOP' ? 'obowiązkowe' : 'dobrowolne';
@@ -566,8 +646,10 @@ export function insuranceRisks(input: CaseInputs, params: BenefitParams): CaseWa
   }
 
   // 8. Zbieg dwóch tytułów ubezpieczenia naraz
-  if (input.additional_insurance_titles?.length ||
-      (input.secondary_employment_type && input.secondary_employment_type !== 'NONE')) {
+  if (
+    input.additional_insurance_titles?.length ||
+    (input.secondary_employment_type && input.secondary_employment_type !== 'NONE')
+  ) {
     const secondaryInsured = input.additional_insurance_titles?.length
       ? input.additional_insurance_titles.some((title) => title.sickness_insured === true)
       : input.secondary_employment_type !== 'UOP' &&

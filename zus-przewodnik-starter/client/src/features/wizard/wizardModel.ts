@@ -226,6 +226,15 @@ export function getQuestions(
               }),
         },
         {
+          id: 'childAdoptionBirthDate',
+          stage: 1,
+          type: 'date',
+          title: 'Kiedy urodziło się przyjęte dziecko?',
+          label: 'Data urodzenia przyjętego dziecka',
+          max: todayLocal(),
+          unknownLabel: 'Nie znam daty urodzenia',
+        },
+        {
           id: 'childAgeYears',
           stage: 1,
           type: 'number',
@@ -249,6 +258,35 @@ export function getQuestions(
           label: 'Odroczenie obowiązku szkolnego',
           options: YES_NO,
         });
+      }
+      if (accepted && answers.adoptionType === 'adoption') {
+        questions.push({
+          id: 'adoptionOrderFinalDate',
+          stage: 1,
+          type: 'date',
+          title: 'Kiedy uprawomocniło się postanowienie o przysposobieniu?',
+          label: 'Data uprawomocnienia przysposobienia',
+          max: todayLocal(),
+          unknownLabel: 'Nie znam daty lub postanowienie nie jest jeszcze prawomocne',
+        });
+      }
+      if (accepted) {
+        questions.push({
+          id: 'adoptionHospitalization',
+          stage: 1,
+          type: 'choice',
+          title: 'Czy dziecko przebywało w szpitalu po przyjęciu na wychowanie?',
+          label: 'Hospitalizacja po przyjęciu dziecka',
+          options: YES_NO,
+        });
+        if (answers.adoptionHospitalization === 'yes') {
+          questions.push(
+            { id: 'pregnancyWeekAtBirth', stage: 1, type: 'number', title: 'W którym tygodniu ciąży urodziło się dziecko?', label: 'Tydzień ciąży w dniu porodu', min: 20, max: 45, step: '1', unknownLabel: 'Nie znam tygodnia ciąży' },
+            { id: 'birthWeightGrams', stage: 1, type: 'number', title: 'Ile dziecko ważyło po urodzeniu?', label: 'Masa urodzeniowa (g)', min: 1, step: '1', unknownLabel: 'Nie znam masy urodzeniowej' },
+            { id: 'childHospitalizationStartDate', stage: 1, type: 'date', title: 'Kiedy rozpoczął się pobyt dziecka w szpitalu?', label: 'Początek hospitalizacji', min: answers.childAdoptionBirthDate, max: todayLocal(), unknownLabel: 'Nie znam daty' },
+            { id: 'childHospitalizationEndDate', stage: 1, type: 'date', title: 'Kiedy zakończył się pobyt dziecka w szpitalu?', label: 'Koniec hospitalizacji', min: answers.childHospitalizationStartDate, max: todayLocal(), unknownLabel: 'Nie znam daty' },
+          );
+        }
       }
     }
   } else {
@@ -486,6 +524,14 @@ export function getQuestions(
         min: answers.birthDate,
         max: today,
         hint: 'Ta data jest potrzebna do ustalenia początku urlopu taty.',
+      });
+      questions.push({
+        id: 'motherWasInsuredAtDeath',
+        stage: 1,
+        type: 'choice',
+        title: 'Czy mama podlegała ubezpieczeniu chorobowemu w dniu śmierci?',
+        label: 'Ubezpieczenie mamy w dniu śmierci',
+        options: [...YES_NO, { value: 'unknown', label: 'Nie wiem' }],
       });
     }
   }
@@ -919,16 +965,18 @@ export function getQuestions(
     }
   }
 
+  const fatherTakingOver = (answers['father.insuranceTitle'] === 'employment' || answers['father.sicknessInsurance'] === 'yes') && (
+    (motherDeceased && answers.motherWasInsuredAtDeath === 'no') ||
+    (motherAbandoned && answers.motherWasInsuredAtAbandonment === 'no')
+  );
   if (
-    !childLost &&
-    !motherDeceased &&
-    !motherAbandoned &&
-    roles.length > 0 &&
-    (roles.includes('mother') || situation === 'adoption')
+    !childLost && roles.length > 0 &&
+    (fatherTakingOver || (!motherDeceased && !motherAbandoned && (roles.includes('mother') || situation === 'adoption')))
   ) {
     const { rates, combinedRateApplicationDeadlineDays: deadline } = params;
     const event = combinedRateEvent(situation, answers);
     const expired = isCombinedRateExpired(situation, answers, today, params);
+    const filingEvent = fatherTakingOver ? (motherDeceased ? 'śmierci matki' : 'porzucenia dziecka') : 'porodu lub przyjęcia dziecka';
     const standard = {
       value: 'standard',
       label: `${formatRate(rates.maternity)}, a potem ${formatRate(rates.parental)}`,
@@ -946,7 +994,7 @@ export function getQuestions(
       label: 'Wariant wysokości zasiłku',
       hint: expired
         ? `Termin na złożenie nowego wniosku o ${formatRate(rates.combined)} upłynął ${formatPolishDate(addDaysIso(event!, deadline))}.`
-        : `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od porodu lub przyjęcia dziecka. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
+        : `Wariant ${formatRate(rates.combined)} wymaga wniosku w ciągu ${deadline} dni od ${filingEvent}. Drugi rodzic za swoje tygodnie urlopu rodzicielskiego dostaje zawsze ${formatRate(rates.secondParentNonTransferableInCombined)}.`,
       options: expired
         ? [standard]
         : [
@@ -969,7 +1017,11 @@ export function getQuestions(
 }
 
 function combinedRateEvent(situation: SituationType, answers: Record<string, string>) {
-  if (situation === 'afterBirth') return answers.birthDate;
+  if (situation === 'afterBirth') {
+    if (answers.motherSituation === 'deceased') return answers.motherDeathDate;
+    if (answers.motherSituation === 'abandoned') return answers.motherAbandonmentDate;
+    return answers.birthDate;
+  }
   if (situation === 'adoption' && answers.adoptionStage === 'accepted')
     return answers.childAcceptanceDate;
   return undefined;
@@ -1183,6 +1235,10 @@ export function buildScenario(
     expectedBirthDate: dateOrNull(values.expectedBirthDate),
     birthDate: dateOrNull(values.birthDate),
     childAcceptanceDate: dateOrNull(values.childAcceptanceDate),
+    childAdoptionBirthDate: dateOrNull(values.childAdoptionBirthDate),
+    adoptionOrderFinalDate: dateOrNull(values.adoptionOrderFinalDate),
+    childHospitalizationStartDate: dateOrNull(values.childHospitalizationStartDate),
+    childHospitalizationEndDate: dateOrNull(values.childHospitalizationEndDate),
     childAgeYears: numberOrNull(values.childAgeYears),
     adoptionType:
       values.adoptionType === 'adoption' || values.adoptionType === 'fosterFamily'
@@ -1308,6 +1364,10 @@ export function buildScenario(
         values.hospitalization === 'no' ? 0 : numberOrNull(values.hospitalizationDays);
     }
   }
+  if (situation === 'adoption' && values.adoptionHospitalization === 'yes') {
+    special.pregnancyWeekAtBirth = numberOrNull(values.pregnancyWeekAtBirth);
+    special.birthWeightGrams = numberOrNull(values.birthWeightGrams);
+  }
   const certificate = knownBoolean(values.zaZyciemCertificate);
   if (certificate !== undefined) special.zaZyciemCertificate = certificate;
   if (values.motherSituation) {
@@ -1315,7 +1375,10 @@ export function buildScenario(
     special.motherHospitalized = situations.includes('hospitalized');
     special.motherIncapableOfIndependentLiving = situations.includes('incapable');
     special.motherDeceased = values.motherSituation === 'deceased';
-    if (special.motherDeceased) scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
+    if (special.motherDeceased) {
+      scenario.motherDeathDate = dateOrNull(values.motherDeathDate);
+      scenario.motherWasInsuredAtDeath = knownBoolean(values.motherWasInsuredAtDeath);
+    }
     if (situations.includes('abandoned')) {
       special.motherAbandonedChild = true;
       scenario.motherAbandonmentDate = dateOrNull(values.motherAbandonmentDate);

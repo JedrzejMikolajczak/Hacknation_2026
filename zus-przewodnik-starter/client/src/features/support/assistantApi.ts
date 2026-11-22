@@ -12,7 +12,6 @@ export interface AssistantPlanContext {
   applied_payment_variant?: string;
   is_qualified?: boolean;
   has_b2b_arrears?: boolean | null;
-  debt_amount_pln?: number | null;
   warning_codes?: string[];
   difficult_case?: boolean;
 }
@@ -48,7 +47,6 @@ export function buildAssistantContext(
     applied_payment_variant: plan.outcome.applied_payment_variant,
     is_qualified: plan.outcome.is_qualified,
     has_b2b_arrears: input.has_b2b_arrears,
-    debt_amount_pln: input.debt_amount_pln ?? null,
     warning_codes: plan.outcome.warnings.map((warning) => warning.code).slice(0, 12),
     difficult_case: difficult,
   };

@@ -154,9 +154,7 @@ describe('Twój plan', () => {
     fireEvent.click(tabLink('Dokumenty i terminy'));
     expect((await screen.findAllByText('19.10.2027')).length).toBeGreaterThan(0);
     const link = tabLink('Wnioski');
-    expect(new URL((link as HTMLAnchorElement).href).searchParams.get('inputs')).toContain(
-      '2027-11-09',
-    );
+    expect(new URL((link as HTMLAnchorElement).href).searchParams.has('inputs')).toBe(false);
     fireEvent.click(link);
     expect(
       await screen.findByText(/uzupełnisz po zalogowaniu przez mObywatela \(symulacja\)/),

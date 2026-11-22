@@ -1,4 +1,5 @@
 import type { BenefitParams, CaseInputs, IsoDate } from '@shared/types';
+import { eventDate, fatherCombinedRateEvent } from '@shared/engine/caseRules';
 
 export const PLAN_TABS = [
   { id: 'entitlements', label: 'Uprawnienia' },
@@ -44,21 +45,16 @@ export function livingChildren(input: CaseInputs): number {
 }
 
 export function combinedRateUnavailable(input: CaseInputs, params: BenefitParams): boolean {
-  if (
-    input.special_circumstances.mother_deceased ||
-    Boolean(input.mother_abandonment_date) ||
-    livingChildren(input) === 0 ||
-    (input.applicant_role === 'FATHER' && input.stage !== 'ADOPTION')
-  )
-    return true;
+  const takeover = fatherCombinedRateEvent(input);
+  if (livingChildren(input) === 0 || input.parental_only) return true;
+  if (!takeover && (input.special_circumstances.mother_deceased || input.mother_abandonment_date ||
+    (input.applicant_role === 'FATHER' && input.stage !== 'ADOPTION'))) return true;
   if (input.stage !== 'ADOPTION' && input.stage !== 'POST_BIRTH') return false;
-  const event =
-    input.stage === 'ADOPTION'
-      ? input.adopted_or_foster_child_acceptance_date
-      : input.due_or_birth_date;
+  const event = takeover ?? eventDate(input);
   if (!event) return false;
   const filing = input.application_to_payer_date ?? input.application_date;
-  const elapsed = filing ? diffDaysIso(event, filing) : input.days_from_birth_to_application;
+  const elapsed = filing ? diffDaysIso(event, filing)
+    : takeover ? null : input.days_from_birth_to_application;
   return elapsed === null
     ? !!input.reference_date &&
         input.reference_date > addDaysIso(event, params.combinedRateApplicationDeadlineDays)

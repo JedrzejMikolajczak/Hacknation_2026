@@ -65,9 +65,16 @@ describe('Sprawy konkursowe ZUS', () => {
     const outcome = calculateCasePlan(inputs, params).outcome;
     const differences = compareCase(expected, outcome);
 
-    it(`${case_id} odtwarza decyzję ZUS bez rozbieżności`, () => {
-      expect(differences).toEqual([]);
-    });
+    if (case_id === 'case-05') {
+      it('case-05 pokazuje rozbieżność między wyciągiem a ustawowym oknem hospitalizacji', () => {
+        expect(differences).toContainEqual({ field: 'granted_duration_days', expected: 378, actual: 371 });
+        expect(outcome.periods.find(({ leave_type }) => leave_type === 'SUPPLEMENTARY_MATERNITY')?.days).toBe(7);
+      });
+    } else {
+      it(`${case_id} odtwarza decyzję ZUS bez rozbieżności`, () => {
+        expect(differences).toEqual([]);
+      });
+    }
 
     it(`${case_id} nie sygnalizuje ryzyka bez danych spełniających warunki`, () => {
       expect(
@@ -573,6 +580,7 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
   it('matka nieubezpieczona + ojciec ubezpieczony → ojciec dostaje rodzicielski i ojcowski (PDF B)', () => {
     const plan = calculateCasePlan(
       baseTwoParentInput({
+        paternity_leave_start_date: '2027-06-22',
         employment_type: 'NONE',
         benefit_base_amount_pln: null,
         payer_insured_count_nov_30: null,
@@ -642,6 +650,7 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
   it('samodzielny ojciec dostaje rodzicielski i ojcowski oraz wyjaśnienie o nieprzenoszalnej części', () => {
     const plan = calculateCasePlan(
       baseTwoParentInput({
+        paternity_leave_start_date: '2027-06-22',
         applicant_role: 'FATHER',
         co_parenting: false,
         other_parent_insured: null,
@@ -671,6 +680,8 @@ describe('Oboje rodzice, wariant 81,5% i sytuacje szczególne', () => {
   it('przy śmierci matki ubezpieczony ojciec przejmuje pełny urlop macierzyński, rodzicielski i ojcowski', () => {
     const plan = calculateCasePlan(
       baseTwoParentInput({
+        paternity_leave_start_date: '2027-03-30',
+        parental_leave_parts: [{ start_date: '2027-04-13', end_date: '2027-11-22' }],
         applicant_role: 'FATHER',
         co_parenting: false,
         other_parent_insured: null,

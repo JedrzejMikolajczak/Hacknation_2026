@@ -1,3 +1,4 @@
+import { z3bRepresentativeNotice } from '@shared/engine/formNotices';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type {
@@ -482,6 +483,9 @@ export function CaseDocuments({
               Gdy zasiłek wypłaca ZUS: pracodawca składa Z-3 (oraz ZAS-12 wyłącznie na dalszy okres
               zasiłku chorobowego), zleceniodawca składa Z-3a, a osoba na JDG składa ZAS-53 (zasiłek
               chorobowy) lub ZUS ZAM (zasiłek macierzyński).
+            </p>
+            <p className="docs-details__sub">
+              {z3bRepresentativeNotice.text} <a href={z3bRepresentativeNotice.url} target="_blank" rel="noreferrer">Komunikat ZUS</a>
             </p>
           </div>
         </details>

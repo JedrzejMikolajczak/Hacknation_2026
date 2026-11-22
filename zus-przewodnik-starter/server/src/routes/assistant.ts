@@ -2,28 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { buildDemoAssistantAnswer } from '@shared/engine/assistantAnswers';
 import {
+  assistantContextSchema,
   GeminiAssistantProvider,
   type AssistantProvider,
 } from '../adapters/GeminiAssistantProvider';
 import { ok } from '../lib/envelope';
 import { getParams } from './params';
-
-const assistantContextSchema = z
-  .strictObject({
-    stage: z.string().trim().max(40).optional(),
-    employment_type: z.string().trim().max(40).optional(),
-    applicant_role: z.string().trim().max(20).optional(),
-    co_parenting: z.boolean().optional(),
-    children_count: z.number().int().min(1).max(10).optional(),
-    who_pays: z.string().trim().max(40).nullable().optional(),
-    applied_payment_variant: z.string().trim().max(40).optional(),
-    is_qualified: z.boolean().optional(),
-    has_b2b_arrears: z.boolean().nullable().optional(),
-    debt_amount_pln: z.number().nonnegative().nullable().optional(),
-    warning_codes: z.array(z.string().trim().max(64)).max(12).optional(),
-    difficult_case: z.boolean().optional(),
-  })
-  .optional();
 
 const assistantHistorySchema = z
   .array(
@@ -37,7 +21,7 @@ const assistantHistorySchema = z
 
 const assistantAskSchema = z.strictObject({
   question: z.string().trim().min(1).max(1000),
-  context: assistantContextSchema,
+  context: assistantContextSchema.optional(),
   history: assistantHistorySchema,
 });
 

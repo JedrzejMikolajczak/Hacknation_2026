@@ -25,7 +25,7 @@ interface PlanJourneyProps {
  * Ścieżka planu: 6 kroków jako przyklejony pasek z postępem. Zielona linia „dopływa” do bieżącego
  * kroku, kroki przed bieżącym są wypełnione zielenią, wszystkie mają numer – rodzic zawsze widzi, gdzie jest, co zrobił i co dalej.
  */
-export function PlanJourney({ tab, search, visited, activeRef }: PlanJourneyProps) {
+export function PlanJourney({ tab, search, activeRef }: PlanJourneyProps) {
   const activeIndex = Math.max(0, PLAN_TABS.findIndex((item) => item.id === tab));
   const progress = activeIndex / (PLAN_TABS.length - 1);
 
