@@ -650,6 +650,26 @@ export function CaseCalculator({
 
   const showVariantSwitch = !childLostAll && !input.parental_only;
   const combinedUnavailable = combinedRateUnavailable(input, params);
+  const combinedTotal =
+    appliedVariant === 'COMBINED_81_5'
+      ? allParentsTotal
+      : combinedUnavailable
+        ? null
+        : otherVariantTotal;
+  const splitTotal = appliedVariant === 'SPLIT_100_70' ? allParentsTotal : otherVariantTotal;
+  const compareDiff =
+    combinedTotal !== null && splitTotal !== null ? combinedTotal - splitTotal : null;
+  const betterVariant: PaymentVariant | 'EQUAL' | null =
+    compareDiff === null || combinedUnavailable
+      ? null
+      : Math.abs(compareDiff) < 0.01
+        ? 'EQUAL'
+        : compareDiff > 0
+          ? 'COMBINED_81_5'
+          : 'SPLIT_100_70';
+  const betterDiffAbs = compareDiff !== null ? Math.abs(compareDiff) : null;
+  const isCombinedActive = input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable;
+  const isSplitActive = input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable;
   const durationText = formatDurationPl(primarySummary.weeks, primarySummary.days);
   const secondaryLabel = secondaryRole === 'FATHER' ? 'tata' : 'mama';
   const generalWarnings = outcome.warnings.filter((w) => isGeneralWarning(w, params));
@@ -763,33 +783,117 @@ export function CaseCalculator({
       </section>
 
       {showVariantSwitch && (
-        <section className="results-variant-bar" aria-label="Wybór wariantu wypłaty">
-          <span className="plan-field__label">Wariant wypłaty</span>
-          <div className="results-variant-bar__segmented" role="group" aria-label="Wariant wypłaty">
+        <section className="results-variant-bar" aria-label="Porównanie i wybór wariantu wypłaty">
+          <div className="results-variant-bar__head">
+            <span className="plan-field__label">Porównanie wariantów wypłaty</span>
+            {betterVariant === 'EQUAL' && (
+              <span className="results-variant-bar__summary">
+                Oba warianty dają taką samą kwotę łączną
+              </span>
+            )}
+            {betterVariant && betterVariant !== 'EQUAL' && betterDiffAbs !== null && (
+              <span className="results-variant-bar__summary">
+                Korzystniejszy:{' '}
+                <strong>
+                  {betterVariant === 'COMBINED_81_5'
+                    ? formatRate(params.rates.combined)
+                    : `${formatRate(params.rates.maternity)} + ${formatRate(params.rates.parental)}`}
+                </strong>{' '}
+                (+{formatPln(betterDiffAbs)})
+              </span>
+            )}
+          </div>
+          <div className="results-variant-compare" role="group" aria-label="Wariant wypłaty">
             <button
               type="button"
-              className={
-                input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'COMBINED_81_5' && !combinedUnavailable}
+              className={[
+                'results-variant-card',
+                isCombinedActive ? 'results-variant-card--active' : '',
+                betterVariant === 'COMBINED_81_5' ? 'results-variant-card--best' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-pressed={isCombinedActive}
               disabled={combinedUnavailable}
               onClick={() => update({ requested_payment_variant: 'COMBINED_81_5' })}
             >
-              {formatRate(params.rates.combined)} za cały okres
+              <span className="results-variant-card__top">
+                <span className="results-variant-card__title">
+                  {formatRate(params.rates.combined)} za cały okres
+                </span>
+                <span className="results-variant-card__badges">
+                  {betterVariant === 'COMBINED_81_5' && betterDiffAbs !== null && (
+                    <span className="results-variant-card__badge results-variant-card__badge--best">
+                      Korzystniejszy (+{formatPln(betterDiffAbs)})
+                    </span>
+                  )}
+                  {betterVariant === 'EQUAL' && (
+                    <span className="results-variant-card__badge results-variant-card__badge--equal">
+                      Równa kwota
+                    </span>
+                  )}
+                  {isCombinedActive && (
+                    <span className="results-variant-card__badge results-variant-card__badge--selected">
+                      Wybrany
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="results-variant-card__amount">
+                {combinedUnavailable
+                  ? 'Niedostępny'
+                  : combinedTotal !== null
+                    ? formatPln(combinedTotal)
+                    : 'Podaj podstawę'}
+              </span>
+              <span className="results-variant-card__desc">
+                {combinedUnavailable
+                  ? `Wymaga wniosku w ciągu ${params.combinedRateApplicationDeadlineDays} dni od porodu lub przyjęcia dziecka.`
+                  : `Stała kwota co miesiąc przez cały urlop (wniosek w ${params.combinedRateApplicationDeadlineDays} dni).`}
+              </span>
             </button>
+
             <button
               type="button"
-              className={
-                input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable
-                  ? 'results-variant-bar__btn results-variant-bar__btn--active'
-                  : 'results-variant-bar__btn'
-              }
-              aria-pressed={input.requested_payment_variant === 'SPLIT_100_70' || combinedUnavailable}
+              className={[
+                'results-variant-card',
+                isSplitActive ? 'results-variant-card--active' : '',
+                betterVariant === 'SPLIT_100_70' ? 'results-variant-card--best' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-pressed={isSplitActive}
               onClick={() => update({ requested_payment_variant: 'SPLIT_100_70' })}
             >
-              {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
+              <span className="results-variant-card__top">
+                <span className="results-variant-card__title">
+                  {formatRate(params.rates.maternity)} + {formatRate(params.rates.parental)}
+                </span>
+                <span className="results-variant-card__badges">
+                  {betterVariant === 'SPLIT_100_70' && betterDiffAbs !== null && (
+                    <span className="results-variant-card__badge results-variant-card__badge--best">
+                      Korzystniejszy (+{formatPln(betterDiffAbs)})
+                    </span>
+                  )}
+                  {betterVariant === 'EQUAL' && (
+                    <span className="results-variant-card__badge results-variant-card__badge--equal">
+                      Równa kwota
+                    </span>
+                  )}
+                  {isSplitActive && (
+                    <span className="results-variant-card__badge results-variant-card__badge--selected">
+                      Wybrany
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="results-variant-card__amount">
+                {splitTotal !== null ? formatPln(splitTotal) : 'Podaj podstawę'}
+              </span>
+              <span className="results-variant-card__desc">
+                {formatRate(params.rates.maternity)} za urlop macierzyński, a potem{' '}
+                {formatRate(params.rates.parental)} za rodzicielski.
+              </span>
             </button>
           </div>
         </section>

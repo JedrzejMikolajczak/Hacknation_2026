@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import type { BenefitParams, CaseWarning } from '@shared/types';
 import { WarningList } from './tabs/CaseResults';
@@ -12,7 +13,6 @@ export function PlanNotifications({ warnings, params }: PlanNotificationsProps) 
   const { pathname } = useLocation();
   const [openPathname, setOpenPathname] = useState<string | null>(null);
   const [seenKey, setSeenKey] = useState<string>('');
-  const wrapRef = useRef<HTMLDivElement>(null);
 
   const open = openPathname === pathname;
   const warningsKey = warnings.map((w) => `${w.code}:${w.message_pl}`).join('|');
@@ -21,23 +21,19 @@ export function PlanNotifications({ warnings, params }: PlanNotificationsProps) 
   useEffect(() => {
     if (!open) return;
 
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setOpenPathname(null);
       }
     }
 
-    function handleClickOutside(event: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
-        setOpenPathname(null);
-      }
-    }
-
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
     return () => {
+      document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [open]);
 
@@ -52,8 +48,41 @@ export function PlanNotifications({ warnings, params }: PlanNotificationsProps) 
     }
   }
 
+  const drawer = open ? (
+    <div
+      className="plan-notif__backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setOpenPathname(null);
+        }
+      }}
+    >
+      <div
+        id="plan-notifications-panel"
+        className="plan-notif__drawer"
+        role="region"
+        aria-label="Powiadomienia i uwagi do planu"
+      >
+        <div className="plan-notif__popover-header">
+          <h3 className="plan-notif__popover-title">Na co zwrócić uwagę ({warnings.length})</h3>
+          <button
+            type="button"
+            className="plan-notif__close"
+            aria-label="Zamknij uwagi"
+            onClick={() => setOpenPathname(null)}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="plan-notif__popover-body">
+          <WarningList warnings={warnings} params={params} compact />
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div className="plan-notif" ref={wrapRef}>
+    <div className="plan-notif">
       <button
         type="button"
         className={hasUnread ? 'plan-notif__btn plan-notif__btn--unread' : 'plan-notif__btn'}
@@ -87,31 +116,7 @@ export function PlanNotifications({ warnings, params }: PlanNotificationsProps) 
         </span>
       </button>
 
-      {open && (
-        <div
-          id="plan-notifications-panel"
-          className="plan-notif__popover"
-          role="region"
-          aria-label="Powiadomienia i uwagi do planu"
-        >
-          <div className="plan-notif__popover-header">
-            <h3 className="plan-notif__popover-title">
-              Na co zwrócić uwagę ({warnings.length})
-            </h3>
-            <button
-              type="button"
-              className="plan-notif__close"
-              aria-label="Zamknij uwagi"
-              onClick={() => setOpenPathname(null)}
-            >
-              ✕
-            </button>
-          </div>
-          <div className="plan-notif__popover-body">
-            <WarningList warnings={warnings} params={params} compact />
-          </div>
-        </div>
-      )}
+      {drawer && typeof document !== 'undefined' ? createPortal(drawer, document.body) : drawer}
     </div>
   );
 }

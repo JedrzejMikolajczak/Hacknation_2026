@@ -226,12 +226,12 @@ describe('family wizard', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('dotyczy mamy');
     await view.choice('Mama zmarła');
     await view.input('2026-01-14');
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa taty');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Twoja sytuacja zawodowa');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     // Mama zmarła: nie pytamy o jej plany; dziecko ma ponad 21 dni, więc 81,5% jest niedostępne.
     expect(screen.queryByRole('radio', { name: /^81,5%/ })).not.toBeInTheDocument();
     await view.choice('Tak');
-    expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sprawdź odpowiedzi' })).toBeInTheDocument();
     expect(screen.queryByText('Plan urlopu mamy')).not.toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
@@ -256,10 +256,10 @@ describe('family wizard', () => {
     await view.input('2026-01-10');
     await view.input('1');
     await view.choice('Dziecko urodziło się martwe');
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('sytuacja zawodowa mamy');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Twoja sytuacja zawodowa');
     await view.choice('Brak tytułu do ubezpieczenia chorobowego');
     await view.choice('Tak');
-    expect(screen.getByRole('heading', { name: 'Sprawdźcie odpowiedzi' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sprawdź odpowiedzi' })).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'Zapisz odpowiedzi' }));
     const stored = JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}');
     expect(stored.special).toEqual({ stillbirth: true, childDeathDate: null });
@@ -278,11 +278,16 @@ describe('family wizard', () => {
     await view.user.click(screen.getByRole('button', { name: 'Zmień: Rodzina' }));
     await view.user.click(screen.getByRole('radio', { name: /^Samodzielnie — mama/ }));
     await view.user.click(screen.getByRole('button', { name: /Wróć do podsumowania/ }));
+    expect(screen.getByRole('heading', { name: 'Sprawdź odpowiedzi' })).toBeInTheDocument();
     expect(screen.queryByText('Zatrudnienie taty')).not.toBeInTheDocument();
     expect(JSON.parse(memory.get(SCENARIO_STORAGE_KEY) ?? '{}').father).toBeNull();
     expect(JSON.parse(memory.get(MANUAL_FORM_STORAGE_KEY) ?? '{}').answers).not.toHaveProperty(
       'father.insuranceTitle',
     );
+    // Anuluj z podsumowania też wraca od razu bez przeklikiwania kroków
+    await view.user.click(screen.getByRole('button', { name: 'Zmień: Liczba dzieci' }));
+    await view.user.click(screen.getByRole('button', { name: 'Anuluj' }));
+    expect(screen.getByRole('heading', { name: 'Sprawdź odpowiedzi' })).toBeInTheDocument();
   });
 
   it('validates required questions and lets users go back without losing answers', async () => {

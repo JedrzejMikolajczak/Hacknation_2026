@@ -251,6 +251,13 @@ export function WizardPage() {
   const firstMissing = questions.find(
     (question) => validateAnswer(question, answers[question.id]) !== null,
   );
+  const allAnswered = !firstMissing && questions.length > 0;
+  const isPlural =
+    answers.family === 'both' &&
+    !(
+      situation === 'afterBirth' &&
+      ['deceased', 'abandoned'].includes(answers.motherSituation ?? '')
+    );
   const showComplete = Boolean(form?.completed && !firstMissing);
   const showSummary = !showComplete && form?.currentQuestionId === 'summary' && !firstMissing;
   const question =
@@ -382,8 +389,11 @@ export function WizardPage() {
     const nextQuestions = updated === currentForm
       ? questions
       : getQuestions(form.situation, updated.answers);
+    const nextMissing = nextQuestions.find(
+      (item) => validateAnswer(item, updated.answers[item.id]) !== null,
+    );
     const nextQuestion = editing
-      ? nextQuestions.find((item) => validateAnswer(item, updated.answers[item.id]) !== null)
+      ? nextMissing
       : nextQuestions[nextQuestions.findIndex((item) => item.id === question.id) + 1];
     persistForm({ ...updated, currentQuestionId: nextQuestion?.id ?? 'summary', completed: false });
     setError(null);
@@ -392,10 +402,22 @@ export function WizardPage() {
 
   function back() {
     if (!form || !question) return;
+    if (editing && allAnswered) {
+      persist(answers, 'summary');
+      setEditing(false);
+      setError(null);
+      return;
+    }
     const previous = questions[questions.findIndex((item) => item.id === question.id) - 1];
     if (previous) persist(answers, previous.id);
     setError(null);
+  }
+
+  function goToSummary() {
+    if (!form || !allAnswered) return;
+    persist(answers, 'summary');
     setEditing(false);
+    setError(null);
   }
 
   function edit(id: string) {
@@ -497,7 +519,8 @@ export function WizardPage() {
           <span className="wizard__situation">{SITUATION_LABELS[situation]}</span>
           <h1 className="wizard__title">Plan dla Twojej rodziny</h1>
           <p className="wizard__subtitle">
-            Pytania dopasujemy do Waszej sytuacji. Odpowiedzi można uzupełnić później.
+            Pytania dopasujemy do {isPlural ? 'Waszej' : 'Twojej'} sytuacji. Odpowiedzi można
+            uzupełnić później.
           </p>
           {!compactIntro && zusBar}
         </div>
@@ -573,12 +596,17 @@ export function WizardPage() {
             </h2>
             <p className="wizard__help">
               {storageAvailable
-                ? 'Możecie wrócić do nich na tym samym urządzeniu i w tej samej przeglądarce.'
-                : 'Pozostawcie tę stronę otwartą. Przeglądarka nie pozwoliła zapisać odpowiedzi na później.'}
+                ? isPlural
+                  ? 'Możecie wrócić do nich na tym samym urządzeniu i w tej samej przeglądarce.'
+                  : 'Możesz wrócić do nich na tym samym urządzeniu i w tej samej przeglądarce.'
+                : isPlural
+                  ? 'Pozostawcie tę stronę otwartą. Przeglądarka nie pozwoliła zapisać odpowiedzi na później.'
+                  : 'Pozostaw tę stronę otwartą. Przeglądarka nie pozwoliła zapisać odpowiedzi na później.'}
             </p>
             {questions.some((item) => answers[item.id] === 'unknown') && (
               <p className="wizard__notice">
-                Część danych czeka na uzupełnienie. Znajdziecie je w podsumowaniu.
+                Część danych czeka na uzupełnienie. {isPlural ? 'Znajdziecie' : 'Znajdziesz'} je w
+                podsumowaniu.
               </p>
             )}
             <div className="wizard__actions">
@@ -605,16 +633,16 @@ export function WizardPage() {
             aria-labelledby="question-title"
           >
             <h2 ref={titleRef} tabIndex={-1} id="question-title">
-              Sprawdźcie odpowiedzi
+              {isPlural ? 'Sprawdźcie odpowiedzi' : 'Sprawdź odpowiedzi'}
             </h2>
             <p className="wizard__help">
-              Każdą odpowiedź możecie zmienić. Pola „Do uzupełnienia później” pozostaną oznaczone
-              jako brakujące.
+              Każdą odpowiedź {isPlural ? 'możecie' : 'możesz'} zmienić. Pola „Do uzupełnienia
+              później” pozostaną oznaczone jako brakujące.
             </p>
             {missingCount > 0 && (
               <p className="wizard__notice">
                 Do uzupełnienia zostało: {answersLabel(missingCount)} – zaznaczone poniżej na żółto.
-                Plan policzymy mimo to, a braki możesz dopisać później.
+                Plan policzymy mimo to, a braki {isPlural ? 'możecie' : 'możesz'} dopisać później.
               </p>
             )}
             {summaryGroups.map(({ label, index, items }) => {
@@ -803,20 +831,44 @@ export function WizardPage() {
                 </p>
               )}
               <div className="wizard__actions wizard__actions--split">
-                {question.id !== 'family' && (
+                {editing && allAnswered ? (
                   <button
                     type="button"
                     className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
-                    onClick={back}
+                    onClick={goToSummary}
                   >
-                    Wstecz
+                    Anuluj
+                  </button>
+                ) : (
+                  question.id !== 'family' && (
+                    <button
+                      type="button"
+                      className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
+                      onClick={back}
+                    >
+                      Wstecz
+                    </button>
+                  )
+                )}
+                {!editing && allAnswered && (
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn--ghost wizard__button wizard__button--secondary"
+                    onClick={goToSummary}
+                  >
+                    Przejdź do podsumowania
                   </button>
                 )}
                 <button
                   type="submit"
                   className="ui-btn ui-btn--cta wizard__button wizard__button--primary"
                 >
-                  {editing ? 'Wróć do podsumowania' : 'Dalej'} <ArrowIcon />
+                  {editing
+                    ? allAnswered
+                      ? 'Wróć do podsumowania'
+                      : 'Dalej do brakującego pola'
+                    : 'Dalej'}{' '}
+                  <ArrowIcon />
                 </button>
               </div>
             </form>

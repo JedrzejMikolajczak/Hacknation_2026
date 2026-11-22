@@ -196,6 +196,19 @@ export function validateLeavePlan(
     const days = getPartDays(part);
     const work = part.work_fraction ?? 0;
 
+    if (
+      (role === 'FATHER' && !availability.fatherAvailable) ||
+      (role === 'MOTHER' && !availability.motherAvailable)
+    ) {
+      coveredEngineCodes.add('PARENTAL_INSURANCE');
+      issues.push({
+        code: 'PARENTAL_UNAVAILABLE_PARENT',
+        severity: 'error',
+        message: `${getPlainParentLabel(role)} nie ma potwierdzonego ubezpieczenia w tym planie — nie można przypisać tej osobie części urlopu rodzicielskiego.`,
+        legalBasis: 'KP art. 182¹a',
+      });
+    }
+
     if (days <= 0) {
       coveredEngineCodes.add('PARENTAL_DATES');
       issues.push({
