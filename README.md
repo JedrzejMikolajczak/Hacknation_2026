@@ -12,7 +12,6 @@ Projekt zespołowy przygotowany na **HackNation 2026** dla wyzwania Zakładu Ube
 ![React + Vite](https://img.shields.io/badge/React%20%2B%20Vite-Frontend-007834?style=flat-square&logo=react&logoColor=white)
 ![Express API](https://img.shields.io/badge/Express-REST%20API-1c3d2e?style=flat-square)
 ![Gemini AI](https://img.shields.io/badge/Gemini%20AI-Asystent%20Wsparcia-4285F4?style=flat-square&logo=google&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-00416e?style=flat-square)](LICENSE)
 
 </div>
 
@@ -155,6 +154,33 @@ W repozytorium znajduje się także automatyczny workflow [GitHub Actions CI](.g
 
 ---
 
+## Zakres wykorzystania sztucznej inteligencji (AI)
+
+Zgodnie z wymaganiami zadania konkursowego (§ 4 i § 9 treści wyzwania) poniżej jasno wskazujemy zakres użycia mechanizmów AI:
+
+- **W działaniu aplikacji:** sztuczna inteligencja jest wykorzystywana **wyłącznie** w opcjonalnym **Asystencie AI** w zakładce **Wsparcie** (`POST /api/v1/assistant/ask`, Google Gemini `gemini-3.1-flash-lite`). Funkcja jest jawnie oznaczona w interfejsie komponentem `<AiBadge />`, maskuje dane wrażliwe (PESEL, numery kont) przed wysłaniem zapytania, a bez klucza API automatycznie przechodzi w deterministyczny tryb lokalnej bazy ZUS 2026 (`is_demo_fallback: true`). **Kalkulator, ustalanie uprawnień, terminy, plan urlopów, odczyt pól PDF (`PDF.js`) i generowanie wniosków (`pdf-lib`) nie wykorzystują AI** — działają w 100% deterministycznie.
+- **W procesie twórczym:** narzędzia AI wspierały zespół podczas programowania, pisania testów jednostkowych/regresyjnych oraz porządkowania dokumentacji na podstawie wspólnego kontraktu ([`agents/CONVENTIONS.md`](zus-przewodnik-starter/agents/CONVENTIONS.md)), przy pełnej weryfikacji merytorycznej i audycie zgodności z przepisami ZUS 2026.
+
+---
+
+## Zgodność z wymaganiami zadania ZUS
+
+| Wymaganie z treści wyzwania (§ 3 i § 5) | Realizacja w aplikacji |
+| --- | --- |
+| Świadczenia w ciąży (chorobowy, zasiłek w wysokości macierzyńskiego, brak uprawnień) | Kreator `/wizard` + zakładka **Uprawnienia** i **Kalkulator** (`/plan/entitlements`, `/plan/calculator`) |
+| Zintegrowany kalkulator dla obojga rodziców, łączenie pracy z rodzicielskim, adopcja i rodzina zastępcza, indywidualna podstawa | Jeden spójny kalkulator + **Plan urlopów** (`/plan/leave-plan`) z osią czasu, podziałem części, pracą na część etatu i adopcją |
+| Dokumenty, terminy, płatnik vs ZUS, zagrożenia i ryzyka | Zakładka **Dokumenty i terminy**, centrum powiadomień **Uwagi**, mapa składania i ostrzeżenia o ryzykach (m.in. dług JDG art. 2a, pozorność, podwyższenie podstawy) |
+| Symulacje: mObywatel, dane ZUS, zadłużenie JDG, e-ZLA, PUE/eZUS, wnioski + akt urodzenia USC | `/login` (symulacja mObywatela i paneli ZUS), `/plan/applications` (wnioski ZAM, ZAS-53, wniosek USC, symulacja wysyłki), `/plan/support` (symulacja PUE/eZUS) |
+| Organizacje charytatywne i oficjalne linki (ZUS, MRPiPS, PIP, USC) | Zakładka **Wsparcie** (`/plan/support`) i **Przewodnik** (`/guide`) |
+| Testowanie przykładowych spraw i upload własnego PDF | Katalog spraw i lokalny import PDF w `/cases` |
+| Panel administracyjny parametrów (zmiany legislacyjne) | `/admin` + centralny plik [`shared/params.json`](zus-przewodnik-starter/shared/params.json) |
+| Preferowany stack techniczny (React, JavaScript/TypeScript, REST API, RWD) | React + Vite + TypeScript + Express REST API (`/api/v1/*`), RWD od 360 px (WCAG 2.1 AA) |
+
+> [!IMPORTANT]
+> **Ochrona materiałów konkursowych:** zgodnie z zastrzeżeniem ZUS żadne oryginalne dokumenty źródłowe ani załączniki udostępnione uczestnikom HackNation 2026 nie zostały skopiowane ani umieszczone w tym repozytorium (katalogi robocze `docs/zus/` i `data/cases-raw/` są wykluczone w `.gitignore`).
+
+---
+
 ## Struktura repozytorium
 
 ```text
@@ -167,22 +193,30 @@ Hacknation_2026/
 │   ├── client/                    # Frontend React + Vite + TypeScript (kreator, plan, PDF, AI UI)
 │   ├── server/                    # REST API Express + walidacja Zod + adaptery (mObywatel, ZUS, Gemini)
 │   ├── shared/                    # Deterministyczny silnik uprawnień, kwot, okresów i dokumentów
-│   ├── data/                      # Sprawy katalogowe (cases/) i fikcyjne profile demonstracyjne (profiles/)
+│   ├── data/                      # Zanonimizowane sprawy katalogowe (cases/) i fikcyjne profile (profiles/)
 │   ├── agents/                    # Kontrakt API i wytyczne pracy zespołu
 │   └── README.md                  # Szczegółowa dokumentacja techniczna, zmienne .env i mapa modułów
 ├── docs/                          # Dokumentacja jakościowa i audyt prawno-techniczny
 │   ├── test-cases.md              # Audyt reguł ZUS i macierz przypadków testowych
 │   └── FIX_ALL_REPORT.md          # Historia integracji modułów
-├── LICENSE                        # Licencja MIT
 └── README.md                      # Ten plik
 ```
 
-Szczegółową konfigurację środowiska (zmienne `.env`, własne porty, opis endpointów API, zależności, licencje zasobów zewnętrznych i weryfikację E2E) znajdziesz w **[dokumentacji technicznej aplikacji](zus-przewodnik-starter/README.md)**.
+Szczegółową konfigurację środowiska (zmienne `.env`, własne porty, opis endpointów API, zależności, rozwiązania zewnętrzne i weryfikację E2E) znajdziesz w **[dokumentacji technicznej aplikacji](zus-przewodnik-starter/README.md)**.
 
 ---
 
-## Zespół i licencja
+## Zespół, prawa autorskie i rozwiązania zewnętrzne
 
 Projekt przygotowany zespołowo podczas **HackNation 2026** (wyzwanie ZUS) przez: `@bchochoool`, `@JedrzejMikolajczak`, `@GluglaK`, `@szymczakkk`, `@gluglam` oraz zespół QA/merytoryczny.
 
-Kod projektu udostępniany jest na licencji **[MIT](LICENSE)**. Zasoby zewnętrzne (font **Lato** na licencji SIL OFL oraz **PDF.js** na licencji Apache 2.0) posiadają dołączone kopie swoich licencji — szczegóły w [dokumentacji aplikacji](zus-przewodnik-starter/README.md#8-licencje).
+Autorskie prawa majątkowe do kodu i dokumentacji wytworzonej w ramach zadania przysługują członkom zespołu na zasadach określonych w **§ 4 Regulaminu Zadania Konkursowego HackNation 2026** (bez odrębnej otwartej licencji, z zachowaniem gotowości do przeniesienia praw na Zakład Ubezpieczeń Społecznych zgodnie z regulaminem).
+
+**Wykorzystane rozwiązania zewnętrzne (§ 4 ust. 1 Regulaminu):**
+- **Frontend i narzędzia:** React, React Router, Vite, TypeScript (MIT / Apache 2.0),
+- **Backend i walidacja:** Express, CORS, Zod (MIT),
+- **Obsługa PDF w przeglądarce:** `pdf-lib`, `@pdf-lib/fontkit` (MIT) oraz **PDF.js** (Apache 2.0 — kopia licencji w repozytorium),
+- **Typografia i wzory:** font **Lato** (SIL Open Font License — kopie licencji dołączone w repozytorium) oraz oficjalne publiczne wzory formularzy `ZAM` i `ZAS-53` ze strony `www.zus.pl`,
+- **Opcjonalne API AI:** Google Gemini API (wyłącznie po stronie asystenta w zakładce Wsparcie, z lokalnym trybem awaryjnym bez API).
+
+Szczegóły licencji plików zewnętrznych i pełna tabela zależności: [dokumentacja aplikacji](zus-przewodnik-starter/README.md#8-licencje-plików-zewnętrznych) oraz [REQUIREMENTS.md](zus-przewodnik-starter/REQUIREMENTS.md).

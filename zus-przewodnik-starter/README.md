@@ -90,9 +90,9 @@ npm run build
 
 Pracuj na gałęzi zadania i wykonaj kontrole przed publikacją (`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`). Zmiany kontraktu opisuj w dzienniku zmian w [`agents/CONVENTIONS.md`](agents/CONVENTIONS.md). Materiały konkursowe, lokalną konfigurację i klucze przechowuj poza Gitem. [Kontrakt i konwencje](agents/CONVENTIONS.md) · [Instrukcje repozytorium](agents/AGENTS.md)
 
-## 8. Licencje
+## 8. Licencje plików zewnętrznych
 
-- Kod projektu udostępniany jest na [licencji MIT](../LICENSE).
+- Autorskie prawa majątkowe do kodu i materiałów wytworzonych w zadaniu podlegają zasadom § 4 Regulaminu Zadania Konkursowego HackNation 2026.
 - [PDF.js](client/src/features/cases/vendor/README.md) zawiera informację o wydaniu i licencji Apache 2.0.
 - Lato ma licencję SIL Open Font License. Kopie licencji są dołączone [do fontów interfejsu](client/public/fonts/OFL.txt) oraz [do zasobów generatora formularzy](client/public/forms/OFL-Lato.txt).
 
