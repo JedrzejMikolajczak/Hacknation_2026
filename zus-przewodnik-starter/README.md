@@ -1,204 +1,21 @@
-# Zasiłkowy Przewodnik Przyszłego Rodzica
+# Aplikacja ZUS Przewodnik
 
-> Projekt na **HackNation 2026**, wyzwanie **Zakładu Ubezpieczeń Społecznych (ZUS)**.
-> Ten plik jest punktem startowym dla ludzi **i agentów AI** (Claude, Gemini, ChatGPT/Codex).
-> Agencie: przeczytaj go w całości, potem `agents/CONVENTIONS.md`, a dopiero potem pisz kod.
+Aplikacja webowa i REST API projektu HackNation 2026. [README repozytorium](../README.md) zawiera szybki start i ręczny test fikcyjnej rodziny. Tutaj znajdziesz konfigurację środowiska i mapę modułów.
 
----
+## 1. Uruchomienie
 
-## 1. Cel projektu w jednym akapicie
+Polecenia wykonuj w `zus-przewodnik-starter`, gdzie znajduje się wspólny plik `package-lock.json`. Wymagania zespołu to Node.js 20 lub nowszy i npm 10 lub nowszy. Do wczytania `.env` użyj Node.js 20.12 lub nowszego. Repozytorium ma [`.nvmrc`](.nvmrc) wskazujący główną wersję 20.
 
-Budujemy responsywną aplikację webową, która pomaga osobom planującym dziecko, kobietom w ciąży, rodzicom małych dzieci oraz rodzicom adopcyjnym i zastępczym:
-1. **ustalić, jakie świadczenia z ubezpieczenia chorobowego im przysługują** (albo dlaczego nie przysługują),
-2. **policzyć okres i wysokość zasiłków** (chorobowego w ciąży, macierzyńskiego za każdy rodzaj urlopu) na podstawie ich indywidualnej sytuacji,
-3. **przejść przez procedurę**: jakie dokumenty, gdzie (pracodawca czy ZUS) i w jakim terminie złożyć,
-4. **uniknąć ryzyk** utraty lub obniżenia świadczeń.
-
-Integracje z systemami państwowymi (mObywatel, ZUS, PUE/eZUS, e-ZLA, akty stanu cywilnego) są **wyłącznie symulowane**. Jury przetestuje demo na **przykładowych sprawach ZUS** i sprawdzi, czy wyliczenia są poprawne. **Poprawność liczb jest najważniejsza.**
-
-## 2. Kryteria oceny (pod nie optymalizujemy)
-
-| Kryterium | Waga |
-|---|---|
-| Związek z wyzwaniem | 25% |
-| Kompletność projektu i UX | 25% |
-| Pomysł | 20% |
-| Oryginalność | 15% |
-| Potencjał wdrożeniowy | 15% |
-
-Wymagania twarde: aplikacja **w pełni responsywna**, **REST API**, **demo online** z możliwością wybrania lub wgrania przykładowej sprawy, **oznaczenie funkcji AI**, prezentacja (max 10 slajdów), film (max 3 min), repozytorium.
-
-## 3. Źródła: co przeczytać, żeby zrozumieć domenę
-
-### 3.1 Dokumenty od ZUS (lokalnie, w `docs/zus/`, NIE w publicznym repo)
-
-> ⚠️ Materiały od ZUS, a zwłaszcza **zestawy przykładowych spraw**, są **wyłącznie na użytek HackNation**: nie wolno ich kopiować ani rozpowszechniać. Folder `docs/zus/` i `data/cases-raw/` są w `.gitignore`. Do repo trafiają tylko **nasze** dane wyciągnięte ze spraw (`data/cases/*.json`), bez kopiowania dokumentów.
-
-| Plik w `docs/zus/` | Co zawiera | Kiedy czytać |
-|---|---|---|
-| `ZUS_Pelna_tresc_zadania.pdf` | Treść wyzwania: wymagania funkcjonalne (pkt 3a–3j), symulacje, wymagania techniczne, kryteria | **Zawsze najpierw** |
-| `Zalacznik_czas_trwania_wysokosc_podstawa.docx` | **Wszystkie liczby:** wymiary urlopów, stawki %, tabela urlopu uzupełniającego, algorytm podstawy wymiaru | Przed każdą pracą w `shared/engine` |
-| `Ustawa_zasilkowa_wyciag.pdf` | Ustawa z 25.06.1999 (art. 2a – zadłużenie JDG, art. 29–31 – prawo do macierzyńskiego, art. 36–48a – podstawa wymiaru, art. 61 – płatnik) | Reguły uprawnień i podstawy |
-| `Kodeks_pracy_wyciag.pdf` | Art. 177 (ochrona), 180–1823 (urlopy, terminy wniosków, łączenie z pracą) | Kalkulator, plan urlopów, wnioski |
-| `Rozporzadzenie_2026_poz_1316.pdf` | Jakie dokumenty i dane są niezbędne do przyznania zasiłków | Moduł „Dokumenty i terminy” |
-| `Rozporzadzenie_2025_poz_322.pdf` | Treść wniosków o urlopy rodzicielskie i dokumenty do nich dołączane | Moduł „Wnioski” |
-| `Poradnik_dla_rodzicow_ZUS_2026.pdf` | Poradnik ZUS (stan na 1.04.2026), przystępny język | Teksty przewodnika, baza wiedzy dla asystenta AI |
-
-### 3.2 Oficjalne strony (wskazane w treści zadania)
-
-- ZUS – formularze i informacje: https://www.zus.pl (zakładka *Wzory formularzy → Zasiłki*: ZAM, Z-3, Z-3a, ZAS-53)
-- Ministerstwo Rodziny – urlop rodzicielski: https://www.gov.pl/web/rodzina/urlop-rodzicielski
-- Państwowa Inspekcja Pracy – rodzicielstwo: https://www.pip.gov.pl/dla-pracodawcow/porady-prawne/rodzicielstwo
-- Rejestr stanu cywilnego (odpis aktu urodzenia): https://www.gov.pl/web/cyfryzacja/rejestr-stanu-cywilnego
-
-### 3.3 Najważniejsze reguły w pigułce
-
-Wszystkie liczby żyją w `shared/params.json`. **Nigdy nie wpisuj ich w kod.**
-
-- **Urlop macierzyński:** 20 / 31 / 33 / 35 / 37 tyg. dla 1 / 2 / 3 / 4 / 5+ dzieci; do 6 tyg. przed porodem; 14 tyg. po porodzie tylko matka.
-- **Urlop rodzicielski:** 41 tyg. (1 dziecko), 43 tyg. (2+); z zaświadczeniem „Za życiem” 65 / 67 tyg.; 9 tyg. nieprzenoszalnych dla każdego rodzica; max 5 części; do końca roku, w którym dziecko kończy 6 lat.
-- **Urlop ojcowski:** 2 tyg., w całości lub 2 częściach po min. 1 tydzień; do 12. miesiąca życia dziecka.
-- **Urlop uzupełniający:** wcześniaki i dzieci w szpitalu; 1 tydzień za każdy tydzień w szpitalu, limit 8 lub 15 tyg. (tabela w params).
-- **Stawki:** 100% (macierzyński, uzupełniający, ojcowski, na warunkach macierzyńskiego); 70% (rodzicielski); **81,5%** za całość, jeśli matka złoży wniosek do 21 dni po porodzie, **ale 9 tyg. drugiego rodzica zawsze 70%**.
-- **Martwe urodzenie / zgon dziecka:** przed 8. tygodniem życia – 8 tyg. po porodzie, min. 7 dni od zgonu; po 8. tygodniu – 7 dni od zgonu.
-- **Adopcja / rodzina zastępcza:** 20–37 tyg. (min. 9); limit wieku dziecka 7 lat (10 przy odroczeniu obowiązku szkolnego) dla rodziny zastępczej, 14 lat dla adopcji.
-- **Zasiłek chorobowy w ciąży:** prawo po 30 dniach (ubezpieczenie obowiązkowe) lub 90 dniach (dobrowolne); 100% przy kodzie „B”; do 270 dni; pracownik najpierw 33 dni (14 po 50. r.ż.) wynagrodzenia chorobowego od pracodawcy.
-- **Podstawa wymiaru:** średnia z 12 miesięcy minus 13,71% (szczegóły w załączniku i `CONVENTIONS.md`).
-- **JDG:** zadłużenie składkowe > 1% płacy minimalnej w dniu powstania prawa oznacza brak zasiłku do czasu spłaty (art. 2a).
-- **Kto wypłaca:** pracodawca, jeśli zgłasza > 20 ubezpieczonych; w innym przypadku ZUS.
-- **Formularze:** ZUR i ZAO są od 24.10.2026 włączone do ZAM; Z-3b zlikwidowany.
-
-## 4. Architektura
-
-```
-/client     React + Vite + TypeScript       – UI (tylko wyświetla wyniki z API)
-/server     Express + TypeScript            – REST API /api/v1/*, adaptery mocków
-/shared
-  /engine   czyste funkcje TS (bez I/O)     – całe liczenie, 100% pokryte testami
-  types.ts  WSPÓLNE TYPY – kontrakt front/back
-  params.json  wszystkie stawki i wymiary (edytowalne w panelu admina)
-/data
-  /profiles   profile testowe do symulacji mObywatela/ZUS (JSON)
-  /cases      dane wyciągnięte z przykładowych spraw ZUS (JSON, bez dokumentów)
-/docs
-  /zus        dokumenty ZUS (gitignored, lokalnie)
-/agents     instrukcje dla agentów AI
+```sh
+npm ci
+npm run dev
 ```
 
-Zasady architektury (ważne dla wdrożenia w ZUS):
-- **Najpierw API:** frontend nie liczy niczego sam, woła API. Silnik da się podpiąć pod PUE/eZUS bez naszego UI.
-- **Adaptery:** `AuthProvider` (dziś `MockMObywatelProvider`) i `ZusDataProvider` (dziś `MockZusDataProvider`). Prawdziwe integracje = podmiana adaptera.
-- **Stan w URL** (`/plan?...`): można linkować do konkretnego wyliczenia.
-- **Bez danych osobowych na serwerze** w wersji demo.
+- Frontend Vite działa pod [`http://localhost:5173`](http://localhost:5173/).
+- Express działa domyślnie na porcie `3001`. [`GET /api/v1/health`](http://localhost:3001/api/v1/health) zwraca `{"data":{"status":"ok"},"error":null}`.
+- Vite przekazuje zapytania `/api` do Expressa przez proxy. Ten sam test działa przez [port frontendu](http://localhost:5173/api/v1/health).
 
-## 5. Mapa aplikacji
-
-1. **Start:** wybór sytuacji (planuję / w ciąży / po porodzie / adopcja) + „Zaloguj przez mObywatela” lub „Kontynuuj bez logowania”.
-2. **Logowanie (symulacja):** wybór profilu → „Pobrane dane z ZUS” (edytowalne).
-3. **Kreator sytuacji:** forma zatrudnienia → data porodu/przyjęcia → liczba dzieci → okoliczności szczególne → drugi rodzic.
-4. **Twój plan** (zakładki): Uprawnienia · Kalkulator · Plan urlopów · Dokumenty i terminy · Wnioski · Wsparcie.
-5. Z menu: **Przewodnik** (baza wiedzy) · **Przykładowe sprawy** (dla jury) · **Panel admina** (`/admin`).
-
-## 6. Zadania i właściciele
-
-| Zadanie | Katalog | Właściciel |
-|---|---|---|
-| Przewodnik (dokumenty, terminy, ryzyka), materiały do zgłoszenia | `client/src/features/guide`, `docs/` | Osoba 1 |
-| UI/UX: kreator, layout, responsywność | `client/src/app`, `client/src/components` | Osoba 2 |
-| Symulacja mObywatela i danych z ZUS, świadczenia w ciąży, wnioski | `client/src/features/{login,applications}`, `server/src/adapters` | Osoba 3 |
-| REST API, parametry, panel admina, deploy, asystent AI | `server/`, `client/src/features/admin` | Osoba 4 |
-| Kalkulator zasiłku macierzyńskiego, plan urlopów, łączenie z pracą, adopcja | `shared/engine/{maternity,parental,adoption}` | Osoba 5 |
-| Podstawa wymiaru, przykładowe sprawy ZUS | `shared/engine/benefitBase`, `data/cases` | Osoba 6 |
-
-## 7. Workflow Git (obowiązkowy, także dla agentów)
-
-**Jeden feature = jeden branch. Nikt nie commituje bezpośrednio do `main` ani do `checkN`.**
-
-### Gałęzie
-| Gałąź | Rola |
-|---|---|
-| `main` | Ostatni działający stan, z którego idzie deploy demo. Tylko fast-forward z checkpointu. |
-| `check1`, `check2`, `check3`, … | **Checkpointy integracyjne co 2–3 h.** Tu łączymy wszystkie feature branche. |
-| `feature/<obszar>-<krótki-opis>` | Praca nad jednym zadaniem, np. `feature/engine-maternity-leave`, `feature/ui-wizard`, `feature/api-cases` |
-| `fix/<opis>` | Poprawka błędu znalezionego przy integracji |
-
-Obszary w nazwie brancha: `engine`, `api`, `ui`, `mock`, `guide`, `admin`, `cases`, `ai`, `docs`.
-
-### Cykl pracy
-1. **Start:** `git checkout checkN && git pull && git checkout -b feature/<obszar>-<opis>` (zawsze od **najnowszego** checkpointu).
-2. **Praca:** małe commity w konwencji **Conventional Commits**:
-   `feat(engine): add maternity leave weeks by children count`
-   `fix(api): return 422 on invalid birthDate`
-   `test(engine): cover 81.5% rate with 9 weeks for second parent`
-   Typy: `feat`, `fix`, `test`, `refactor`, `docs`, `style`, `chore`.
-3. **Przed pushem:** `npm run lint && npm run typecheck && npm test` muszą przejść.
-4. **Push** brancha i otwarcie PR do bieżącego checkpointu (`checkN+1`), z opisem: co zrobione, jak przetestować, czy zmienia kontrakt.
-5. **Co 2–3 h – integracja (prowadzi Osoba 4 albo lider):**
-   ```bash
-   git checkout checkN && git pull
-   git checkout -b checkN+1
-   git merge --no-ff feature/...     # po kolei każdy gotowy branch
-   npm ci && npm run typecheck && npm test && npm run build
-   git push origin checkN+1
-   # jeśli wszystko zielone:
-   git checkout main && git merge --ff-only checkN+1 && git push
-   ```
-6. **Po integracji** każdy aktualizuje swój branch: `git merge checkN+1` (bez `rebase` na już wypchniętych branchach).
-7. **Branch nieskończony?** Nie wchodzi do checkpointu. Lepiej mniejszy działający zakres niż zepsuty build.
-
-### Zmiany kontraktu (`shared/types.ts`, `shared/params.json`, ścieżki API)
-- Zmiany kontraktu tylko w osobnym branchu `feature/contract-<opis>`, ogłoszone zespołowi **przed** merge.
-- Każda zmiana kontraktu trafia do sekcji *Changelog kontraktu* w `agents/CONVENTIONS.md`.
-- Nie zmieniaj nazw istniejących pól. Dodawaj nowe, stare oznacz jako przestarzałe.
-
-### Zakazy
-- ❌ `git push --force` na wspólne gałęzie (`main`, `checkN`)
-- ❌ commit plików z `docs/zus/`, `data/cases-raw/`, `.env`, kluczy API
-- ❌ commit z czerwonymi testami
-- ❌ „przy okazji” refaktory poza zakresem zadania
-
-## 8. Uruchomienie
-
-Wymagania (Node.js ≥ 20, npm ≥ 10), pełna lista zależności i opis skryptów: **[`REQUIREMENTS.md`](REQUIREMENTS.md)**.
-
-```bash
-npm ci               # katalog zus-przewodnik-starter, workspaces client, server, shared
-npm run dev          # client :5173 + server :3001
-npm test             # testy shared + server + client
-npm run build
-```
-
-## 9. Funkcje AI (do oznaczenia w UI i w opisie zgłoszenia)
-
-Każdą funkcję korzystającą z AI oznaczamy w UI etykietą „Wspierane przez AI” i wpisujemy do listy poniżej.
-
-- [x] Asystent AI (Google Gemini) odpowiadający na podstawie poradnika ZUS 2026, parametrów systemu i zanonimizowanego kontekstu planu — zakładka Wsparcie (`/plan/support`, oznaczona `<AiBadge />`, z automatycznym trybem awaryjnym z bazy lokalnej bez AI, gdy brak klucza `GEMINI_API_KEY`)
-- [ ] Odczyt danych z PDF przykładowej sprawy (opcjonalny)
-
-## Test wersji konkursowej
-
-1. Otwórz `http://localhost:5173/cases` i wybierz jedną z sześciu spraw.
-2. Przejdź przez sześć zakładek planu. W sprawie 04 ustaw drugą część od 09.11.2027 do 10.01.2028. Sprawdź termin 19.10.2027 w dokumentach i zakres dat we wniosku ojca.
-3. Sprawdź `/api/v1/health` na porcie API. Porównanie z decyzją jest dostępne w katalogu spraw oraz w `POST /api/v1/cases/:caseId/evaluate`.
-
-### Wnioski i walidacja kreatora
-
-1. Po porodzie ustaw datę sprzed 21 dni, a następnie sprzed 22 dni. Sprawdź, czy kreator nadal pozwala wybrać 81,5% w pierwszym przypadku i wybiera stawki rozdzielone w drugim.
-2. W planie obojga rodziców zaznacz pobyt mamy w szpitalu i orzeczenie jednocześnie. Następnie wybierz zgon mamy. Podaj datę zgonu i sprawdź, czy formularz przechodzi do danych taty.
-3. W zakładce **Wnioski** wybierz **Pobierz dane z mObywatela (symulacja)**. Wybierz gotowy profil, wskaż wnioskodawcę, jeśli plan obejmuje oboje rodziców, i kliknij **Przekaż dane testowe**. Po automatycznym powrocie sprawdź imię i nazwisko, PESEL oraz datę urodzenia wybranego wnioskodawcy.
-4. Uzupełnij wymagane pola wniosku i kliknij **Pobierz PDF**. Sprawdź podgląd oraz listę załączników i wybierz **Pobierz wniosek do uzupełnienia (PDF)**. Uzupełnij ewentualne braki i złóż wniosek u adresata wskazanego w podglądzie.
-5. W kreatorze wybierz datę 31 stycznia, po czym zmień miesiąc na luty. Pole dnia powinno się wyczyścić. W pytaniu o liczbę dzieci sprawdź wartości 1, 2 i 3 oraz **4 lub więcej**.
-6. W planie z odwróconymi datami zwolnienia sprawdź komunikat w zakładce **Uprawnienia** i popraw zakres bezpośrednio pod komunikatem.
-
-Wnioski pracownicze generowane z planu obejmują urlopy i czynności dostępne w aplikacji. Dane osobowe z symulacji pozostają w pamięci strony do jej odświeżenia. [Rozporządzenie MRPiPS, Dz.U. 2025 poz. 322](https://dziennikustaw.gov.pl/DU/2025/322)
-
-### Adapter logowania do wniosków
-
-`GET /api/v1/mock/profiles` zwraca identyfikatory i etykiety profili z `data/profiles/`. `POST /api/v1/mock/login` przyjmuje np. `{"profile_id":"anna"}` i zwraca `{ data: { sessionToken, profile }, error: null }`. Profile zawierają dane fikcyjne i PESEL-e z celowo niepoprawną cyfrą kontrolną. Sesja testowa jest ważna do 30 minut i żyje w pamięci procesu API.
-
-Punkt podpięcia integracji ZUS znajduje się w `server/src/app.ts`, gdzie rejestrowany jest router z implementacją `AuthProvider`. W wersji produkcyjnej można zastąpić demonstracyjny wybór profilu na `/login` właściwym przepływem uwierzytelniania i przekazać wynik z polami `firstName`, `lastName`, `pesel` i `birthDate` do tej samej funkcji `setSimulatedIdentity`. Wnioski odczytują te pola z kontekstu scenariusza.
-
-Gdy domyślne porty są zajęte, uruchom w PowerShell:
+Jeśli porty są zajęte, ustaw je w tej samej sesji terminala przed uruchomieniem. Vite odczytuje `PORT` i `VITE_PORT` ze środowiska procesu.
 
 ```powershell
 $env:PORT = '3301'
@@ -206,6 +23,72 @@ $env:VITE_PORT = '5276'
 npm run dev
 ```
 
-Panel `/admin` przyjmuje token ustawiony w zmiennej środowiskowej serwera `ADMIN_TOKEN`. Testowe zmiany parametrów obowiązują do restartu API. Plik `shared/params.json` zawiera wartości początkowe. Używaj przykładowych danych we wnioskach. Link planu zawiera dane scenariusza potrzebne do wyliczenia.
+`npm run start -w server` uruchamia samo API przez `tsx`. `npm run build` kompiluje projekt, a gotowe pliki Vite trafiają do `client/dist/`. [Wymagania i zależności](REQUIREMENTS.md)
 
-[Raport integracji i wyniki spraw](../docs/FIX_ALL_REPORT.md)
+## 2. Konfiguracja opcjonalna
+
+Do podstawowego demo wystarczą ustawienia domyślne. Jeśli potrzebujesz ustawień serwera, skopiuj [`.env.example`](.env.example) do `.env` w `zus-przewodnik-starter`. W PowerShellu użyj `Copy-Item .env.example .env`.
+
+| Zmienna | Zastosowanie |
+| --- | --- |
+| `PORT` | Port Expressa, domyślnie `3001`. Aby proxy Vite użyło tego samego portu, ustaw zmienną przed `npm run dev`. |
+| `VITE_PORT` | Port serwera deweloperskiego Vite, domyślnie `5173`. |
+| `CLIENT_ORIGIN` | Dodatkowy adres frontendu dozwolony przez CORS, np. `http://localhost:5276`. `http://localhost:5173` jest dozwolony domyślnie. |
+| `ADMIN_TOKEN` | Token zapisu w `/admin`, co najmniej 32 znaki. Pusta wartość wyłącza zapis na serwerze. Zapisane parametry obowiązują do restartu API. |
+| `GEMINI_API_KEY` | Opcjonalny klucz asystenta. Pusta wartość uruchamia odpowiedzi z lokalnej bazy demonstracyjnej. |
+| `GEMINI_MODEL` | Opcjonalny identyfikator modelu. Domyślna wartość z przykładu to `gemini-3.1-flash-lite`. |
+| `GEMINI_API_BASE_URL` | Opcjonalny bazowy adres usługi Gemini. W zwykłym uruchomieniu serwer używa domyślnego adresu adaptera. |
+
+Wartości tokenów konfiguruj lokalnie. Plik `.env` pozostaje poza repozytorium.
+
+## 3. Dane i źródła
+
+- [`data/cases/`](data/cases/) zawiera sześć spraw katalogowych przygotowanych z materiałów konkursowych.
+- [`data/profiles/`](data/profiles/) zawiera fikcyjne profile wykorzystywane przez symulację mObywatela i ZUS.
+- Materiały konkursowe otrzymane od ZUS należą do lokalnego, ignorowanego `docs/zus/`. Surowe sprawy przechowuj poza Gitem w `data/cases-raw/`.
+
+Oficjalne źródła to [serwis ZUS](https://www.zus.pl), [informacja o urlopie rodzicielskim](https://www.gov.pl/web/rodzina/urlop-rodzicielski), [porady PIP dotyczące rodzicielstwa](https://www.pip.gov.pl/dla-pracodawcow/porady-prawne/rodzicielstwo), [rejestr stanu cywilnego](https://www.gov.pl/web/cyfryzacja/rejestr-stanu-cywilnego) i [rozporządzenie dotyczące wniosków, Dz.U. 2025 poz. 322](https://dziennikustaw.gov.pl/DU/2025/322).
+
+## 4. Moduły i przepływ danych
+
+| Miejsce | Rola |
+| --- | --- |
+| [`client/`](client/) | React, formularz, plan, przewodnik, przykładowe sprawy i panel administracyjny. |
+| [`server/`](server/) | Express, walidacja Zod i trasy pod `/api/v1`. Adaptery dostarczają fikcyjne dane logowania i ubezpieczenia. |
+| [`shared/engine/`](shared/engine/) | Wspólny silnik uprawnień, obliczeń, okresów i checklist dokumentów. |
+| [`shared/types.ts`](shared/types.ts) i [`shared/params.json`](shared/params.json) | Wspólny kontrakt oraz domyślne parametry obliczeń. |
+| [`agents/`](agents/) | Instrukcje pracy i [konwencje API](agents/CONVENTIONS.md). |
+
+Kreator przekazuje dane scenariusza do `POST /api/v1/plan`. Link do planu może zawierać dane scenariusza w parametrze `inputs`. Do testów i udostępniania linków używaj danych fikcyjnych.
+
+## 5. Ścieżki demonstracyjne
+
+- [Kreator](client/src/features/wizard/README.md) zaczyna się od wybrania sytuacji na stronie startowej. Możesz go wypełnić ręcznie lub użyć danych z profilu testowego.
+- `/plan` prowadzi do uprawnień, kalkulatora, planu urlopów, dokumentów, wniosków i wsparcia.
+- `/cases` porównuje wyniki ze sprawami katalogowymi. Import własnego PDF próbuje odczytać pola w przeglądarce. Użytkownik sprawdza i zatwierdza wartości wysyłane do kalkulatora. W oficjalnych formularzach ZUS dane można uzupełnić ręcznie.
+- `/login` symuluje mObywatela. `GET /api/v1/mock/profiles` zwraca listę profili, `POST /api/v1/mock/login` przyjmuje `{"profile_id":"anna"}`, a `GET /api/v1/mock/zus-data` używa tokenu z odpowiedzi logowania w nagłówku `Authorization: Bearer …`.
+- `/guide` zawiera przewodnik po tematach, a `/admin` pozwala edytować parametry wersji demonstracyjnej. Podgląd i pobieranie wniosków są dostępne w planie. Informacje o adresacie prowadzą do właściwej ścieżki złożenia dokumentów.
+
+## 6. Sprawdzenia
+
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+`npm test` uruchamia Vitest w pakietach `shared`, `server` i `client`. Aby sprawdzić porównanie z decyzją w wybranej sprawie, otwórz ją w katalogu lub wyślij `POST /api/v1/cases/:caseId/evaluate`. [Matryca spraw](../docs/test-cases.md) · [Raport integracji](../docs/FIX_ALL_REPORT.md) · [Raport E2E](docs/E2E_BUGI.md)
+
+## 7. Praca nad projektem
+
+Pracuj na gałęzi zadania i wykonaj kontrole przed publikacją. Zmiany kontraktu omawiaj z zespołem i opisuj w dzienniku zmian. Materiały konkursowe, lokalną konfigurację i klucze przechowuj poza Gitem. [Instrukcje repozytorium](agents/AGENTS.md) · [Brief zespołu](docs/TEAM_BRIEF.md)
+
+## 8. Licencje plików zewnętrznych
+
+- [PDF.js](client/src/features/cases/vendor/README.md) zawiera informację o wydaniu i licencji Apache 2.0.
+- Lato ma licencję SIL Open Font License. Kopie licencji są dołączone [do fontów interfejsu](client/public/fonts/OFL.txt) oraz [do zasobów generatora formularzy](client/public/forms/OFL-Lato.txt).
+
+## 9. Funkcje AI
+
+Asystent w zakładce **Wsparcie** jest oznaczony w interfejsie i może korzystać z Google Gemini po skonfigurowaniu klucza. Gdy serwer korzysta z lokalnej bazy odpowiedzi, API zwraca `is_demo_fallback: true`. Import pól PDF wykorzystuje PDF.js i reguły odczytu tekstu w przeglądarce.

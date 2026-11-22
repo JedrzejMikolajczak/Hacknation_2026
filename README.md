@@ -1,46 +1,42 @@
 # Zasiłkowy Przewodnik Przyszłego Rodzica
 
-> **Projekt realizowany w ramach hackathonu HackNation 2026 (wyzwanie Zakładu Ubezpieczeń Społecznych).**
+Projekt zespołowy na **HackNation 2026** w ramach wyzwania Zakładu Ubezpieczeń Społecznych.
 
-**Zasiłkowy Przewodnik Przyszłego Rodzica** to interaktywna aplikacja webowa, która przeprowadza przyszłych i obecnych rodziców przez gąszcz przepisów ubezpieczeniowych. Narzędzie tłumaczy zawiłe zasady na konkretny plan działania: wylicza przysługujące świadczenia, pomaga zaplanować podział urlopów między rodziców, wskazuje płatnika zasiłku oraz kompletuje wymagane dokumenty.
+ZUS Przewodnik pomaga przygotować plan na czas ciąży, po porodzie, przy adopcji lub przyjęciu dziecka do niezawodowej rodziny zastępczej. Kreator zbiera dane rodziny, a kalkulator pokazuje przewidywane świadczenia, płatnika i podział urlopów. Plan obejmuje też terminy, listę dokumentów i pobieranie wybranych formularzy. Logowanie mObywatelem i dane ZUS działają na profilach demonstracyjnych.
 
----
+## Uruchomienie i pierwszy test
 
-## Kluczowe funkcjonalności
+Przygotuj **Node.js 20.12 lub nowszy** oraz **npm 10 lub nowszy**. W katalogu głównym repozytorium uruchom:
 
-* **Ścieżki dopasowane do sytuacji życiowej** — osobne prowadzenie dla osób planujących ciążę, będących w ciąży, po porodzie oraz w przypadku adopcji (pieczy zastępczej), a także dedykowane wsparcie w sytuacjach trudnych (wcześniactwo, hospitalizacja dziecka, zaświadczenie *„Za życiem”*, poronienie lub urodzenie martwego dziecka).
-* **Zintegrowany kalkulator zasiłkowy (reguły 2026)** — deterministyczny silnik wyliczający prawo do świadczenia oraz jego wysokość z uwzględnieniem tytułu ubezpieczenia (UoP, umowa zlecenie, JDG), okresów wyczekiwania (`30`/`90` dni), odliczenia `13,71%`, limitów podstawy JDG oraz wyboru między wariantem uśrednionym (`81,5%`) a standardowym (`100%` / `70%`).
-* **Interaktywny kalendarz i oś czasu urlopów** — wizualne planowanie urlopu macierzyńskiego, uzupełniającego (dla wcześniaków), ojcowskiego oraz rodzicielskiego — z automatycznym pilnowaniem `14` tygodni obowiązkowych dla matki, `9` tygodni nieprzenoszalnych dla drugiego rodzica oraz wydłużenia urlopu przy łączeniu go z pracą na maksymalnie `1/2` etatu.
-* **Centrum dokumentów i symulator eZUS / mObywatel** — automatyczna lista wymaganych druków (`ZAM`, `Z-3`, `Z-3a`, `ZAS-53`), wskazanie podmiotu wypłacającego (pracodawca zgłaszający powyżej `20` ubezpieczonych vs ZUS), obsługa przykładowych plików PDF oraz symulacja pobrania danych ubezpieczonego.
-* **Ostrzeżenia przed pułapkami prawnymi** — alerty m.in. o terminie `21` dni od porodu na złożenie wniosku o `81,5%`, zaległościach składkowych w JDG powyżej `1%` minimalnego wynagrodzenia czy konieczności ponownego zgłoszenia się do dobrowolnego ubezpieczenia chorobowego (`ZUS ZUA`) po zakończeniu zasiłku macierzyńskiego.
-* **Panel administracyjny parametrów** — możliwość aktualizacji stawek procentowych, limitów kwotowych i wymiarów urlopów bez ingerencji w kod źródłowy aplikacji.
-
----
-
-## Architektura projektu
-
-Repozytorium zostało podzielone na niezależne moduły funkcjonalne oraz warstwę dokumentacji i przypadków testowych:
-
-```text
-Hacknation_2026/
-├── modules/
-│   ├── 01-kalendarz/             # Wizualna oś czasu, podział urlopów i kluczowe terminy
-│   ├── 02-formularz/             # Kreator danych użytkownika i walidacja sytuacji życiowej
-│   ├── 03-kalkulator/            # Deterministyczny silnik reguł prawnych i wyliczeń ZUS
-│   ├── 04-ui/                    # Interfejs użytkownika, komponenty, RWD i dostępność
-│   └── 05-documents-profiles/    # Parser wniosków PDF, profile testowe, symulacja eZUS
-├── data/
-│   └── sample-cases/             # Przykładowe sprawy i dokumenty testowe ZUS
-└── docs/
-    └── test-cases.md             # Matryca weryfikacji wyników na bazie spraw konkursowych
-```
-
-## Uruchomienie wersji konkursowej
-
-```bash
+```sh
 cd zus-przewodnik-starter
 npm ci
 npm run dev
 ```
 
-Otwórz `http://localhost:5173/cases`. Katalog prowadzi do sześciu spraw i panelu „Twój plan”. [Instrukcja aplikacji](zus-przewodnik-starter/README.md) · [Raport integracji](docs/FIX_ALL_REPORT.md)
+Otwórz [aplikację](http://localhost:5173/) i sprawdź [odpowiedź API](http://localhost:3001/api/v1/health). Powinna zawierać `"status": "ok"`. W [przykładowych sprawach](http://localhost:5173/cases) wybierz sprawę 04 i otwórz „Twój plan”. Możesz sprawdzić wynik kalkulatora, oś czasu i wymagane dokumenty.
+
+Po zatrzymaniu serwerów lub w drugim terminalu, w katalogu `zus-przewodnik-starter`, uruchom `npm test`. Jeśli potrzebujesz innych portów lub chcesz uruchomić opcjonalne funkcje, zajrzyj do [instrukcji aplikacji](zus-przewodnik-starter/README.md).
+
+## Ręczny test z fikcyjną rodziną
+
+Anna i Piotr Kowalscy spodziewają się jednego dziecka. Wybierz **Jestem w ciąży → Kontynuuj bez logowania → Dwoje rodziców**.
+
+| Pytanie | Dane testowe |
+| --- | --- |
+| Przewidywany termin porodu i liczba dzieci | Data około 8 tygodni od dziś, 1 dziecko |
+| Zaświadczenie „Za życiem” i sytuacja mamy | „Nie” oraz „Nie dotyczy” |
+| Zatrudnienie obojga | Umowa o pracę. Ubezpieczenie Anny od 01.03.2022, Piotra od 01.06.2021. Dla obojga wybierz opcję umowy bezterminowej przy dacie końca umowy. |
+| Liczba osób zgłoszonych przez płatników | Pracodawca Anny 80, pracodawca Piotra 15 |
+| Dodatkowe pytania o Annę | 30 lat. Przy pytaniu o rozwiązanie umowy wybierz „Nie”. Przy pytaniu o zwolnienie w tej ciąży również wybierz „Nie”. |
+| Urlop i kwoty | Oboje planują skorzystać. Wybierz „Podstawę ustalimy później”. W polach wynagrodzenia brutto i wynagrodzenia z umowy wpisz po 7 000 zł dla Anny i po 8 500 zł dla Piotra. |
+| Drugi tytuł i wariant zasiłku | „Nie, mam tylko jeden tytuł do ubezpieczenia” oraz „Jeszcze nie wiemy – pokażcie porównanie” |
+
+Kliknij **Zapisz odpowiedzi → Przejdź do planu → Kalkulator**. Podstawy z podanych kwot brutto powinny wynieść **6 040,30 zł** dla Anny i **7 334,65 zł** dla Piotra. Sprawdź oba warianty kalkulatora oraz okresy obojga rodziców w zakładce **Plan urlopów**.
+
+## Co jest w repozytorium
+
+- [`zus-przewodnik-starter/`](zus-przewodnik-starter/) zawiera aplikację React/Vite, REST API Express i współdzielony silnik TypeScript.
+- [`zus-przewodnik-starter/data/`](zus-przewodnik-starter/data/) zawiera dane spraw i fikcyjne profile używane w aplikacji.
+- [`docs/`](docs/) zawiera [raport integracji](docs/FIX_ALL_REPORT.md) i [matrycę spraw testowych](docs/test-cases.md).
+- [`modules/`](modules/) i [`data/sample-cases/`](data/sample-cases/) zachowują znaczniki pierwotnego podziału pracy zespołu. Uruchamiany kod i dane są w `zus-przewodnik-starter/`.
