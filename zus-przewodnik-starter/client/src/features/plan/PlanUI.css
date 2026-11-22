@@ -664,118 +664,206 @@
   border-radius: var(--radius-md);
 }
 
-/* ----- Oś czasu ----- */
-.plan-page .lp-timeline-tracks {
+/* ----- Oś czasu: pionowe „szyny” etapów, osobno dla każdego rodzica ----- */
+.plan-page .lp-rails {
+  display: grid;
   gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+@media (min-width: 880px) {
+  .plan-page .lp-rails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.plan-page .lp-rail {
   padding: var(--space-4);
-  border: 0;
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
 }
 
-.plan-page .lp-timeline-track__lane {
-  border-radius: 14px;
+.plan-page .lp-rail__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
-.plan-page .lp-timeline-bar {
-  --bar-bg: #d8f0e1;
-  --bar-edge: #2f9d63;
-  --bar-ink: #0b3d1f;
-  container-type: inline-size;
-  border: 2px solid var(--bar-edge);
-  border-radius: 12px;
-  background: var(--bar-bg);
-  color: var(--bar-ink);
+.plan-page .lp-rail__who {
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .lp-rail__total {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .lp-rail__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.plan-page .lp-rail__list {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* pionowa linia łącząca etapy */
+.plan-page .lp-rail__list::before {
+  content: '';
+  position: absolute;
+  top: 1.1rem;
+  bottom: 1.1rem;
+  left: 0.55rem;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+
+.plan-page .lp-stage {
+  --st-color: #2f9d63;
+  --st-soft: #d8f0e1;
+  --st-ink: #0b3d1f;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-page .lp-stage__dot {
+  position: relative;
+  z-index: 1;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.9rem;
+  border: 3px solid var(--st-color);
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 4px var(--color-surface-muted);
+}
+
+.plan-page .lp-stage__body {
+  display: grid;
+  gap: 0.15rem;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-left: 5px solid var(--st-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   transition:
     transform var(--dur-base) var(--ease-spring),
     box-shadow var(--dur-base) var(--ease-out);
 }
 
-.plan-page .lp-timeline-bar:hover {
-  z-index: 2;
+.plan-page .lp-stage:hover .lp-stage__body,
+.plan-page .lp-stage:focus-visible .lp-stage__body {
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  transform: translateX(3px);
 }
 
-.plan-page .lp-timeline-bar__meta {
-  color: inherit;
-  opacity: 0.8;
-}
-
-/* Rodzaje urlopów – te same klasy mają paski i pastylki legendy */
-.plan-page .lp-timeline-bar--parental,
-.plan-page .lp-timeline-bar--with-work {
-  --bar-bg: #dfeaf6;
-  --bar-edge: #2f6ea6;
-  --bar-ink: #0d3558;
-}
-
-.plan-page .lp-timeline-bar--paternity {
-  --bar-bg: #fff0d3;
-  --bar-edge: #d98a12;
-  --bar-ink: #5b3600;
-  border-style: dashed;
-}
-
-.plan-page .lp-timeline-bar--supplementary {
-  --bar-bg: #e9f7ef;
-  --bar-edge: #19a45a;
-  border-style: solid;
-}
-
-.plan-page .lp-timeline-bar--extension {
-  --bar-bg: #eef7f1;
-  --bar-edge: #19a45a;
-  border-style: dotted;
-}
-
-/* Z pracą w trakcie – kreskowane tło */
-.plan-page .lp-timeline-bar--with-work {
-  background: repeating-linear-gradient(135deg, var(--bar-bg) 0 9px, #f6f9fc 9px 15px);
-}
-
-/* Wąskie paski: najpierw znika nazwa, potem stawka, na końcu cały podpis (jest w legendzie i tooltipie) */
-@container (max-width: 8rem) {
-  .lp-timeline-bar__title {
-    display: none;
-  }
-}
-
-@container (max-width: 5.5rem) {
-  .lp-timeline-bar__rate {
-    display: none;
-  }
-}
-
-@container (max-width: 3.4rem) {
-  .lp-timeline-bar__meta {
-    display: none;
-  }
-}
-
-.plan-page .lp-timeline-legend {
+.plan-page .lp-stage__top {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-  margin-block: calc(var(--space-2) * -1) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.plan-page .lp-stage__title {
+  color: var(--st-ink);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .lp-stage__rate {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--st-soft);
+  color: var(--st-ink);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .lp-stage__weeks {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
+}
+
+.plan-page .lp-stage__dates {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  list-style: none;
 }
 
-.plan-page .lp-timeline-legend__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+/* miniaturka: gdzie na całej osi wypada etap */
+.plan-page .lp-stage__span {
+  position: relative;
+  height: 6px;
+  margin-top: var(--space-2);
+  border-radius: 3px;
+  background: var(--color-border);
 }
 
-.plan-page :where(.lp-timeline-legend__swatch) {
-  display: inline-block;
-  width: 1.1rem;
-  height: 0.8rem;
-  border: 2px solid var(--bar-edge, #2f9d63);
-  border-radius: 4px;
-  background: var(--bar-bg, #d8f0e1);
+.plan-page .lp-stage__span-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 6px;
+  border-radius: 3px;
+  background: var(--st-color);
+}
+
+/* Rodzaje urlopów */
+.plan-page .lp-stage--parental,
+.plan-page .lp-stage--with-work {
+  --st-color: #2f6ea6;
+  --st-soft: #dfeaf6;
+  --st-ink: #0d3558;
+}
+
+.plan-page .lp-stage--paternity {
+  --st-color: #d98a12;
+  --st-soft: #fff0d3;
+  --st-ink: #5b3600;
+}
+
+.plan-page .lp-stage--supplementary {
+  --st-color: #19a45a;
+  --st-soft: #e9f7ef;
+}
+
+.plan-page .lp-stage--extension {
+  --st-color: #19a45a;
+  --st-soft: #eef7f1;
+}
+
+.plan-page .lp-stage--with-work .lp-stage__body {
+  border-left-style: dashed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-page .lp-stage__body {
+    transition: none;
+  }
+  .plan-page .lp-stage:hover .lp-stage__body {
+    transform: none;
+  }
 }
 
 /* ----- Zwijane sekcje planu urlopów ----- */

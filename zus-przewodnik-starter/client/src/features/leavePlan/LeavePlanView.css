@@ -326,123 +326,6 @@
   font-weight: var(--font-weight-bold);
 }
 
-.lp-timeline-tracks-wrap {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  margin-bottom: var(--space-4);
-}
-
-.lp-timeline-tracks {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-3);
-  background: var(--color-surface-muted);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
-}
-
-.lp-timeline-track {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.lp-timeline-track__label {
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-}
-
-.lp-timeline-track__lane {
-  position: relative;
-  /* pasek = lane − 2×4px, a w nim dwie linie tekstu (tytuł + „20 tyg. · 100%”) + padding i ramka */
-  min-height: 4.5rem;
-  background: var(--color-surface);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.lp-timeline-track__empty {
-  display: inline-block;
-  padding: var(--space-3);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-
-.lp-timeline-bar {
-  position: absolute;
-  top: var(--space-1);
-  bottom: var(--space-1);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--space-1) var(--space-2);
-  border: var(--border-width-control) solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  background: var(--color-accent-soft);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  text-align: left;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.lp-timeline-bar--supplementary {
-  border-color: var(--color-primary);
-  border-style: double;
-  background: var(--color-accent-soft);
-}
-
-.lp-timeline-bar--parental {
-  border-color: var(--color-navy);
-  background: var(--color-info-soft);
-}
-
-.lp-timeline-bar--paternity {
-  border-style: dashed;
-  border-color: var(--color-primary);
-  background: var(--color-surface);
-}
-
-.lp-timeline-bar--with-work {
-  border-color: var(--color-navy);
-  border-bottom-width: var(--accent-bar-width);
-  border-bottom-color: var(--color-navy);
-  background: var(--color-info-soft);
-}
-
-.lp-timeline-bar--extension {
-  border-color: var(--color-primary);
-  border-bottom-width: var(--accent-bar-width);
-  border-bottom-color: var(--color-primary);
-  background: var(--color-accent-soft);
-}
-
-.lp-timeline-bar__title {
-  flex-shrink: 0;
-  line-height: 1.3;
-  font-weight: var(--font-weight-bold);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lp-timeline-bar__meta {
-  flex-shrink: 0;
-  line-height: 1.3;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Szczegółowa lista okresów (wewnątrz <details>) */
 .lp-period-list {
   display: grid;
@@ -1319,10 +1202,6 @@
     justify-content: space-between;
   }
 
-  .lp-timeline-track {
-    grid-template-columns: 4.5rem 1fr;
-    gap: var(--space-3);
-  }
 
   .lp-period-item {
     grid-template-columns: 5.5rem 1fr auto auto;
