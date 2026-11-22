@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import type { ApplicantRole, CasePeriod } from '@shared/types';
 import { benefitLabels, parentLabels } from '../plan/caseLabels';
 import {
+  formatDaysPl,
   formatPln,
   formatPolishDate,
   formatRatePercent,
@@ -56,6 +58,10 @@ function assignSubRows(rolePeriods: CasePeriod[]): { period: CasePeriod; row: nu
 }
 
 export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimelineProps) {
+  const [periodsOpen, setPeriodsOpen] = useState(
+    () => window.matchMedia?.('(max-width: 639px)').matches ?? false,
+  );
+
   if (periods.length === 0) {
     return (
       <section className="lp-card" aria-labelledby="timeline-heading">
@@ -140,6 +146,7 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                       const widthPct = Math.min(100 - startOffset, Math.max(4, rawWidth));
                       const shortTitle = getPeriodShortTitle(period);
                       const fullName = benefitLabels[period.leave_type];
+                      const label = `${fullName} (${parentLabels[role]}), ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${formatDaysPl(period.days)}), stawka ${formatRatePercent(period.rate_percent)}`;
                       const topPct = (row / rowCount) * 100;
                       const heightPct = 100 / rowCount;
 
@@ -156,7 +163,8 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                             bottom: rowCount > 1 ? 'auto' : undefined,
                           }}
                           onClick={() => onSelectDate(period.start_date, true)}
-                          title={`${fullName} (${parentLabels[role]}): ${formatPolishDate(period.start_date)} – ${formatPolishDate(period.end_date)}, ${formatWeeksPl(period.weeks)} (${period.days} dni), stawka ${formatRatePercent(period.rate_percent)}`}
+                          aria-label={label}
+                          title={label}
                         >
                           <span className="lp-timeline-bar__title">{shortTitle}</span>
                           <span className="lp-timeline-bar__meta">
@@ -173,7 +181,11 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
         </div>
       </div>
 
-      <details className="lp-details">
+      <details
+        className="lp-details"
+        open={periodsOpen}
+        onToggle={(event) => setPeriodsOpen(event.currentTarget.open)}
+      >
         <summary className="lp-details__summary">Zobacz okresy i kwoty</summary>
         <div className="lp-details__body">
           <ul className="lp-period-list" aria-label="Szczegółowa lista okresów urlopu">
@@ -218,7 +230,7 @@ export function LeaveTimeline({ periods, rolesToShow, onSelectDate }: LeaveTimel
                     </span>
                     <span className="lp-period-item__dates">
                       {formatPolishDate(period.start_date)} – {formatPolishDate(period.end_date)} (
-                      {formatWeeksPl(period.weeks)} / {period.days} dni)
+                      {formatWeeksPl(period.weeks)} / {formatDaysPl(period.days)})
                     </span>
                     <span className="lp-period-item__rate">
                       Stawka: <strong>{formatRatePercent(period.rate_percent)}</strong>

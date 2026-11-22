@@ -13,6 +13,7 @@ import type {
 } from '@shared/types';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
+import { formatDaysPl } from '../../leavePlan/leavePlanHelpers';
 import { ContributionDebtCertificate, SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { benefitLabels, parentLabels, payerLabel, percent, roles } from '../caseLabels';
 import {
@@ -419,9 +420,9 @@ function formatDurationPl(weeks: number, days: number): string {
     return formatWeeksPl(weeks);
   }
   if (weeks >= 1) {
-    return `${days} dni (ok. ${weeks.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} tyg.)`;
+    return `${formatDaysPl(days)} (ok. ${weeks.toLocaleString('pl-PL', { maximumFractionDigits: 1 })} tyg.)`;
   }
-  return `${days} dni`;
+  return formatDaysPl(days);
 }
 
 function summarizeCasePeriods(periods: CasePeriod[]): {
@@ -530,7 +531,7 @@ export function PeriodCards({
                     <time dateTime={period.start_date}>{formatPolishDate(period.start_date)}</time>–
                     <time dateTime={period.end_date}>{formatPolishDate(period.end_date)}</time>
                     {' · '}
-                    {period.days} dni (
+                    {formatDaysPl(period.days)} (
                     {period.weeks.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} tyg.)
                     {period.work_fraction > 0 && (
                       <> · praca {percent(period.work_fraction * 100)} etatu</>

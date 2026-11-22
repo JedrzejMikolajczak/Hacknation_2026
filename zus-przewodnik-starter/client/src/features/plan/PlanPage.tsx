@@ -481,6 +481,7 @@ export function PlanPage() {
   const [attempt, setAttempt] = useState(0);
   const [computed, setComputed] = useState<{
     key: string;
+    caseId: string | null;
     plan: CasePlan | null;
     params: BenefitParams | null;
     error?: ReturnType<typeof planRequestError>;
@@ -514,9 +515,12 @@ export function PlanPage() {
   }, [serialized, caseId, currentFixture, planInputs]);
 
   const key = input ? JSON.stringify(input) : '';
-  const current = computed?.key === key ? computed : null;
-  const plan = current?.plan ?? null;
-  const params = current?.params ?? null;
+  const current = computed?.key === key && computed.caseId === caseId ? computed : null;
+  // Keep the editor mounted while the API recalculates the same scenario.
+  const plannerSnapshot = tab === 'leave-plan' && computed?.caseId === caseId ? computed : null;
+  const visibleResult = current ?? plannerSnapshot;
+  const plan = visibleResult?.plan ?? null;
+  const params = visibleResult?.params ?? null;
 
   useEffect(() => {
     if (!key || !tab || !isPlanTab(tab)) return;
@@ -526,12 +530,13 @@ export function PlanPage() {
       apiGet<BenefitParams>('/params'),
     ])
       .then(([nextPlan, nextParams]) => {
-        if (active) setComputed({ key, plan: nextPlan, params: nextParams });
+        if (active) setComputed({ key, caseId, plan: nextPlan, params: nextParams });
       })
       .catch((error: unknown) => {
         if (active)
           setComputed({
             key,
+            caseId,
             plan: null,
             params: null,
             error: planRequestError(error),
@@ -540,7 +545,7 @@ export function PlanPage() {
     return () => {
       active = false;
     };
-  }, [key, tab, attempt]);
+  }, [key, caseId, tab, attempt]);
 
   useEffect(() => {
     if (typeof activeTabRef.current?.scrollIntoView === 'function') {
@@ -696,7 +701,11 @@ export function PlanPage() {
                     Nie udało się otworzyć sprawy. <Link to="/cases">Wybierz sprawę z listy.</Link>
                   </p>
                 )}
-                {waiting && <p role="status">Pobieranie planu z API…</p>}
+                {waiting && (
+                  <p role="status">
+                    {plan ? 'Przeliczamy plan. Poniżej widać poprzedni wynik.' : 'Pobieranie planu z API…'}
+                  </p>
+                )}
                 {!waiting && !fixtureError && !input && (
                   <div className="plan-missing-data plan-callout" role="status">
                     <h2>{activeTabMeta?.label ?? 'Uzupełnij dane'}</h2>
@@ -754,7 +763,7 @@ export function PlanPage() {
                 )}
                 {input && plan && params && (
                   <>
-                    {plan.validation_errors.length > 0 && (
+                    {current && plan.validation_errors.length > 0 && (
                       <div className="plan-callout plan-callout--warning" role="alert">
                         <strong>Sprawdź plan urlopów</strong>
                         <ul>
@@ -773,7 +782,7 @@ export function PlanPage() {
                       <CaseCalculator plan={plan} input={input} params={params} update={update} />
                     )}
                     {tab === 'leave-plan' && (
-                      <CasePlanner plan={plan} input={input} params={params} update={update} />
+                      <CasePlanner key={caseId} plan={plan} input={input} params={params} update={update} />
                     )}
                     {tab === 'documents' && (
                       <CaseDocuments

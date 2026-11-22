@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   ApplicantRole,
   BenefitParams,
@@ -12,6 +12,7 @@ import { roles } from '../plan/caseLabels';
 import {
   addDaysIso,
   computeParentalUsage,
+  formatDaysPl,
   formatPolishDate,
   formatWeeksPl,
   formatWorkFraction,
@@ -50,6 +51,7 @@ export function LeaveSplitPlanner({
   onSelectPreset,
   onUpdate,
 }: LeaveSplitPlannerProps) {
+  const [manualOpen, setManualOpen] = useState(false);
   const presets = useMemo(() => getLeavePlanPresets(params), [params]);
   const workQuickOptions = useMemo(() => getWorkFractionQuickOptions(params), [params]);
   const usage = useMemo(
@@ -230,7 +232,11 @@ export function LeaveSplitPlanner({
           </div>
 
           {/* Ręczna edycja części, łączenie z pracą i pozostałe daty – zwinięte w <details> */}
-          <details className="lp-details">
+          <details
+            className="lp-details"
+            open={manualOpen}
+            onToggle={(event) => setManualOpen(event.currentTarget.open)}
+          >
             <summary className="lp-details__summary">Ułóż ręcznie / połącz z pracą</summary>
             <div className="lp-details__body">
               <div className="lp-manual-intro">
@@ -311,7 +317,7 @@ export function LeaveSplitPlanner({
                           {days > 0 && (
                             <span className="lp-part-fieldset__meta">
                               {' '}
-                              ({formatWeeksPl(weeks)} / {days} dni)
+                              ({formatWeeksPl(weeks)} / {formatDaysPl(days)})
                             </span>
                           )}
                         </legend>
@@ -411,7 +417,7 @@ export function LeaveSplitPlanner({
                             </strong>{' '}
                             {formatPolishDate(extensionPeriod.start_date)} –{' '}
                             {formatPolishDate(extensionPeriod.end_date)} (+
-                            {formatWeeksPl(extensionPeriod.weeks)} / {extensionPeriod.days} dni).
+                            {formatWeeksPl(extensionPeriod.weeks)} / {formatDaysPl(extensionPeriod.days)}).
                             Powrót do pracy po tej części:{' '}
                             <strong>
                               {formatPolishDate(addDaysIso(extensionPeriod.end_date, 1))}

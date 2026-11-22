@@ -58,6 +58,7 @@ function tabLink(title: string) {
 describe('Twój plan', () => {
   beforeEach(() => {
     api.mockClear();
+    sessionStorage.clear();
     vi.stubGlobal('fetch', api);
   });
 
@@ -123,6 +124,16 @@ describe('Twój plan', () => {
     expect(within(result).getByText('Dokumenty z tego tytułu')).toBeInTheDocument();
   });
 
+  it('odmienia pojedynczy dzień w okresie zasiłku chorobowego', async () => {
+    openPlan('calculator', {
+      ...fixture.inputs,
+      sickness_leave_start_date: '2025-07-19',
+      sickness_leave_end_date: '2025-07-19',
+    });
+
+    expect(await screen.findByText(/1 dzień \(0,14 tyg\.\)/)).toBeInTheDocument();
+  });
+
   it('synchronizuje zmianę daty ojca z dokumentami i wnioskiem', async () => {
     openPlan('leave-plan');
     const manualSummary = await screen.findByText('Ułóż ręcznie / połącz z pracą');
@@ -132,6 +143,11 @@ describe('Twój plan', () => {
     fireEvent.change(await screen.findByLabelText('Koniec części 2'), {
       target: { value: '2028-01-10' },
     });
+    expect(manualDetails).toBeInTheDocument();
+    expect(manualDetails.open).toBe(true);
+    await waitFor(() => expect(screen.queryByText(/Przeliczamy plan/)).not.toBeInTheDocument());
+    expect(manualDetails.open).toBe(true);
+
     fireEvent.change(await screen.findByLabelText('Początek części 2'), {
       target: { value: '2027-11-09' },
     });
@@ -180,7 +196,20 @@ describe('Twój plan', () => {
     expect(bankInput).toHaveValue('');
 
     fireEvent.change(nameInput, { target: { value: 'Maria Testowa' } });
+    expect(peselInput).toHaveAttribute('maxlength', '11');
+    expect(peselInput).toHaveAttribute('inputmode', 'numeric');
+
+    const download = screen.getByRole('button', { name: /^Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski.*Matka/ });
+    fireEvent.click(download);
+    expect(screen.getByRole('alert')).toHaveTextContent(/Uzupełnij dane osobowe.*PESEL/);
+    fireEvent.change(peselInput, { target: { value: '12345' } });
+    fireEvent.click(download);
+    expect(screen.getByRole('alert')).toHaveTextContent('PESEL jest nieprawidłowy');
     fireEvent.change(peselInput, { target: { value: '11111111111' } });
+    fireEvent.click(download);
+    expect(screen.getByRole('alert')).toHaveTextContent(/poprawną cyfrą kontrolną/);
+    expect(peselInput).toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(peselInput, { target: { value: '11111111116' } });
     fireEvent.change(bankInput, { target: { value: '12345678901234567890123456' } });
 
     const count = api.mock.calls.length;
@@ -191,11 +220,21 @@ describe('Twój plan', () => {
     expect(generateApplicationPdf).toHaveBeenCalledWith(expect.objectContaining({ kind: 'letter' }));
     fireEvent.click(preview.getByRole('button', { name: 'Zamknij podgląd' }));
     expect(api.mock.calls).toHaveLength(count);
-    expect(window.location.search).not.toContain('11111111111');
+    expect(window.location.search).not.toContain('11111111116');
+
+    const sent = within(download.closest('article')!).getByRole('checkbox', { name: 'Wysłano do adresata' });
+    fireEvent.click(sent);
+    expect(sent).toBeChecked();
+    expect(sessionStorage.getItem('zus.applications.sent')).not.toMatch(/Maria Testowa|11111111116|12345678901234567890123456/);
 
     fireEvent.click(tabLink('Plan urlopów'));
     fireEvent.click(tabLink('Wnioski'));
     expect(within(await screen.findByRole('group', { name: 'Matka' })).getByLabelText('PESEL')).toHaveValue('');
+    const reopenedDownload = screen.getByRole('button', { name: /^Pobierz PDF: Wniosek o urlop macierzyński i rodzicielski.*Matka/ });
+    const reopenedSent = within(reopenedDownload.closest('article')!).getByRole('checkbox', { name: 'Wysłano do adresata' });
+    expect(reopenedSent).toBeChecked();
+    fireEvent.click(reopenedSent);
+    expect(JSON.parse(sessionStorage.getItem('zus.applications.sent') ?? 'null')).toEqual([]);
   });
 
   it('w zakładce Wnioski dla planu dwojga rodziców (UoP) pokazuje spójne wnioski z realnymi datami i bez duplikatów', async () => {

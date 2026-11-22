@@ -12,6 +12,7 @@ import type {
 import { apiGet } from '../../../api/client';
 import { DEFAULT_PARAMS, formatRate } from '../../../app/benefitParams';
 import { useScenario } from '../../../app/ScenarioContext';
+import { formatDaysPl } from '../../leavePlan/leavePlanHelpers';
 import { SickLeavePreview } from '../../login/ZusSimulationPanels';
 import { parentLabels, roles } from '../caseLabels';
 import { addDaysIso, diffDaysIso, formatPolishDate, livingChildren, todayIsoDate } from '../planScenario';
@@ -649,9 +650,24 @@ const PERSONAL_FIELD_LABELS: Record<PersonalFieldKey, string> = {
 /** Cyfry z pola: ignoruje spacje, myślniki i prefiks „PL” (numery rachunków zwykle są zapisywane z odstępami). */
 const digitsOnly = (value: string) => value.replace(/^\s*PL/i, '').replace(/[\s-]/g, '');
 
-function isPersonalValueValid(field: PersonalFieldKey, rawValue: string): boolean {
+const PESEL_WEIGHTS = [1, 3, 7, 9, 1, 3, 7, 9, 1, 3];
+
+function isPersonalValueValid(
+  field: PersonalFieldKey,
+  rawValue: string,
+  demoPesel?: string,
+): boolean {
   const value = rawValue.trim();
-  if (field === 'pesel') return /^\d{11}$/.test(digitsOnly(value));
+  if (field === 'pesel') {
+    if (!/^\d{11}$/.test(value)) return false;
+    // The mock identity provider uses fictional PESELs with invalid check digits.
+    if (value === demoPesel) return true;
+    const sum = PESEL_WEIGHTS.reduce(
+      (total, weight, index) => total + weight * Number(value[index]),
+      0,
+    );
+    return (sum + Number(value[10])) % 10 === 0;
+  }
   if (field === 'bank') return /^\d{26}$/.test(digitsOnly(value));
   return !!value;
 }
@@ -747,9 +763,9 @@ function formatDurationRange(
   if (days <= 0) return null;
   if (days % daysPerWeek === 0) {
     const weeks = days / daysPerWeek;
-    return `${weeks} tyg. (${days} dni)`;
+    return `${weeks} tyg. (${formatDaysPl(days)})`;
   }
-  return `${days} dni`;
+  return formatDaysPl(days);
 }
 
 function formatWorkFraction(fraction: number): string {
@@ -1332,6 +1348,17 @@ const LETTER_SKIPPED_LABELS = new Set([
   'Wariant i stawka zasiłku',
 ]);
 
+const SENT_APPLICATIONS_STORAGE_KEY = 'zus.applications.sent';
+
+function readSentApplications(): Set<string> {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(SENT_APPLICATIONS_STORAGE_KEY) ?? '[]');
+    return new Set(Array.isArray(value) ? value.filter((key) => typeof key === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export interface CaseApplicationsProps {
   documents: CaseDocument[];
   input?: CaseInputs | null;
@@ -1353,6 +1380,7 @@ export function CaseApplications({
   const [personal, setPersonal] = useState<
     Partial<Record<ApplicantRole, Partial<Record<PersonalFieldKey, string>>>>
   >({});
+  const [sentApplications, setSentApplications] = useState(readSentApplications);
   const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidField, setInvalidField] = useState<string | null>(null);
@@ -1444,6 +1472,19 @@ export function CaseApplications({
     const profile = simulatedIdentities[role]?.profile;
     if (!profile || field === 'bank') return '';
     return field === 'name' ? `${profile.firstName} ${profile.lastName}` : profile[field];
+  }
+
+  function setApplicationSent(key: string, sent: boolean) {
+    const next = new Set(sentApplications);
+    if (sent) next.add(key);
+    else next.delete(key);
+    setSentApplications(next);
+
+    try {
+      sessionStorage.setItem(SENT_APPLICATIONS_STORAGE_KEY, JSON.stringify([...next]));
+    } catch {
+      // Keep the current view usable if storage is disabled.
+    }
   }
 
   function personalId(role: ApplicantRole, field: PersonalFieldKey) {
@@ -1607,10 +1648,12 @@ export function CaseApplications({
     const role = doc.parent_role;
     for (const field of requiredFieldsForApplication(item)) {
       const value = personalValue(role, field).trim();
-      if (!isPersonalValueValid(field, value)) {
+      if (!isPersonalValueValid(field, value, simulatedIdentities[role]?.profile.pesel)) {
         showError(
           `${idPrefix}${personalId(role, field)}`,
-          `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
+          field === 'pesel' && value
+            ? 'PESEL jest nieprawidłowy. Wpisz 11 cyfr z poprawną cyfrą kontrolną.'
+            : `Uzupełnij dane osobowe (${parentLabels[role]}): ${PERSONAL_FIELD_LABELS[field]}.`,
         );
         return false;
       }
@@ -1782,9 +1825,14 @@ export function CaseApplications({
 
   const openItem = hasOpenItem ? (forms.find((item) => item.key === openKey) ?? null) : null;
   const openMissingPersonal = openItem
-    ? requiredFieldsForApplication(openItem).filter(
-        (field) => !isPersonalValueValid(field, personalValue(openItem.doc.parent_role, field)),
-      )
+    ? requiredFieldsForApplication(openItem).filter((field) => {
+        const role = openItem.doc.parent_role;
+        return !isPersonalValueValid(
+          field,
+          personalValue(role, field),
+          simulatedIdentities[role]?.profile.pesel,
+        );
+      })
     : [];
   const openMissingDetails = openItem
     ? (applicationDetails(openItem)?.fields ?? []).filter(
@@ -1865,6 +1913,7 @@ export function CaseApplications({
                       autoComplete="off"
                       spellCheck={false}
                       inputMode={field === 'pesel' || field === 'bank' ? 'numeric' : undefined}
+                      maxLength={field === 'pesel' ? 11 : undefined}
                       className={
                         invalidField === id
                           ? 'plan-field__input apps-field-error'
@@ -1955,6 +2004,9 @@ export function CaseApplications({
         <h3 id="apps-list-heading" className="plan-section__title">
           Lista wniosków ({forms.length})
         </h3>
+        <p className="plan-section__lead">
+          Po złożeniu wniosku u adresata zaznacz „Wysłano do adresata”.
+        </p>
 
         <div className="apps-compact-list">
           {forms.map((item) => {
@@ -1971,6 +2023,7 @@ export function CaseApplications({
               ? 'Matka / Ojciec'
               : parentLabels[doc.parent_role];
             const duration = formatDurationRange(item.startDate, item.endDate, daysPerWeek);
+            const sentKey = `${caseId ?? 'scenariusz'}.${key}.${doc.submit_to}`;
 
             return (
               <article key={item.key} className="apps-card">
@@ -2025,6 +2078,17 @@ export function CaseApplications({
                     </button>
                   )}
                 </div>
+
+                {doc.submit_to && (
+                  <label className="apps-card__recipient">
+                    <input
+                      type="checkbox"
+                      checked={sentApplications.has(sentKey)}
+                      onChange={(event) => setApplicationSent(sentKey, event.target.checked)}
+                    />{' '}
+                    Wysłano do adresata
+                  </label>
+                )}
 
                 <details className="apps-preview">
                   <summary className="apps-preview__summary">Podgląd wniosku</summary>
@@ -2192,6 +2256,7 @@ export function CaseApplications({
                         type={field === 'birthDate' ? 'date' : 'text'}
                         autoComplete="off"
                         inputMode={field === 'pesel' || field === 'bank' ? 'numeric' : undefined}
+                        maxLength={field === 'pesel' ? 11 : undefined}
                         className={
                           invalidField === id
                             ? 'plan-field__input apps-field-error'
